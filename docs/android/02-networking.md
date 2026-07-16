@@ -993,27 +993,31 @@ interface ApiService {
     suspend fun deleteAgent(@Path("id") agentId: String): Response<Unit>
 
     // ==================== Conversations ====================
-    @GET("api/v1/conversations")
+    @GET("api/v1/ai/conversations")
     suspend fun getConversations(
         @Query("page") page: Int = 1,
         @Query("limit") limit: Int = 20
     ): Response<ApiResponse<List<ConversationDto>>>
 
-    @GET("api/v1/conversations/{id}")
+    @GET("api/v1/ai/conversations/{id}")
     suspend fun getConversation(@Path("id") conversationId: String): Response<ApiResponse<ConversationDto>>
 
-    @POST("api/v1/conversations")
+    @POST("api/v1/ai/conversations")
     suspend fun createConversation(@Body request: CreateConversationRequest): Response<ApiResponse<ConversationDto>>
 
-    @DELETE("api/v1/conversations/{id}")
+    @DELETE("api/v1/ai/conversations/{id}")
     suspend fun deleteConversation(@Path("id") conversationId: String): Response<Unit>
 
-    @GET("api/v1/conversations/{id}/messages")
+    @GET("api/v1/ai/conversations/{id}/messages")
     suspend fun getMessages(
         @Path("id") conversationId: String,
         @Query("limit") limit: Int = 50,
         @Query("offset") offset: Int = 0
     ): Response<ApiResponse<List<MessageDto>>>
+
+    // ==================== AI Chat ====================
+    @POST("api/v1/ai/chat")
+    suspend fun sendChatMessage(@Body request: ChatRequest): Response<ApiResponse<ChatResponse>>
 
     // ==================== Models ====================
     @GET("api/v1/models")
@@ -1029,19 +1033,83 @@ interface ApiService {
         @Query("limit") limit: Int = 20
     ): Response<ApiResponse<List<KnowledgeDto>>>
 
-    @POST("api/v1/knowledge")
-    suspend fun createKnowledge(@Body request: CreateKnowledgeRequest): Response<ApiResponse<KnowledgeDto>>
+    // ==================== RAG Knowledge ====================
+    @GET("api/v1/rag/documents")
+    suspend fun getDocuments(
+        @Query("page") page: Int = 1,
+        @Query("limit") limit: Int = 20
+    ): Response<ApiResponse<List<DocumentDto>>>
 
-    @DELETE("api/v1/knowledge/{id}")
-    suspend fun deleteKnowledge(@Path("id") knowledgeId: String): Response<Unit>
-
-    // ==================== File Upload ====================
     @Multipart
-    @POST("api/v1/files/upload")
-    suspend fun uploadFile(
-        @Part file: MultipartBody.Part,
-        @Part("description") description: RequestBody?
-    ): Response<ApiResponse<FileUploadResponse>>
+    @POST("api/v1/rag/documents")
+    suspend fun uploadDocument(
+        @Part file: MultipartBody.Part
+    ): Response<ApiResponse<DocumentUploadResponse>>
+
+    @GET("api/v1/rag/documents/{id}/status")
+    suspend fun getDocumentStatus(
+        @Path("id") documentId: String
+    ): Response<ApiResponse<DocumentStatusResponse>>
+
+    @POST("api/v1/rag/search")
+    suspend fun searchKnowledge(
+        @Body request: SearchRequest
+    ): Response<ApiResponse<SearchResponse>>
+
+    @DELETE("api/v1/rag/documents/{id}")
+    suspend fun deleteDocument(
+        @Path("id") documentId: String
+    ): Response<Unit>
+
+    // ==================== Vision ====================
+    @Multipart
+    @POST("api/v1/vision/analyze")
+    suspend fun analyzeImage(
+        @Part image: MultipartBody.Part,
+        @Part("task") task: RequestBody?
+    ): Response<ApiResponse<VisionAnalysisResponse>>
+
+    // ==================== SQL Intelligence ====================
+    @POST("api/v1/sql/query")
+    suspend fun executeSqlQuery(
+        @Body request: SqlQueryRequest
+    ): Response<ApiResponse<SqlQueryResponse>>
+
+    // ==================== Memory ====================
+    @POST("api/v1/memory")
+    suspend fun storeMemory(
+        @Body request: StoreMemoryRequest
+    ): Response<Unit>
+
+    @GET("api/v1/memory/search")
+    suspend fun searchMemory(
+        @Query("q") query: String,
+        @Query("limit") limit: Int = 5
+    ): Response<ApiResponse<List<MemoryDto>>>
+
+    // ==================== Workflows ====================
+    @POST("api/v1/workflows/start")
+    suspend fun startWorkflow(
+        @Body request: StartWorkflowRequest
+    ): Response<ApiResponse<WorkflowResponse>>
+
+    @GET("api/v1/workflows/{id}")
+    suspend fun getWorkflow(
+        @Path("id") workflowId: String
+    ): Response<ApiResponse<WorkflowStatusResponse>>
+
+    // ==================== KYC ====================
+    @GET("api/v1/kyc/status")
+    suspend fun getKycStatus(): Response<ApiResponse<KycStatusResponse>>
+
+    @Multipart
+    @POST("api/v1/kyc/documents")
+    suspend fun uploadKycDocument(
+        @Part file: MultipartBody.Part
+    ): Response<ApiResponse<KycDocumentResponse>>
+
+    @POST("api/v1/kyc/submit")
+    suspend fun submitKyc(): Response<Unit>
 }
 ```
 
@@ -1072,23 +1140,47 @@ interface ApiService {
 │  └── DELETE /api/v1/agents/{id}                         │
 │                                                          │
 │  Conversations                                           │
-│  ├── GET    /api/v1/conversations                       │
-│  ├── GET    /api/v1/conversations/{id}                  │
-│  ├── POST   /api/v1/conversations                       │
-│  ├── DELETE /api/v1/conversations/{id}                  │
-│  └── GET    /api/v1/conversations/{id}/messages         │
+│  ├── GET    /api/v1/ai/conversations                       │
+│  ├── GET    /api/v1/ai/conversations/{id}                  │
+│  ├── POST   /api/v1/ai/conversations                       │
+│  ├── DELETE /api/v1/ai/conversations/{id}                  │
+│  └── GET    /api/v1/ai/conversations/{id}/messages         │
+│                                                          │
+│  AI Chat                                                 │
+│  └── POST   /api/v1/ai/chat                               │
 │                                                          │
 │  Models                                                  │
 │  ├── GET    /api/v1/models                              │
 │  └── GET    /api/v1/models/{id}                         │
 │                                                          │
 │  Knowledge                                               │
-│  ├── GET    /api/v1/knowledge                           │
-│  ├── POST   /api/v1/knowledge                           │
-│  └── DELETE /api/v1/knowledge/{id}                      │
+│  ├── GET    /api/v1/rag/documents                        │
+│  ├── POST   /api/v1/rag/documents                        │
+│  ├── GET    /api/v1/rag/documents/{id}/status             │
+│  ├── POST   /api/v1/rag/search                           │
+│  └── DELETE /api/v1/rag/documents/{id}                    │
 │                                                          │
-│  Files                                                   │
-│  └── POST   /api/v1/files/upload                        │
+│  Vision                                                  │
+│  ├── POST   /api/v1/vision/analyze                       │
+│  ├── POST   /api/v1/vision/ocr                           │
+│  └── POST   /api/v1/vision/batch                         │
+│                                                          │
+│  SQL Intelligence                                        │
+│  └── POST   /api/v1/sql/query                            │
+│                                                          │
+│  Memory                                                  │
+│  ├── POST   /api/v1/memory                               │
+│  ├── GET    /api/v1/memory/search                         │
+│  └── GET    /api/v1/memory/context/{session_id}           │
+│                                                          │
+│  Workflows                                               │
+│  ├── POST   /api/v1/workflows/start                       │
+│  └── GET    /api/v1/workflows/{id}                        │
+│                                                          │
+│  KYC                                                     │
+│  ├── GET    /api/v1/kyc/status                            │
+│  ├── POST   /api/v1/kyc/documents                         │
+│  └── POST   /api/v1/kyc/submit                            │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -1656,7 +1748,7 @@ class NetworkCallback @Inject constructor(
 │  Request Queue:                                          │
 │  ├── GET /api/v1/agents      [pending]    12ms          │
 │  ├── GET /api/v1/models      [completed]  45ms          │
-│  └── POST /api/v1/messages   [completed]  120ms         │
+│  └── POST /api/v1/ai/chat    [completed]  120ms         │
 │                                                          │
 │  Cache:                                                  │
 │  ├── Hit Rate: 85%                                      │

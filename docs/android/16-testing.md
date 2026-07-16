@@ -728,7 +728,7 @@ class WebSocketManagerTest {
     fun `should emit messages when received`() = runTest {
         webSocketManager.connect()
 
-        mockWebSocket.onMessage("""{"type":"chat","content":"Hello"}""")
+        mockWebSocket.onMessage("""{"type":"message","content":"Hello"}""")
 
         webSocketManager.messages.test {
             val msg = awaitItem()
