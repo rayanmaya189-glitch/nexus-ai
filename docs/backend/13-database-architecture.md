@@ -59,8 +59,8 @@ AeroXe Nexus AI
 
 ```sql
 CREATE TABLE users (
-    id UUID PRIMARY KEY,
-    tenant_id UUID NOT NULL,
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    tenant_id BIGINT NOT NULL,
     email VARCHAR(255) UNIQUE NOT NULL,
     password_hash TEXT NOT NULL,
     display_name VARCHAR(255),
@@ -79,8 +79,8 @@ CREATE INDEX idx_users_email ON users(email);
 
 ```sql
 CREATE TABLE roles (
-    id UUID PRIMARY KEY,
-    tenant_id UUID,
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    tenant_id BIGINT,
     name VARCHAR(100) NOT NULL,
     description TEXT,
     is_system BOOLEAN DEFAULT FALSE,
@@ -92,7 +92,7 @@ CREATE TABLE roles (
 
 ```sql
 CREATE TABLE permissions (
-    id UUID PRIMARY KEY,
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     name VARCHAR(100) UNIQUE NOT NULL,
     resource VARCHAR(100) NOT NULL,
     action VARCHAR(50) NOT NULL
@@ -103,8 +103,8 @@ CREATE TABLE permissions (
 
 ```sql
 CREATE TABLE user_roles (
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    role_id UUID NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    role_id BIGINT NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
     assigned_at TIMESTAMP NOT NULL DEFAULT NOW(),
     PRIMARY KEY(user_id, role_id)
 );
@@ -114,7 +114,7 @@ CREATE TABLE user_roles (
 
 ```sql
 CREATE TABLE tenants (
-    id UUID PRIMARY KEY,
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     slug VARCHAR(100) UNIQUE NOT NULL,
     plan VARCHAR(50) NOT NULL DEFAULT 'free',
@@ -132,9 +132,9 @@ CREATE TABLE tenants (
 
 ```sql
 CREATE TABLE ai_sessions (
-    id UUID PRIMARY KEY,
-    tenant_id UUID NOT NULL,
-    user_id UUID NOT NULL,
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    tenant_id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL,
     started_at TIMESTAMP NOT NULL DEFAULT NOW(),
     status VARCHAR(50) NOT NULL DEFAULT 'active',
     metadata JSONB
@@ -145,9 +145,9 @@ CREATE TABLE ai_sessions (
 
 ```sql
 CREATE TABLE ai_requests (
-    id UUID PRIMARY KEY,
-    session_id UUID NOT NULL REFERENCES ai_sessions(id),
-    tenant_id UUID NOT NULL,
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    session_id BIGINT NOT NULL REFERENCES ai_sessions(id),
+    tenant_id BIGINT NOT NULL,
     prompt TEXT NOT NULL,
     model VARCHAR(100),
     agent VARCHAR(100),
@@ -170,7 +170,7 @@ CREATE INDEX idx_requests_tenant ON ai_requests(tenant_id, created_at DESC);
 
 ```sql
 CREATE TABLE agents (
-    id UUID PRIMARY KEY,
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     type VARCHAR(100) NOT NULL,
     model VARCHAR(100) NOT NULL,
@@ -185,10 +185,10 @@ CREATE TABLE agents (
 
 ```sql
 CREATE TABLE agent_executions (
-    id UUID PRIMARY KEY,
-    tenant_id UUID NOT NULL,
-    user_id UUID NOT NULL,
-    agent_id UUID NOT NULL REFERENCES agents(id),
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    tenant_id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL,
+    agent_id BIGINT NOT NULL REFERENCES agents(id),
     task TEXT NOT NULL,
     status VARCHAR(50) NOT NULL DEFAULT 'pending',
     plan JSONB,
@@ -206,8 +206,8 @@ CREATE INDEX idx_executions_tenant ON agent_executions(tenant_id, started_at DES
 
 ```sql
 CREATE TABLE agent_steps (
-    id UUID PRIMARY KEY,
-    execution_id UUID NOT NULL REFERENCES agent_executions(id) ON DELETE CASCADE,
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    execution_id BIGINT NOT NULL REFERENCES agent_executions(id) ON DELETE CASCADE,
     step_number INT NOT NULL,
     agent_type VARCHAR(100),
     action TEXT NOT NULL,
@@ -228,8 +228,8 @@ CREATE TABLE agent_steps (
 
 ```sql
 CREATE TABLE documents (
-    id UUID PRIMARY KEY,
-    tenant_id UUID NOT NULL,
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    tenant_id BIGINT NOT NULL,
     filename TEXT NOT NULL,
     type VARCHAR(50) NOT NULL,
     status VARCHAR(50) NOT NULL DEFAULT 'uploaded',
@@ -247,8 +247,8 @@ CREATE INDEX idx_documents_tenant ON documents(tenant_id, status);
 
 ```sql
 CREATE TABLE document_chunks (
-    id UUID PRIMARY KEY,
-    document_id UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    document_id BIGINT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
     content TEXT NOT NULL,
     chunk_index INT NOT NULL,
     token_count INT,
@@ -266,8 +266,8 @@ USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
 
 ```sql
 CREATE TABLE document_metadata (
-    id UUID PRIMARY KEY,
-    document_id UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    document_id BIGINT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
     metadata JSONB NOT NULL
 );
 ```
@@ -280,9 +280,9 @@ CREATE TABLE document_metadata (
 
 ```sql
 CREATE TABLE images (
-    id UUID PRIMARY KEY,
-    tenant_id UUID NOT NULL,
-    user_id UUID NOT NULL,
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    tenant_id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL,
     storage_path TEXT NOT NULL,
     file_type VARCHAR(50) NOT NULL,
     file_size_bytes BIGINT,
@@ -296,9 +296,9 @@ CREATE TABLE images (
 
 ```sql
 CREATE TABLE vision_analysis (
-    id UUID PRIMARY KEY,
-    image_id UUID NOT NULL REFERENCES images(id) ON DELETE CASCADE,
-    tenant_id UUID NOT NULL,
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    image_id BIGINT NOT NULL REFERENCES images(id) ON DELETE CASCADE,
+    tenant_id BIGINT NOT NULL,
     model VARCHAR(100) NOT NULL DEFAULT 'qwen3-vl:4b',
     analysis_type VARCHAR(50) NOT NULL,
     description TEXT,
@@ -314,8 +314,8 @@ CREATE TABLE vision_analysis (
 
 ```sql
 CREATE TABLE ocr_results (
-    id UUID PRIMARY KEY,
-    image_id UUID NOT NULL REFERENCES images(id) ON DELETE CASCADE,
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    image_id BIGINT NOT NULL REFERENCES images(id) ON DELETE CASCADE,
     text TEXT NOT NULL,
     language VARCHAR(10) DEFAULT 'en',
     confidence FLOAT,
@@ -332,9 +332,9 @@ CREATE TABLE ocr_results (
 
 ```sql
 CREATE TABLE memories (
-    id UUID PRIMARY KEY,
-    user_id UUID NOT NULL,
-    tenant_id UUID NOT NULL,
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    tenant_id BIGINT NOT NULL,
     content TEXT NOT NULL,
     embedding vector(768),
     memory_type VARCHAR(50) NOT NULL DEFAULT 'fact',
@@ -356,10 +356,10 @@ CREATE INDEX idx_memories_user ON memories(user_id, tenant_id);
 
 ```sql
 CREATE TABLE conversation_history (
-    id UUID PRIMARY KEY,
-    session_id UUID NOT NULL,
-    user_id UUID NOT NULL,
-    tenant_id UUID NOT NULL,
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    session_id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL,
+    tenant_id BIGINT NOT NULL,
     role VARCHAR(20) NOT NULL,
     content TEXT NOT NULL,
     tokens_used INT,
@@ -379,8 +379,8 @@ CREATE INDEX idx_conversation_user ON conversation_history(user_id, created_at D
 
 ```sql
 CREATE TABLE workflows (
-    id UUID PRIMARY KEY,
-    tenant_id UUID NOT NULL,
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    tenant_id BIGINT NOT NULL,
     name VARCHAR(100) NOT NULL,
     description TEXT,
     definition JSONB NOT NULL,
@@ -395,10 +395,10 @@ CREATE TABLE workflows (
 
 ```sql
 CREATE TABLE workflow_instances (
-    id UUID PRIMARY KEY,
-    workflow_id UUID NOT NULL REFERENCES workflows(id),
-    tenant_id UUID NOT NULL,
-    initiated_by UUID NOT NULL,
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    workflow_id BIGINT NOT NULL REFERENCES workflows(id),
+    tenant_id BIGINT NOT NULL,
+    initiated_by BIGINT NOT NULL,
     status VARCHAR(50) NOT NULL DEFAULT 'running',
     context JSONB,
     started_at TIMESTAMP NOT NULL DEFAULT NOW(),
@@ -411,13 +411,13 @@ CREATE TABLE workflow_instances (
 
 ```sql
 CREATE TABLE workflow_steps (
-    id UUID PRIMARY KEY,
-    instance_id UUID NOT NULL REFERENCES workflow_instances(id) ON DELETE CASCADE,
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    instance_id BIGINT NOT NULL REFERENCES workflow_instances(id) ON DELETE CASCADE,
     step_number INT NOT NULL,
     step_type VARCHAR(50) NOT NULL,
     name VARCHAR(100),
     status VARCHAR(50) NOT NULL DEFAULT 'pending',
-    assignee_id UUID,
+    assignee_id BIGINT,
     input JSONB,
     output JSONB,
     started_at TIMESTAMP,
@@ -433,13 +433,13 @@ CREATE TABLE workflow_steps (
 
 ```sql
 CREATE TABLE audit_events (
-    id UUID PRIMARY KEY,
-    tenant_id UUID NOT NULL,
-    user_id UUID,
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    tenant_id BIGINT NOT NULL,
+    user_id BIGINT,
     service VARCHAR(100) NOT NULL,
     event_type VARCHAR(100) NOT NULL,
     resource_type VARCHAR(100),
-    resource_id UUID,
+    resource_id BIGINT,
     action VARCHAR(50) NOT NULL,
     payload JSONB,
     ip_address INET,

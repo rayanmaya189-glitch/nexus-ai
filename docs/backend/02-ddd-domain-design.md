@@ -95,8 +95,8 @@ User
 
 ### Value Objects
 
-- `UserId` (UUID)
-- `TenantId` (UUID)
+- `UserId` (i64)
+- `TenantId` (i64)
 - `EmailAddress` (validated string)
 - `Permission` (resource + action pair)
 
@@ -145,7 +145,7 @@ AIRequest
 - `Prompt` (sanitized text)
 - `ModelName` (validated model identifier)
 - `RequestId` (UUID)
-- `TenantId` (UUID)
+- `TenantId` (i64)
 
 ### Domain Events
 
@@ -189,9 +189,9 @@ AgentExecution
 
 ### Value Objects
 
-- `AgentId` (UUID)
-- `TaskId` (UUID)
-- `ExecutionId` (UUID)
+- `AgentId` (i64)
+- `TaskId` (i64)
+- `ExecutionId` (i64)
 - `AgentType` (enum: planner, customer, developer, rag, vision, security, business)
 
 ### Domain Events
@@ -255,7 +255,7 @@ KnowledgeDocument
 
 ### Value Objects
 
-- `DocumentId` (UUID)
+- `DocumentId` (i64)
 - `EmbeddingVector` (768-dimensional float array)
 - `DocumentType` (enum: pdf, docx, html, markdown, code)
 

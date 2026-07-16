@@ -160,7 +160,7 @@ Every gRPC request includes metadata:
 | Header | Purpose |
 |---|---|
 | `authorization` | JWT token |
-| `tenant-id` | Tenant UUID |
+| `tenant-id` | Tenant ID |
 | `service-id` | Calling service identity |
 | `request-id` | Request UUID |
 | `trace-id` | Distributed trace ID |

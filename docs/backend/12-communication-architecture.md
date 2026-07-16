@@ -56,8 +56,8 @@ Every gRPC request must include:
 
 ```text
 authorization     - JWT token
-tenant-id         - Tenant UUID
-user-id           - User UUID
+tenant-id         - Tenant ID
+user-id           - User ID
 request-id        - Request UUID for tracing
 trace-id          - Distributed trace ID
 ```

@@ -141,7 +141,7 @@ AeroXe Nexus AI supports:
 Every business table must include:
 
 ```sql
-tenant_id UUID NOT NULL
+tenant_id BIGINT NOT NULL
 ```
 
 Example:
@@ -149,11 +149,11 @@ Example:
 ```sql
 CREATE TABLE ai_sessions (
 
-id UUID PRIMARY KEY,
+id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
 
-tenant_id UUID NOT NULL,
+tenant_id BIGINT NOT NULL,
 
-user_id UUID NOT NULL,
+user_id BIGINT NOT NULL,
 
 created_at TIMESTAMP NOT NULL
 
@@ -182,9 +182,9 @@ Authentication and authorization.
 ```sql
 CREATE TABLE users (
 
-id UUID PRIMARY KEY,
+id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
 
-tenant_id UUID NOT NULL,
+tenant_id BIGINT NOT NULL,
 
 email VARCHAR(255) UNIQUE,
 
@@ -207,9 +207,9 @@ updated_at TIMESTAMP
 ```sql
 CREATE TABLE roles (
 
-id UUID PRIMARY KEY,
+id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
 
-tenant_id UUID,
+tenant_id BIGINT,
 
 name VARCHAR(100),
 
@@ -226,7 +226,7 @@ description TEXT
 ```sql
 CREATE TABLE permissions (
 
-id UUID PRIMARY KEY,
+id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
 
 name VARCHAR(100),
 
@@ -245,9 +245,9 @@ action VARCHAR(50)
 ```sql
 CREATE TABLE user_roles (
 
-user_id UUID,
+user_id BIGINT,
 
-role_id UUID,
+role_id BIGINT,
 
 PRIMARY KEY(user_id,role_id)
 
@@ -276,11 +276,11 @@ Store AI sessions and requests.
 ```sql
 CREATE TABLE ai_sessions (
 
-id UUID PRIMARY KEY,
+id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
 
-tenant_id UUID,
+tenant_id BIGINT,
 
-user_id UUID,
+user_id BIGINT,
 
 started_at TIMESTAMP,
 
@@ -297,9 +297,9 @@ status VARCHAR(50)
 ```sql
 CREATE TABLE ai_requests (
 
-id UUID PRIMARY KEY,
+id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
 
-session_id UUID,
+session_id BIGINT,
 
 prompt TEXT,
 
@@ -334,7 +334,7 @@ Track AI agent execution.
 ```sql
 CREATE TABLE agents (
 
-id UUID PRIMARY KEY,
+id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
 
 name VARCHAR(100),
 
@@ -355,11 +355,11 @@ status VARCHAR(50)
 ```sql
 CREATE TABLE agent_executions (
 
-id UUID PRIMARY KEY,
+id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
 
-tenant_id UUID,
+tenant_id BIGINT,
 
-agent_id UUID,
+agent_id BIGINT,
 
 task TEXT,
 
@@ -380,9 +380,9 @@ completed_at TIMESTAMP
 ```sql
 CREATE TABLE agent_steps (
 
-id UUID PRIMARY KEY,
+id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
 
-execution_id UUID,
+execution_id BIGINT,
 
 step_number INT,
 
@@ -422,9 +422,9 @@ pgvector
 ```sql
 CREATE TABLE documents (
 
-id UUID PRIMARY KEY,
+id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
 
-tenant_id UUID,
+tenant_id BIGINT,
 
 filename TEXT,
 
@@ -445,9 +445,9 @@ created_at TIMESTAMP
 ```sql
 CREATE TABLE document_chunks (
 
-id UUID PRIMARY KEY,
+id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
 
-document_id UUID,
+document_id BIGINT,
 
 content TEXT,
 
@@ -481,9 +481,9 @@ USING ivfflat
 ```sql
 CREATE TABLE document_metadata (
 
-id UUID PRIMARY KEY,
+id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
 
-document_id UUID,
+document_id BIGINT,
 
 metadata JSONB
 
@@ -670,9 +670,9 @@ vision_db
 ```sql
 CREATE TABLE images (
 
-id UUID PRIMARY KEY,
+id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
 
-tenant_id UUID,
+tenant_id BIGINT,
 
 storage_path TEXT,
 
@@ -691,9 +691,9 @@ created_at TIMESTAMP
 ```sql
 CREATE TABLE vision_analysis (
 
-id UUID PRIMARY KEY,
+id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
 
-image_id UUID,
+image_id BIGINT,
 
 model VARCHAR(100),
 
@@ -714,9 +714,9 @@ metadata JSONB
 ```sql
 CREATE TABLE ocr_results (
 
-id UUID PRIMARY KEY,
+id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
 
-image_id UUID,
+image_id BIGINT,
 
 text TEXT
 
@@ -766,9 +766,9 @@ PostgreSQL:
 ```sql
 CREATE TABLE memories (
 
-id UUID PRIMARY KEY,
+id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
 
-user_id UUID,
+user_id BIGINT,
 
 content TEXT,
 
@@ -799,7 +799,7 @@ workflow_db
 ```sql
 CREATE TABLE workflows (
 
-id UUID PRIMARY KEY,
+id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
 
 name VARCHAR(100),
 
@@ -816,9 +816,9 @@ definition JSONB
 ```sql
 CREATE TABLE workflow_instances (
 
-id UUID PRIMARY KEY,
+id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
 
-workflow_id UUID,
+workflow_id BIGINT,
 
 status VARCHAR(50),
 
@@ -849,9 +849,9 @@ Complete compliance tracking.
 ```sql
 CREATE TABLE audit_events (
 
-id UUID PRIMARY KEY,
+id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
 
-tenant_id UUID,
+tenant_id BIGINT,
 
 service VARCHAR(100),
 

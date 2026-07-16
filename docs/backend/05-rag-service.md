@@ -69,7 +69,7 @@ KnowledgeDocument (Aggregate Root)
 
 | Value Object | Type |
 |---|---|
-| `DocumentId` | UUID |
+| `DocumentId` | i64 |
 | `EmbeddingVector` | 768-dimensional float array |
 | `DocumentType` | Enum (pdf, docx, html, markdown, code, database) |
 | `ChunkStrategy` | Enum (semantic, fixed, recursive) |
@@ -438,8 +438,8 @@ Before retrieval, security checks are applied:
 
 ```sql
 CREATE TABLE documents (
-    id UUID PRIMARY KEY,
-    tenant_id UUID NOT NULL,
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    tenant_id BIGINT NOT NULL,
     filename TEXT NOT NULL,
     type VARCHAR(50) NOT NULL,
     status VARCHAR(50) NOT NULL DEFAULT 'uploaded',
@@ -454,8 +454,8 @@ CREATE TABLE documents (
 
 ```sql
 CREATE TABLE document_chunks (
-    id UUID PRIMARY KEY,
-    document_id UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    document_id BIGINT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
     content TEXT NOT NULL,
     chunk_index INT NOT NULL,
     token_count INT,
@@ -469,8 +469,8 @@ CREATE TABLE document_chunks (
 
 ```sql
 CREATE TABLE document_metadata (
-    id UUID PRIMARY KEY,
-    document_id UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    document_id BIGINT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
     metadata JSONB NOT NULL
 );
 ```

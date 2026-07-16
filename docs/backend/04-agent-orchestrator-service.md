@@ -67,9 +67,9 @@ AgentExecution (Aggregate Root)
 
 | Value Object | Type | Description |
 |---|---|---|
-| `AgentId` | UUID | Unique agent identifier |
-| `TaskId` | UUID | Unique task identifier |
-| `ExecutionId` | UUID | Unique execution run identifier |
+| `AgentId` | i64 | Unique agent identifier |
+| `TaskId` | i64 | Unique task identifier |
+| `ExecutionId` | i64 | Unique execution run identifier |
 | `AgentType` | Enum | planner, customer, developer, rag, vision, security, business |
 | `TaskStatus` | Enum | pending, planning, executing, waiting, completed, failed |
 
@@ -303,7 +303,7 @@ Result returned to Agent
     "customer_id": {
       "type": "string",
       "required": true,
-      "description": "Customer UUID"
+      "description": "Customer ID"
     }
   },
   "permissions": ["customer.read"],
@@ -354,7 +354,7 @@ Step 2 (after all complete):
 
 ```sql
 CREATE TABLE agents (
-    id UUID PRIMARY KEY,
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     type VARCHAR(100) NOT NULL,
     model VARCHAR(100) NOT NULL,
@@ -369,10 +369,10 @@ CREATE TABLE agents (
 
 ```sql
 CREATE TABLE agent_executions (
-    id UUID PRIMARY KEY,
-    tenant_id UUID NOT NULL,
-    user_id UUID NOT NULL,
-    agent_id UUID NOT NULL REFERENCES agents(id),
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    tenant_id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL,
+    agent_id BIGINT NOT NULL REFERENCES agents(id),
     task TEXT NOT NULL,
     status VARCHAR(50) NOT NULL DEFAULT 'pending',
     plan JSONB,
@@ -388,8 +388,8 @@ CREATE TABLE agent_executions (
 
 ```sql
 CREATE TABLE agent_steps (
-    id UUID PRIMARY KEY,
-    execution_id UUID NOT NULL REFERENCES agent_executions(id),
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    execution_id BIGINT NOT NULL REFERENCES agent_executions(id),
     step_number INT NOT NULL,
     agent_type VARCHAR(100),
     action TEXT NOT NULL,

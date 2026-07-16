@@ -174,15 +174,15 @@ Application Layer → Audit Event → NATS JetStream → Audit Service → Elast
 
 ```sql
 CREATE TABLE audit_events (
-    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    tenant_id       UUID NOT NULL REFERENCES tenants(id),
+    id              BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    tenant_id       BIGINT NOT NULL REFERENCES tenants(id),
     event_type      VARCHAR(100) NOT NULL,
-    actor_user_id   UUID,
+    actor_user_id   BIGINT,
     actor_role      VARCHAR(50),
     actor_ip        INET,
     actor_user_agent TEXT,
     resource_type   VARCHAR(50),
-    resource_id     UUID,
+    resource_id     BIGINT,
     action          VARCHAR(100) NOT NULL,
     result          VARCHAR(20) NOT NULL,
     details         JSONB,

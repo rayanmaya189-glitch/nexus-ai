@@ -40,8 +40,8 @@ The AI Gateway is the single entry point for all AI requests in the AeroXe Nexus
 AIRequest (Aggregate Root)
 ├── RequestContext
 │   ├── RequestId (UUID)
-│   ├── TenantId (UUID)
-│   ├── UserId (UUID)
+│   ├── TenantId (i64)
+│   ├── UserId (i64)
 │   └── TraceId (string)
 ├── SecurityContext
 │   ├── JWT Token
@@ -69,7 +69,7 @@ AIRequest (Aggregate Root)
 | `ModelName` | string | Must exist in model registry |
 | `RequestId` | UUID | Auto-generated |
 | `SessionId` | UUID | Auto-generated per session |
-| `TenantId` | UUID | Required, validated against JWT |
+| `TenantId` | i64 | Required, validated against JWT |
 
 ---
 
@@ -298,9 +298,9 @@ Every request must include `tenant_id`. The gateway:
 
 ```sql
 CREATE TABLE ai_sessions (
-    id UUID PRIMARY KEY,
-    tenant_id UUID NOT NULL,
-    user_id UUID NOT NULL,
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    tenant_id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL,
     started_at TIMESTAMP NOT NULL DEFAULT NOW(),
     status VARCHAR(50) NOT NULL DEFAULT 'active',
     metadata JSONB
@@ -311,9 +311,9 @@ CREATE TABLE ai_sessions (
 
 ```sql
 CREATE TABLE ai_requests (
-    id UUID PRIMARY KEY,
-    session_id UUID NOT NULL REFERENCES ai_sessions(id),
-    tenant_id UUID NOT NULL,
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    session_id BIGINT NOT NULL REFERENCES ai_sessions(id),
+    tenant_id BIGINT NOT NULL,
     prompt TEXT NOT NULL,
     model VARCHAR(100),
     agent VARCHAR(100),

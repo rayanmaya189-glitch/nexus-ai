@@ -203,9 +203,9 @@ Current context: "User asking about billing"
 
 ```sql
 CREATE TABLE memories (
-    id UUID PRIMARY KEY,
-    user_id UUID NOT NULL,
-    tenant_id UUID NOT NULL,
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    user_id BIGINT NOT NULL,
+    tenant_id BIGINT NOT NULL,
     content TEXT NOT NULL,
     embedding vector(768),
     memory_type VARCHAR(50) NOT NULL DEFAULT 'fact',
@@ -226,10 +226,10 @@ USING ivfflat (embedding vector_cosine_ops) WITH (lists = 50);
 
 ```sql
 CREATE TABLE conversation_history (
-    id UUID PRIMARY KEY,
-    session_id UUID NOT NULL,
-    user_id UUID NOT NULL,
-    tenant_id UUID NOT NULL,
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    session_id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL,
+    tenant_id BIGINT NOT NULL,
     role VARCHAR(20) NOT NULL, -- 'user' or 'assistant'
     content TEXT NOT NULL,
     tokens_used INT,

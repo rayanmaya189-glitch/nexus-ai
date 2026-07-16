@@ -68,8 +68,8 @@ User (Aggregate Root)
 
 | Value Object | Type |
 |---|---|
-| `UserId` | UUID |
-| `TenantId` | UUID |
+| `UserId` | i64 |
+| `TenantId` | i64 |
 | `EmailAddress` | Validated string |
 | `PasswordHash` | bcrypt hash |
 | `JWTToken` | Signed JWT |
@@ -308,8 +308,8 @@ message PermissionResponse {
 
 ```sql
 CREATE TABLE users (
-    id UUID PRIMARY KEY,
-    tenant_id UUID NOT NULL,
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    tenant_id BIGINT NOT NULL,
     email VARCHAR(255) UNIQUE NOT NULL,
     password_hash TEXT NOT NULL,
     display_name VARCHAR(255),
@@ -326,8 +326,8 @@ CREATE TABLE users (
 
 ```sql
 CREATE TABLE roles (
-    id UUID PRIMARY KEY,
-    tenant_id UUID,
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    tenant_id BIGINT,
     name VARCHAR(100) NOT NULL,
     description TEXT,
     is_system BOOLEAN DEFAULT FALSE,
@@ -339,7 +339,7 @@ CREATE TABLE roles (
 
 ```sql
 CREATE TABLE permissions (
-    id UUID PRIMARY KEY,
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     name VARCHAR(100) UNIQUE NOT NULL,
     resource VARCHAR(100) NOT NULL,
     action VARCHAR(50) NOT NULL,
@@ -351,10 +351,10 @@ CREATE TABLE permissions (
 
 ```sql
 CREATE TABLE user_roles (
-    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    role_id UUID NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    role_id BIGINT NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
     assigned_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    assigned_by UUID,
+    assigned_by BIGINT,
     PRIMARY KEY(user_id, role_id)
 );
 ```
@@ -363,8 +363,8 @@ CREATE TABLE user_roles (
 
 ```sql
 CREATE TABLE role_permissions (
-    role_id UUID NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
-    permission_id UUID NOT NULL REFERENCES permissions(id) ON DELETE CASCADE,
+    role_id BIGINT NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+    permission_id BIGINT NOT NULL REFERENCES permissions(id) ON DELETE CASCADE,
     PRIMARY KEY(role_id, permission_id)
 );
 ```
@@ -373,7 +373,7 @@ CREATE TABLE role_permissions (
 
 ```sql
 CREATE TABLE tenants (
-    id UUID PRIMARY KEY,
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     slug VARCHAR(100) UNIQUE NOT NULL,
     plan VARCHAR(50) NOT NULL DEFAULT 'free',
@@ -387,9 +387,9 @@ CREATE TABLE tenants (
 
 ```sql
 CREATE TABLE api_keys (
-    id UUID PRIMARY KEY,
-    tenant_id UUID NOT NULL,
-    user_id UUID NOT NULL REFERENCES users(id),
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    tenant_id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL REFERENCES users(id),
     name VARCHAR(100) NOT NULL,
     key_hash TEXT NOT NULL,
     key_prefix VARCHAR(10) NOT NULL,

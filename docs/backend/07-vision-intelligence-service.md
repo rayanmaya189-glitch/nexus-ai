@@ -65,7 +65,7 @@ VisionAnalysis (Aggregate Root)
 
 | Value Object | Type |
 |---|---|
-| `ImageId` | UUID |
+| `ImageId` | i64 |
 | `ImageType` | Enum (png, jpg, jpeg, webp, gif, bmp, tiff) |
 | `AnalysisType` | Enum (describe, ocr, troubleshoot, extract, detect) |
 
@@ -244,9 +244,9 @@ Image Upload
 
 ```sql
 CREATE TABLE images (
-    id UUID PRIMARY KEY,
-    tenant_id UUID NOT NULL,
-    user_id UUID NOT NULL,
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    tenant_id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL,
     storage_path TEXT NOT NULL,
     file_type VARCHAR(50) NOT NULL,
     file_size_bytes BIGINT,
@@ -260,9 +260,9 @@ CREATE TABLE images (
 
 ```sql
 CREATE TABLE vision_analysis (
-    id UUID PRIMARY KEY,
-    image_id UUID NOT NULL REFERENCES images(id) ON DELETE CASCADE,
-    tenant_id UUID NOT NULL,
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    image_id BIGINT NOT NULL REFERENCES images(id) ON DELETE CASCADE,
+    tenant_id BIGINT NOT NULL,
     model VARCHAR(100) NOT NULL DEFAULT 'qwen3-vl:4b',
     analysis_type VARCHAR(50) NOT NULL,
     description TEXT,
@@ -278,8 +278,8 @@ CREATE TABLE vision_analysis (
 
 ```sql
 CREATE TABLE ocr_results (
-    id UUID PRIMARY KEY,
-    image_id UUID NOT NULL REFERENCES images(id) ON DELETE CASCADE,
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    image_id BIGINT NOT NULL REFERENCES images(id) ON DELETE CASCADE,
     text TEXT NOT NULL,
     language VARCHAR(10) DEFAULT 'en',
     confidence FLOAT,

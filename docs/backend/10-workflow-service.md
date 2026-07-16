@@ -69,8 +69,8 @@ WorkflowInstance (Aggregate Root)
 
 | Value Object | Type |
 |---|---|
-| `WorkflowId` | UUID |
-| `InstanceId` | UUID |
+| `WorkflowId` | i64 |
+| `InstanceId` | i64 |
 | `StepType` | Enum (ai_task, approval, notification, api_call, condition) |
 | `StepStatus` | Enum (pending, running, waiting, completed, failed, skipped) |
 
@@ -211,8 +211,8 @@ Publish
 
 ```sql
 CREATE TABLE workflows (
-    id UUID PRIMARY KEY,
-    tenant_id UUID NOT NULL,
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    tenant_id BIGINT NOT NULL,
     name VARCHAR(100) NOT NULL,
     description TEXT,
     definition JSONB NOT NULL,
@@ -227,10 +227,10 @@ CREATE TABLE workflows (
 
 ```sql
 CREATE TABLE workflow_instances (
-    id UUID PRIMARY KEY,
-    workflow_id UUID NOT NULL REFERENCES workflows(id),
-    tenant_id UUID NOT NULL,
-    initiated_by UUID NOT NULL,
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    workflow_id BIGINT NOT NULL REFERENCES workflows(id),
+    tenant_id BIGINT NOT NULL,
+    initiated_by BIGINT NOT NULL,
     status VARCHAR(50) NOT NULL DEFAULT 'running',
     context JSONB,
     started_at TIMESTAMP NOT NULL DEFAULT NOW(),
@@ -243,13 +243,13 @@ CREATE TABLE workflow_instances (
 
 ```sql
 CREATE TABLE workflow_steps (
-    id UUID PRIMARY KEY,
-    instance_id UUID NOT NULL REFERENCES workflow_instances(id) ON DELETE CASCADE,
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    instance_id BIGINT NOT NULL REFERENCES workflow_instances(id) ON DELETE CASCADE,
     step_number INT NOT NULL,
     step_type VARCHAR(50) NOT NULL,
     name VARCHAR(100),
     status VARCHAR(50) NOT NULL DEFAULT 'pending',
-    assignee_id UUID,
+    assignee_id BIGINT,
     input JSONB,
     output JSONB,
     error_message TEXT,
@@ -262,9 +262,9 @@ CREATE TABLE workflow_steps (
 
 ```sql
 CREATE TABLE workflow_approvals (
-    id UUID PRIMARY KEY,
-    step_id UUID NOT NULL REFERENCES workflow_steps(id) ON DELETE CASCADE,
-    approver_id UUID NOT NULL,
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    step_id BIGINT NOT NULL REFERENCES workflow_steps(id) ON DELETE CASCADE,
+    approver_id BIGINT NOT NULL,
     status VARCHAR(50) NOT NULL DEFAULT 'pending',
     comment TEXT,
     decided_at TIMESTAMP,

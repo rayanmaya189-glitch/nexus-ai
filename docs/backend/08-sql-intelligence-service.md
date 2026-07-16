@@ -47,7 +47,7 @@ QueryExecution (Aggregate Root)
 
 | Value Object | Type |
 |---|---|
-| `DatabaseId` | UUID |
+| `DatabaseId` | i64 |
 | `SQLStatement` | Validated SQL string |
 | `QueryPermission` | User role + database access |
 
