@@ -803,7 +803,7 @@ function DatabaseConnectionCard({ connection, agentId }: {
 │  └──────────────────────────────────────────────────┘    │
 │                                                            │
 │  Status: Connected ✅                                      │
-│  Server Version: PostgreSQL 16.2                           │
+│  Server Version: PostgreSQL 18.0                           │
 │  Total Tables: 47                                         │
 │  Response Time: 42ms                                      │
 │                                                            │

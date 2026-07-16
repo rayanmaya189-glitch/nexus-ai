@@ -112,11 +112,12 @@ apiClient.interceptors.response.use(
     }
 
     // Transform error
+    const errorData = (error.response?.data as any)?.error;
     const transformedError = {
-      message: (error.response?.data as any)?.error || error.message || 'Unknown error',
+      message: errorData?.message || error.message || 'Unknown error',
       status: error.response?.status,
-      code: (error.response?.data as any)?.code,
-      details: (error.response?.data as any)?.details,
+      code: errorData?.code,
+      request_id: errorData?.request_id,
     };
 
     return Promise.reject(transformedError);
@@ -165,19 +166,19 @@ export const agentApi = {
 };
 
 export const chatApi = {
-  sendMessage: (data: { content: string; agent_id: string; conversation_id?: string }) =>
-    apiClient.post<Message>('/api/v1/chat/send', data),
+  sendMessage: (data: { message: string; agent: string; conversation_id?: string }) =>
+    apiClient.post<Message>('/api/v1/ai/chat', data),
 
   getConversations: () =>
-    apiClient.get<{ conversations: Conversation[] }>('/api/v1/chat/conversations'),
+    apiClient.get<{ conversations: Conversation[] }>('/api/v1/ai/conversations'),
 
   getMessages: (conversationId: string) =>
     apiClient.get<{ messages: Message[] }>(
-      `/api/v1/chat/conversations/${conversationId}/messages`
+      `/api/v1/ai/conversations/${conversationId}/messages`
     ),
 
   deleteConversation: (id: string) =>
-    apiClient.delete(`/api/v1/chat/conversations/${id}`),
+    apiClient.delete(`/api/v1/ai/conversations/${id}`),
 };
 
 export const dashboardApi = {
@@ -198,7 +199,7 @@ export const fileApi = {
     const formData = new FormData();
     formData.append('file', file);
 
-    return apiClient.post('/api/v1/files/upload', formData, {
+    return apiClient.post('/api/v1/rag/documents', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
       onUploadProgress: (e) => {
         if (e.total && onProgress) {
@@ -209,7 +210,7 @@ export const fileApi = {
   },
 
   download: (fileId: string) =>
-    apiClient.get(`/api/v1/files/${fileId}`, { responseType: 'blob' }),
+    apiClient.get(`/api/v1/rag/documents/${fileId}`, { responseType: 'blob' }),
 };
 ```
 
@@ -227,6 +228,7 @@ export interface LoginRequest {
 export interface LoginResponse {
   access_token: string;
   refresh_token: string;
+  expires_in: number;
   user: User;
 }
 
@@ -445,7 +447,7 @@ class WebSocketClient {
 }
 
 export const wsClient = new WebSocketClient(
-  process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000/ws'
+  process.env.NEXT_PUBLIC_WS_URL || 'ws://localhost:8000/ws/chat'
 );
 ```
 
@@ -453,13 +455,15 @@ export const wsClient = new WebSocketClient(
 
 | Type | Direction | Payload | Description |
 |------|-----------|---------|-------------|
-| `token` | Server→Client | `{ token: string }` | Streaming text token |
-| `tool_call` | Server→Client | `{ name, arguments }` | Agent calling a tool |
-| `tool_result` | Server→Client | `{ tool_id, result }` | Tool execution result |
-| `completed` | Server→Client | `{ message_id }` | Response complete |
+| `token` | Server→Client | `{ content: string }` | Streaming text token |
+| `tool_call` | Server→Client | `{ content: string }` | Agent calling a tool |
+| `tool_result` | Server→Client | `{ content: string }` | Tool execution result |
+| `thinking` | Server→Client | `{ content: string }` | Agent reasoning |
+| `completed` | Server→Client | `{}` | Response complete |
 | `error` | Server→Client | `{ message, code }` | Error occurred |
-| `heartbeat` | Bidirectional | `{}` | Keep-alive ping |
-| `chat` | Client→Server | `{ content, agent_id, conversation_id }` | Send message |
+| `ping` | Client→Server | `{}` | Keep-alive ping |
+| `pong` | Server→Client | `{}` | Keep-alive pong |
+| `message` | Client→Server | `{ type: "message", content: string }` | Send message |
 
 ---
 

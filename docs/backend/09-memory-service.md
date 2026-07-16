@@ -218,7 +218,7 @@ CREATE TABLE memories (
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX memory_embedding_idx ON memories
+CREATE INDEX idx_memories_embedding ON memories
 USING ivfflat (embedding vector_cosine_ops) WITH (lists = 50);
 ```
 

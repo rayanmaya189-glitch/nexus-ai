@@ -1101,87 +1101,63 @@ export function MetadataEditor({ document }: { document: Document }) {
 
 ### Endpoints
 
-| Method   | Endpoint                    | Description              |
-|----------|-----------------------------|--------------------------|
-| `POST`   | `/api/documents/upload`     | Upload a document        |
-| `GET`    | `/api/documents`            | List documents           |
-| `GET`    | `/api/documents/:id`        | Get document details     |
-| `PATCH`  | `/api/documents/:id`        | Update metadata          |
-| `DELETE` | `/api/documents/:id`        | Delete document          |
-| `POST`   | `/api/documents/:id/reprocess` | Reprocess document   |
-| `GET`    | `/api/documents/:id/chunks` | Get document chunks      |
-| `PATCH`  | `/api/documents/:id/chunks/:chunkId` | Edit chunk    |
-| `POST`   | `/api/documents/search`     | Search documents         |
-| `POST`   | `/api/documents/bulk`       | Bulk operations          |
-| `GET`    | `/api/document-sets`        | List document sets       |
-| `POST`   | `/api/document-sets`        | Create a document set    |
-| `PATCH`  | `/api/document-sets/:id`    | Update a document set    |
-| `DELETE` | `/api/document-sets/:id`    | Delete a document set    |
-| `POST`   | `/api/document-sets/:id/documents` | Add docs to set  |
-| `DELETE` | `/api/document-sets/:id/documents/:docId` | Remove doc |
+| Method   | Endpoint                               | Description              |
+|----------|----------------------------------------|--------------------------|
+| `POST`   | `/api/v1/rag/documents`                | Upload a document        |
+| `GET`    | `/api/v1/rag/documents`                | List documents           |
+| `GET`    | `/api/v1/rag/documents/:id`            | Get document details     |
+| `PATCH`  | `/api/v1/rag/documents/:id`            | Update metadata          |
+| `DELETE` | `/api/v1/rag/documents/:id`            | Delete document          |
+| `POST`   | `/api/v1/rag/documents/:id/reprocess`  | Reprocess document       |
+| `GET`    | `/api/v1/rag/documents/:id/status`     | Get processing status    |
+| `GET`    | `/api/v1/rag/documents/:id/chunks`     | Get document chunks      |
+| `PATCH`  | `/api/v1/rag/documents/:id/chunks/:chunkId` | Edit chunk         |
+| `POST`   | `/api/v1/rag/search`                   | Search documents         |
+| `POST`   | `/api/v1/rag/documents/bulk`           | Bulk operations          |
+| `GET`    | `/api/v1/document-sets`                | List document sets       |
+| `POST`   | `/api/v1/document-sets`                | Create a document set    |
+| `PATCH`  | `/api/v1/document-sets/:id`            | Update a document set    |
+| `DELETE` | `/api/v1/document-sets/:id`            | Delete a document set    |
+| `POST`   | `/api/v1/document-sets/:id/documents`  | Add docs to set          |
+| `DELETE` | `/api/v1/document-sets/:id/documents/:docId` | Remove doc from set |
 
 ### Upload Request/Response
 
 ```typescript
-// POST /api/documents/upload
+// POST /api/v1/rag/documents
 // Request: multipart/form-data
 interface UploadRequest {
   file: File;
-  set_id?: string;
-  tags?: string[];
-  category?: string;
-  description?: string;
-  chunk_size?: number;
-  chunk_overlap?: number;
 }
 
 // Response
 interface UploadResponse {
-  document: {
-    id: string;
-    name: string;
-    type: string;
-    size: number;
-    status: 'uploaded';
-    created_at: string;
-  };
+  document_id: string;
+  status: 'processing';
 }
 ```
 
 ### Search Request/Response
 
 ```typescript
-// POST /api/documents/search
+// POST /api/v1/rag/search
 interface SearchRequest {
   query: string;
-  mode: 'semantic' | 'keyword' | 'hybrid';
-  filters?: {
-    types?: string[];
-    status?: string[];
-    tags?: string[];
-    set_id?: string;
-    date_from?: string;
-    date_to?: string;
-  };
   limit?: number;
-  offset?: number;
 }
 
 interface SearchResponse {
   results: SearchResult[];
-  total: number;
-  query_time_ms: number;
+  total_latency_ms: number;
 }
 
 interface SearchResult {
   document_id: string;
-  document_name: string;
-  chunk_id: string;
-  chunk_index: number;
+  title: string;
   content: string;
   score: number;
-  match_type: 'semantic' | 'keyword';
-  highlights: string[];
+  source: string;
+  metadata: Record<string, unknown>;
 }
 ```
 
