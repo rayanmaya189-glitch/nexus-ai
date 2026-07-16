@@ -182,30 +182,208 @@ External Request
 [5] Authorization (RBAC + ABAC)
     |
     v
-[6] Input Sanitization (Prompt Injection Check)
+[6] Sensitive Words Filter (prompt scan)
     |
     v
-[7] Request Validation
+[7] Prompt Injection Detection
     |
     v
-[8] Agent Routing Decision
+[8] Request Validation
     |
     v
-[9] gRPC Call to Agent Orchestrator
+[9] Agent Routing Decision
     |
     v
-[10] Response Aggregation / Streaming
+[10] gRPC Call to Agent Orchestrator
     |
     v
-[11] Audit Event Publishing
+[11] Response Aggregation / Streaming
     |
     v
-[12] Response to Client
+[12] Sensitive Words Filter (response scan)
+    |
+    v
+[13] Audit Event Publishing
+    |
+    v
+[14] Response to Client
 ```
 
 ---
 
-## 7. Rate Limiting
+## 7. Sensitive Words Filter
+
+Every prompt and every response passes through a sensitive words filter before reaching the AI model or the customer.
+
+### 7.1 Filter Architecture
+
+```
+User Prompt
+  → [Prompt Filter] Scan for banned words
+    → MATCH FOUND? → BLOCK + return safe message + audit log
+    → NO MATCH → Continue to AI model
+
+AI Response
+  → [Response Filter] Scan for leaked sensitive data
+    → MATCH FOUND? → BLOCK + redact + audit log
+    → NO MATCH → Deliver to customer
+```
+
+### 7.2 Word Categories
+
+| Category | Action | Examples |
+|---|---|---|
+| **Profanity** | BLOCK prompt | Abusive/vulgar words |
+| **Hate Speech** | BLOCK prompt | Discriminatory language |
+| **Violence** | BLOCK prompt | Threats, harm instructions |
+| **Self-Harm** | BLOCK prompt | Suicide, self-injury content |
+| **Sexual** | BLOCK prompt | Explicit sexual content |
+| **Illegal Activities** | BLOCK prompt | Drug manufacturing, hacking instructions |
+| **PII Leakage** | BLOCK response | Aadhaar numbers, PAN, credit cards |
+| **Credential Leakage** | BLOCK response | Passwords, API keys, tokens |
+| **Internal System Info** | BLOCK response | DB passwords, internal IPs, secret keys |
+| **Competitor Names** | FLAG (log only) | Competitor product names |
+
+### 7.3 Filter Configuration (Per Tenant)
+
+```json
+{
+  "tenant_id": 1,
+  "filter_config": {
+    "enabled": true,
+    "block profanity": true,
+    "block hate_speech": true,
+    "block violence": true,
+    "block self_harm": true,
+    "block sexual": true,
+    "block illegal_activities": true,
+    "block pii_leakage": true,
+    "block credential_leakage": true,
+    "block internal_info": true,
+    "flag_competitor_names": true,
+    "custom_blocked_words": ["word1", "word2"],
+    "custom_allowed_words": ["allowed_word1"],
+    "max_prompt_length": 10000,
+    "log_all_matches": true
+  }
+}
+```
+
+### 7.4 Filter Implementation
+
+```rust
+// Rust implementation in api-gateway-service
+use aho_corasick::AhoCorasick;
+
+struct SensitiveWordFilter {
+    profanity: AhoCorasick,
+    hate_speech: AhoCorasick,
+    violence: AhoCorasick,
+    self_harm: AhoCorasick,
+    sexual: AhoCorasick,
+    illegal: AhoCorasick,
+    pii_patterns: Vec<Regex>,
+    credential_patterns: Vec<Regex>,
+    internal_patterns: Vec<Regex>,
+    custom_words: AhoCorasick,
+}
+
+impl SensitiveWordFilter {
+    fn scan_prompt(&self, prompt: &str) -> FilterResult {
+        let lower = prompt.to_lowercase();
+
+        // Check all word categories
+        if self.profanity.is_match(&lower) { return FilterResult::Blocked("profanity"); }
+        if self.hate_speech.is_match(&lower) { return FilterResult::Blocked("hate_speech"); }
+        if self.violence.is_match(&lower) { return FilterResult::Blocked("violence"); }
+        if self.self_harm.is_match(&lower) { return FilterResult::Blocked("self_harm"); }
+        if self.sexual.is_match(&lower) { return FilterResult::Blocked("sexual"); }
+        if self.illegal.is_match(&lower) { return FilterResult::Blocked("illegal"); }
+        if self.custom_words.is_match(&lower) { return FilterResult::Blocked("custom"); }
+
+        FilterResult::Clean
+    }
+
+    fn scan_response(&self, response: &str) -> FilterResult {
+        // Check PII patterns
+        for pattern in &self.pii_patterns {
+            if pattern.is_match(response) {
+                return FilterResult::Redacted("pii_leakage");
+            }
+        }
+        // Check credential patterns
+        for pattern in &self.credential_patterns {
+            if pattern.is_match(response) {
+                return FilterResult::Redacted("credential_leakage");
+            }
+        }
+        // Check internal info patterns
+        for pattern in &self.internal_patterns {
+            if pattern.is_match(response) {
+                return FilterResult::Redacted("internal_info");
+            }
+        }
+        FilterResult::Clean
+    }
+}
+```
+
+### 7.5 PII Detection Patterns
+
+| Pattern | Regex | Action |
+|---|---|---|
+| Aadhaar Number | `\b\d{4}\s?\d{4}\s?\d{4}\b` | Redact: `XXXX XXXX 1234` |
+| PAN Card | `\b[A-Z]{5}\d{4}[A-Z]\b` | Redact: `XXXXX1234X` |
+| Credit Card | `\b\d{4}[\s-]?\d{4}[\s-]?\d{4}[\s-]?\d{4}\b` | Redact: `XXXX XXXX XXXX 1234` |
+| Phone Number (IN) | `\b(\+91|91|0)?[6-9]\d{9}\b` | Redact: `+91 XXXXX1234` |
+| Email | `\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b` | Redact: `a***@gmail.com` |
+| Passport | `\b[A-Z]\d{8}\b` | Redact: `X1234XXXX` |
+
+### 7.6 Credential Detection Patterns
+
+| Pattern | Regex | Action |
+|---|---|---|
+| API Key | `\b(sk|ak|pk|key|token)[_-]?[a-zA-Z0-9]{20,}\b` | Redact: `[REDACTED_API_KEY]` |
+| Password in text | `password\s*[:=]\s*\S+` | Redact: `password: [REDACTED]` |
+| JWT Token | `eyJ[a-zA-Z0-9_-]+\.eyJ[a-zA-Z0-9_-]+\.[a-zA-Z0-9_-]+` | Redact: `[REDACTED_JWT]` |
+| Private Key | `-----BEGIN (RSA |EC )?PRIVATE KEY-----` | Redact: `[REDACTED_PRIVATE_KEY]` |
+| AWS Key | `\b(AKIA|ABIA|ACCA|ASIA)[A-Z0-9]{16}\b` | Redact: `[REDACTED_AWS_KEY]` |
+
+### 7.7 Filter Response Messages
+
+| Block Reason | User Message |
+|---|---|
+| Profanity | "Your message contains inappropriate language. Please rephrase." |
+| Hate Speech | "Your message contains discriminatory language. Please rephrase." |
+| Violence | "Your message contains violent content. Please rephrase." |
+| Self-Harm | "If you're in crisis, please contact a helpline. I'm here to help with platform-related questions." |
+| Sexual | "Your message contains inappropriate content. Please rephrase." |
+| Illegal | "I can't assist with illegal activities. I'm here to help with platform-related questions." |
+| PII Leakage (response) | Response redacted, PII replaced with masked values |
+| Credential Leakage (response) | Response redacted, credentials removed |
+
+### 7.8 Audit Logging
+
+Every filter match is logged:
+
+```json
+{
+  "event_type": "sensitive_word_filter",
+  "filter_type": "prompt",
+  "category": "profanity",
+  "matched_words": ["***"],
+  "action": "blocked",
+  "tenant_id": 1,
+  "customer_id": 12345,
+  "session_id": "sess_abc",
+  "prompt_length": 150,
+  "created_at": "2026-07-16T10:30:00Z"
+}
+```
+
+---
+
+## 8. Rate Limiting
 
 ### Configuration
 

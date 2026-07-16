@@ -543,18 +543,22 @@ Every agent response passes through validation before delivery:
 | Response contains platform data from wrong platform | BLOCK, redirect |
 | Response contains internal system details | BLOCK, generic error |
 | Response contains API keys/tokens | BLOCK, log violation |
+| Prompt contains banned/sensitive words | BLOCK, safe message |
+| Response contains profanity/hate speech | BLOCK, safe message |
 
 ### 9.2 Response Validation Flow
 
 ```
 Agent generates response
   → Response Validator
+    → Sensitive Words Filter (profanity, hate, violence, etc.)
     → Extract entities (customer names, IDs, accounts)
     → Check: Do any match OTHER customers?
     → Check: Does response contain sensitive patterns?
       - password, secret, token, key, PIN
       - Credit card numbers
       - SSN/Aadhaar patterns
+      - API keys, JWT tokens
         → IF violation detected: BLOCK + audit log
         → IF clean: Deliver to customer
 ```
