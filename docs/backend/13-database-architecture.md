@@ -552,27 +552,203 @@ CREATE TABLE workflow_steps (
 
 ## 11. Audit Database (audit_db)
 
-### audit_events
+### chat_trail (Partitioned by Month)
+
+Complete chat trail for every conversation — every message, every tool call, every response.
+
+```sql
+CREATE TABLE chat_trail (
+    id              BIGINT GENERATED ALWAYS AS IDENTITY,
+    tenant_id       BIGINT NOT NULL,
+    session_id      VARCHAR(100) NOT NULL,
+    conversation_id VARCHAR(100) NOT NULL,
+    message_id      VARCHAR(100) NOT NULL,
+    customer_id     BIGINT,
+    user_id         BIGINT,
+    role            VARCHAR(20) NOT NULL,           -- user | assistant | system | tool
+    content         TEXT NOT NULL,
+    content_type    VARCHAR(50) DEFAULT 'text',     -- text | image | audio | tool_call | tool_result
+    model_used      VARCHAR(100),                   -- which AI model responded
+    tokens_input    INTEGER,
+    tokens_output   INTEGER,
+    latency_ms      INTEGER,
+    tool_name       VARCHAR(100),                   -- tool invoked (if any)
+    tool_input      JSONB,                          -- tool call arguments
+    tool_output     JSONB,                          -- tool call result
+    tool_status     VARCHAR(20),                    -- success | error | blocked
+    safety_flag     VARCHAR(50),                    -- none | prompt_injection | jailbreak | policy_violation
+    metadata        JSONB,                          -- additional context
+    ip_address      INET,
+    user_agent      TEXT,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (id, created_at)
+) PARTITION BY RANGE (created_at);
+
+-- Monthly partitions (auto-created by pg_partman)
+CREATE TABLE chat_trail_2026_01 PARTITION OF chat_trail
+    FOR VALUES FROM ('2026-01-01') TO ('2026-02-01');
+CREATE TABLE chat_trail_2026_02 PARTITION OF chat_trail
+    FOR VALUES FROM ('2026-02-01') TO ('2026-03-01');
+CREATE TABLE chat_trail_2026_03 PARTITION OF chat_trail
+    FOR VALUES FROM ('2026-03-01') TO ('2026-04-01');
+-- ... pg_partman auto-creates future partitions
+
+-- Indexes on partitioned table
+CREATE INDEX idx_ct_tenant_session ON chat_trail(tenant_id, session_id, created_at DESC);
+CREATE INDEX idx_ct_conversation ON chat_trail(conversation_id, created_at);
+CREATE INDEX idx_ct_customer ON chat_trail(customer_id, created_at DESC);
+CREATE INDEX idx_ct_user ON chat_trail(user_id, created_at DESC);
+CREATE INDEX idx_ct_model ON chat_trail(model_used, created_at DESC);
+CREATE INDEX idx_ct_safety ON chat_trail(safety_flag) WHERE safety_flag != 'none';
+CREATE INDEX idx_ct_tool ON chat_trail(tool_name, created_at DESC);
+```
+
+### audit_events (Partitioned by Month)
 
 ```sql
 CREATE TABLE audit_events (
-    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    tenant_id BIGINT NOT NULL,
-    user_id BIGINT,
-    service VARCHAR(100) NOT NULL,
-    event_type VARCHAR(100) NOT NULL,
-    resource_type VARCHAR(100),
-    resource_id BIGINT,
-    action VARCHAR(50) NOT NULL,
-    payload JSONB,
-    ip_address INET,
-    user_agent TEXT,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW()
-);
+    id              BIGINT GENERATED ALWAYS AS IDENTITY,
+    tenant_id       BIGINT NOT NULL,
+    event_type      VARCHAR(100) NOT NULL,
+    actor_user_id   BIGINT,
+    actor_role      VARCHAR(50),
+    actor_ip        INET,
+    actor_user_agent TEXT,
+    resource_type   VARCHAR(50),
+    resource_id     BIGINT,
+    action          VARCHAR(100) NOT NULL,
+    result          VARCHAR(20) NOT NULL,           -- success | failure | blocked
+    details         JSONB,
+    trace_id        VARCHAR(100),
+    request_id      VARCHAR(100),
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (id, created_at)
+) PARTITION BY RANGE (created_at);
+
+-- Monthly partitions
+CREATE TABLE audit_events_2026_01 PARTITION OF audit_events
+    FOR VALUES FROM ('2026-01-01') TO ('2026-02-01');
+CREATE TABLE audit_events_2026_02 PARTITION OF audit_events
+    FOR VALUES FROM ('2026-02-01') TO ('2026-03-01');
+CREATE TABLE audit_events_2026_03 PARTITION OF audit_events
+    FOR VALUES FROM ('2026-03-01') TO ('2026-04-01');
+-- ... pg_partman auto-creates future partitions
 
 CREATE INDEX idx_audit_tenant ON audit_events(tenant_id, created_at DESC);
-CREATE INDEX idx_audit_service ON audit_events(service, event_type);
-CREATE INDEX idx_audit_user ON audit_events(user_id, created_at DESC);
+CREATE INDEX idx_audit_event_type ON audit_events(event_type, created_at DESC);
+CREATE INDEX idx_audit_actor ON audit_events(actor_user_id, created_at DESC);
+CREATE INDEX idx_audit_resource ON audit_events(resource_type, resource_id);
+CREATE INDEX idx_audit_trace ON audit_events(trace_id);
+CREATE INDEX idx_audit_created ON audit_events(created_at);
+```
+
+### Partition Management (pg_partman)
+
+```sql
+-- Auto-create next 3 months of partitions
+SELECT partman.create_parent(
+    p_parent_table := 'public.chat_trail',
+    p_control := 'created_at',
+    p_type := 'range',
+    p_premake := 3
+);
+
+SELECT partman.create_parent(
+    p_parent_table := 'public.audit_events',
+    p_control := 'created_at',
+    p_type := 'range',
+    p_premake := 3
+);
+
+-- Retention: drop partitions older than 2 years
+UPDATE partman.part_config
+SET retention = '2 years',
+    retention_keep_table = false
+WHERE parent_table = 'public.chat_trail';
+
+UPDATE partman.part_config
+SET retention = '2 years',
+    retention_keep_table = false
+WHERE parent_table = 'public.audit_events';
+```
+
+### Partition Strategy
+
+| Table | Partition Key | Interval | Hot | Warm | Cold | Archive |
+|---|---|---|---|---|---|---|
+| `chat_trail` | `created_at` | Monthly | 0-3 months | 3-12 months | 1-2 years | MinIO |
+| `audit_events` | `created_at` | Monthly | 0-3 months | 3-12 months | 1-2 years | MinIO |
+
+### Retention Policies
+
+| Tier | Age | Storage | Compression | Access |
+|---|---|---|---|---|
+| Hot | 0-3 months | PostgreSQL (NVMe) | None | Full index scan |
+| Warm | 3-12 months | PostgreSQL (SSD) | LZ4 | Indexed scan |
+| Cold | 1-2 years | PostgreSQL (HDD) | ZSTD | Time-range scan |
+| Archive | 2+ years | MinIO (S3) | ZSTD | Restore on demand |
+
+### chat_trail Query Examples
+
+```sql
+-- Get all messages in a conversation
+SELECT * FROM chat_trail
+WHERE conversation_id = 'conv_abc123'
+ORDER BY created_at ASC;
+
+-- Get all conversations for a customer in last 7 days
+SELECT DISTINCT conversation_id, MIN(created_at) AS started, MAX(created_at) AS ended
+FROM chat_trail
+WHERE customer_id = 12345
+  AND created_at > NOW() - INTERVAL '7 days'
+GROUP BY conversation_id
+ORDER BY started DESC;
+
+-- Get tool usage stats for a tenant
+SELECT tool_name, COUNT(*) AS invocations,
+       AVG(latency_ms) AS avg_latency,
+       SUM(CASE WHEN tool_status = 'error' THEN 1 ELSE 0 END) AS errors
+FROM chat_trail
+WHERE tenant_id = 1
+  AND tool_name IS NOT NULL
+  AND created_at > NOW() - INTERVAL '30 days'
+GROUP BY tool_name
+ORDER BY invocations DESC;
+
+-- Get AI model performance stats
+SELECT model_used, COUNT(*) AS responses,
+       AVG(tokens_output) AS avg_tokens,
+       AVG(latency_ms) AS avg_latency
+FROM chat_trail
+WHERE role = 'assistant'
+  AND model_used IS NOT NULL
+  AND created_at > NOW() - INTERVAL '30 days'
+GROUP BY model_used;
+
+-- Get safety-flagged conversations
+SELECT session_id, conversation_id, customer_id,
+       safety_flag, content, created_at
+FROM chat_trail
+WHERE safety_flag != 'none'
+  AND created_at > NOW() - INTERVAL '24 hours'
+ORDER BY created_at DESC;
+
+-- Export conversation as JSON for compliance
+SELECT jsonb_build_object(
+    'conversation_id', conversation_id,
+    'messages', jsonb_agg(
+        jsonb_build_object(
+            'role', role,
+            'content', content,
+            'model', model_used,
+            'tokens', tokens_input + tokens_output,
+            'timestamp', created_at
+        ) ORDER BY created_at
+    )
+) AS conversation_json
+FROM chat_trail
+WHERE conversation_id = 'conv_abc123'
+GROUP BY conversation_id;
 ```
 
 ---
