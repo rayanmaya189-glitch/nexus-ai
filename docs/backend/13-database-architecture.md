@@ -1,0 +1,561 @@
+# AeroXe Nexus AI — Database Architecture
+
+## PostgreSQL, pgvector, Apache AGE, Redis, Elasticsearch & MinIO
+
+---
+
+## 1. Architecture Principles
+
+AeroXe Nexus AI follows Database-per-Microservice architecture:
+
+| Rule | Description |
+|---|---|
+| Service Ownership | Each microservice owns its database |
+| No Cross-DB Access | Services communicate through gRPC/NATS only |
+| Event Synchronization | Data consistency through domain events |
+| Read Model Optimization | Read models can be optimized separately |
+| Tenant Isolation | Mandatory `tenant_id` in all business tables |
+
+---
+
+## 2. Storage Technology Selection
+
+| Requirement | Technology | Purpose |
+|---|---|---|
+| Transaction Data | PostgreSQL 16 | Primary relational database |
+| Vector Search | pgvector | Semantic search embeddings |
+| Knowledge Graph | Apache AGE | Entity relationships |
+| Cache | Redis | Short-term memory, sessions, rate limiting |
+| Full Text Search | Elasticsearch | Document search, logs, audit |
+| File Storage | MinIO | Documents, images, model files |
+| Event Storage | NATS JetStream | Event streaming persistence |
+
+---
+
+## 3. Database-per-Service Map
+
+```
+AeroXe Nexus AI
+    |
+    ===================================================
+
+    identity-service     -> identity_db    (PostgreSQL)
+    ai-gateway-service   -> gateway_db     (PostgreSQL)
+    agent-orchestrator   -> agent_db       (PostgreSQL)
+    rag-service          -> rag_db         (PostgreSQL + pgvector)
+    vision-service       -> vision_db      (PostgreSQL)
+    memory-service       -> memory_db      (PostgreSQL + pgvector) + Redis
+    workflow-service     -> workflow_db    (PostgreSQL)
+    audit-service        -> audit_db       (PostgreSQL + Elasticsearch)
+
+    ===================================================
+```
+
+---
+
+## 4. Identity Database (identity_db)
+
+### users
+
+```sql
+CREATE TABLE users (
+    id UUID PRIMARY KEY,
+    tenant_id UUID NOT NULL,
+    email VARCHAR(255) UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    display_name VARCHAR(255),
+    status VARCHAR(50) NOT NULL DEFAULT 'active',
+    mfa_enabled BOOLEAN DEFAULT FALSE,
+    last_login_at TIMESTAMP,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_users_tenant ON users(tenant_id);
+CREATE INDEX idx_users_email ON users(email);
+```
+
+### roles
+
+```sql
+CREATE TABLE roles (
+    id UUID PRIMARY KEY,
+    tenant_id UUID,
+    name VARCHAR(100) NOT NULL,
+    description TEXT,
+    is_system BOOLEAN DEFAULT FALSE,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+```
+
+### permissions
+
+```sql
+CREATE TABLE permissions (
+    id UUID PRIMARY KEY,
+    name VARCHAR(100) UNIQUE NOT NULL,
+    resource VARCHAR(100) NOT NULL,
+    action VARCHAR(50) NOT NULL
+);
+```
+
+### user_roles
+
+```sql
+CREATE TABLE user_roles (
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    role_id UUID NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+    assigned_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    PRIMARY KEY(user_id, role_id)
+);
+```
+
+### tenants
+
+```sql
+CREATE TABLE tenants (
+    id UUID PRIMARY KEY,
+    name VARCHAR(255) NOT NULL,
+    slug VARCHAR(100) UNIQUE NOT NULL,
+    plan VARCHAR(50) NOT NULL DEFAULT 'free',
+    status VARCHAR(50) NOT NULL DEFAULT 'active',
+    settings JSONB,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+```
+
+---
+
+## 5. Gateway Database (gateway_db)
+
+### ai_sessions
+
+```sql
+CREATE TABLE ai_sessions (
+    id UUID PRIMARY KEY,
+    tenant_id UUID NOT NULL,
+    user_id UUID NOT NULL,
+    started_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    status VARCHAR(50) NOT NULL DEFAULT 'active',
+    metadata JSONB
+);
+```
+
+### ai_requests
+
+```sql
+CREATE TABLE ai_requests (
+    id UUID PRIMARY KEY,
+    session_id UUID NOT NULL REFERENCES ai_sessions(id),
+    tenant_id UUID NOT NULL,
+    prompt TEXT NOT NULL,
+    model VARCHAR(100),
+    agent VARCHAR(100),
+    status VARCHAR(50) NOT NULL DEFAULT 'pending',
+    latency_ms FLOAT,
+    tokens_used INT,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    completed_at TIMESTAMP
+);
+
+CREATE INDEX idx_requests_session ON ai_requests(session_id);
+CREATE INDEX idx_requests_tenant ON ai_requests(tenant_id, created_at DESC);
+```
+
+---
+
+## 6. Agent Database (agent_db)
+
+### agents
+
+```sql
+CREATE TABLE agents (
+    id UUID PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    type VARCHAR(100) NOT NULL,
+    model VARCHAR(100) NOT NULL,
+    system_prompt TEXT,
+    capabilities JSONB,
+    status VARCHAR(50) NOT NULL DEFAULT 'active',
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+```
+
+### agent_executions
+
+```sql
+CREATE TABLE agent_executions (
+    id UUID PRIMARY KEY,
+    tenant_id UUID NOT NULL,
+    user_id UUID NOT NULL,
+    agent_id UUID NOT NULL REFERENCES agents(id),
+    task TEXT NOT NULL,
+    status VARCHAR(50) NOT NULL DEFAULT 'pending',
+    plan JSONB,
+    result JSONB,
+    tokens_used INT,
+    latency_ms FLOAT,
+    started_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    completed_at TIMESTAMP
+);
+
+CREATE INDEX idx_executions_tenant ON agent_executions(tenant_id, started_at DESC);
+```
+
+### agent_steps
+
+```sql
+CREATE TABLE agent_steps (
+    id UUID PRIMARY KEY,
+    execution_id UUID NOT NULL REFERENCES agent_executions(id) ON DELETE CASCADE,
+    step_number INT NOT NULL,
+    agent_type VARCHAR(100),
+    action TEXT NOT NULL,
+    tool_name VARCHAR(100),
+    tool_params JSONB,
+    result JSONB,
+    status VARCHAR(50) NOT NULL DEFAULT 'pending',
+    started_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    completed_at TIMESTAMP
+);
+```
+
+---
+
+## 7. RAG Database (rag_db) — pgvector
+
+### documents
+
+```sql
+CREATE TABLE documents (
+    id UUID PRIMARY KEY,
+    tenant_id UUID NOT NULL,
+    filename TEXT NOT NULL,
+    type VARCHAR(50) NOT NULL,
+    status VARCHAR(50) NOT NULL DEFAULT 'uploaded',
+    size_bytes BIGINT,
+    storage_path TEXT,
+    chunk_count INT DEFAULT 0,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    processed_at TIMESTAMP
+);
+
+CREATE INDEX idx_documents_tenant ON documents(tenant_id, status);
+```
+
+### document_chunks
+
+```sql
+CREATE TABLE document_chunks (
+    id UUID PRIMARY KEY,
+    document_id UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+    content TEXT NOT NULL,
+    chunk_index INT NOT NULL,
+    token_count INT,
+    embedding vector(768),
+    metadata JSONB,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_chunks_document ON document_chunks(document_id);
+CREATE INDEX idx_chunks_embedding ON document_chunks
+USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
+```
+
+### document_metadata
+
+```sql
+CREATE TABLE document_metadata (
+    id UUID PRIMARY KEY,
+    document_id UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+    metadata JSONB NOT NULL
+);
+```
+
+---
+
+## 8. Vision Database (vision_db)
+
+### images
+
+```sql
+CREATE TABLE images (
+    id UUID PRIMARY KEY,
+    tenant_id UUID NOT NULL,
+    user_id UUID NOT NULL,
+    storage_path TEXT NOT NULL,
+    file_type VARCHAR(50) NOT NULL,
+    file_size_bytes BIGINT,
+    width INT,
+    height INT,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+```
+
+### vision_analysis
+
+```sql
+CREATE TABLE vision_analysis (
+    id UUID PRIMARY KEY,
+    image_id UUID NOT NULL REFERENCES images(id) ON DELETE CASCADE,
+    tenant_id UUID NOT NULL,
+    model VARCHAR(100) NOT NULL DEFAULT 'qwen3-vl:4b',
+    analysis_type VARCHAR(50) NOT NULL,
+    description TEXT,
+    confidence FLOAT,
+    detected_objects JSONB,
+    metadata JSONB,
+    latency_ms FLOAT,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+```
+
+### ocr_results
+
+```sql
+CREATE TABLE ocr_results (
+    id UUID PRIMARY KEY,
+    image_id UUID NOT NULL REFERENCES images(id) ON DELETE CASCADE,
+    text TEXT NOT NULL,
+    language VARCHAR(10) DEFAULT 'en',
+    confidence FLOAT,
+    regions JSONB,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+```
+
+---
+
+## 9. Memory Database (memory_db)
+
+### memories
+
+```sql
+CREATE TABLE memories (
+    id UUID PRIMARY KEY,
+    user_id UUID NOT NULL,
+    tenant_id UUID NOT NULL,
+    content TEXT NOT NULL,
+    embedding vector(768),
+    memory_type VARCHAR(50) NOT NULL DEFAULT 'fact',
+    importance FLOAT NOT NULL DEFAULT 0.5,
+    access_count INT NOT NULL DEFAULT 0,
+    last_accessed_at TIMESTAMP,
+    expires_at TIMESTAMP,
+    metadata JSONB,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_memories_embedding ON memories
+USING ivfflat (embedding vector_cosine_ops) WITH (lists = 50);
+CREATE INDEX idx_memories_user ON memories(user_id, tenant_id);
+```
+
+### conversation_history
+
+```sql
+CREATE TABLE conversation_history (
+    id UUID PRIMARY KEY,
+    session_id UUID NOT NULL,
+    user_id UUID NOT NULL,
+    tenant_id UUID NOT NULL,
+    role VARCHAR(20) NOT NULL,
+    content TEXT NOT NULL,
+    tokens_used INT,
+    model VARCHAR(100),
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_conversation_session ON conversation_history(session_id);
+CREATE INDEX idx_conversation_user ON conversation_history(user_id, created_at DESC);
+```
+
+---
+
+## 10. Workflow Database (workflow_db)
+
+### workflows
+
+```sql
+CREATE TABLE workflows (
+    id UUID PRIMARY KEY,
+    tenant_id UUID NOT NULL,
+    name VARCHAR(100) NOT NULL,
+    description TEXT,
+    definition JSONB NOT NULL,
+    status VARCHAR(50) NOT NULL DEFAULT 'active',
+    version INT NOT NULL DEFAULT 1,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+```
+
+### workflow_instances
+
+```sql
+CREATE TABLE workflow_instances (
+    id UUID PRIMARY KEY,
+    workflow_id UUID NOT NULL REFERENCES workflows(id),
+    tenant_id UUID NOT NULL,
+    initiated_by UUID NOT NULL,
+    status VARCHAR(50) NOT NULL DEFAULT 'running',
+    context JSONB,
+    started_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    completed_at TIMESTAMP,
+    error_message TEXT
+);
+```
+
+### workflow_steps
+
+```sql
+CREATE TABLE workflow_steps (
+    id UUID PRIMARY KEY,
+    instance_id UUID NOT NULL REFERENCES workflow_instances(id) ON DELETE CASCADE,
+    step_number INT NOT NULL,
+    step_type VARCHAR(50) NOT NULL,
+    name VARCHAR(100),
+    status VARCHAR(50) NOT NULL DEFAULT 'pending',
+    assignee_id UUID,
+    input JSONB,
+    output JSONB,
+    started_at TIMESTAMP,
+    completed_at TIMESTAMP
+);
+```
+
+---
+
+## 11. Audit Database (audit_db)
+
+### audit_events
+
+```sql
+CREATE TABLE audit_events (
+    id UUID PRIMARY KEY,
+    tenant_id UUID NOT NULL,
+    user_id UUID,
+    service VARCHAR(100) NOT NULL,
+    event_type VARCHAR(100) NOT NULL,
+    resource_type VARCHAR(100),
+    resource_id UUID,
+    action VARCHAR(50) NOT NULL,
+    payload JSONB,
+    ip_address INET,
+    user_agent TEXT,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_audit_tenant ON audit_events(tenant_id, created_at DESC);
+CREATE INDEX idx_audit_service ON audit_events(service, event_type);
+CREATE INDEX idx_audit_user ON audit_events(user_id, created_at DESC);
+```
+
+---
+
+## 12. Elasticsearch Indices
+
+| Index | Purpose | Retention |
+|---|---|---|
+| `ai_logs` | AI conversation logs | 90 days |
+| `audit_events` | Audit trail (searchable) | 365 days |
+| `documents` | Full-text document search | Permanent |
+| `security_events` | Security alerts | 365 days |
+
+---
+
+## 13. MinIO Buckets
+
+| Bucket | Purpose | Versioning |
+|---|---|---|
+| `aeroxe-documents` | RAG documents | Enabled |
+| `aeroxe-images` | Vision analysis images | Enabled |
+| `aeroxe-model-files` | Custom model files | Enabled |
+| `aeroxe-backups` | System backups | Enabled |
+
+---
+
+## 14. Database Event Synchronization
+
+### Pattern: Event-Driven Data Sync
+
+```
+rag-service
+    |
+    v  DocumentProcessed event
+NATS JetStream
+    |
+    v
+knowledge-graph-service
+    |
+    v  Update Apache AGE relationships
+```
+
+### Pattern: CQRS (Optional)
+
+For high-read services:
+- Write model: PostgreSQL (normalized)
+- Read model: Denormalized/optimized tables
+- Sync via NATS events
+
+---
+
+## 15. Repository Pattern (Rust)
+
+```rust
+#[async_trait]
+pub trait AgentRepository: Send + Sync {
+    async fn save(&self, agent: Agent) -> Result<AgentId>;
+    async fn find_by_id(&self, id: AgentId) -> Result<Option<Agent>>;
+    async fn find_by_tenant(&self, tenant_id: TenantId) -> Result<Vec<Agent>>;
+    async fn delete(&self, id: AgentId) -> Result<()>;
+}
+```
+
+---
+
+## 16. Migration Strategy
+
+### Tool: EntORM Migrate (Go) / SeaORM Migrate (Rust)
+
+```
+migrations/
+├── 001_create_users.sql
+├── 002_create_roles.sql
+├── 003_create_permissions.sql
+├── 004_create_ai_sessions.sql
+├── 005_create_documents.sql
+├── 006_enable_pgvector.sql
+├── 007_create_memories.sql
+└── ...
+```
+
+---
+
+## 17. Backup Strategy
+
+| Component | Strategy | Frequency |
+|---|---|---|
+| PostgreSQL | Full backup + WAL archiving | Daily full, continuous WAL |
+| MinIO | Versioning + Replication | Continuous |
+| Redis | RDB + AOF snapshots | Every 15 min |
+| NATS JetStream | Stream snapshots | Daily |
+| Elasticsearch | Snapshot to MinIO | Daily |
+
+**Recovery Targets:**
+- RPO: < 15 minutes
+- RTO: < 2 hours
+
+---
+
+## 18. Performance Targets
+
+| Component | Target |
+|---|---|
+| Vector Search (pgvector) | < 200ms |
+| SQL Query (PostgreSQL) | < 2s |
+| Redis Lookup | < 10ms |
+| PostgreSQL API Query | < 100ms |
+| Elasticsearch Search | < 300ms |
+| MinIO Upload | < 1s |
