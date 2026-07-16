@@ -377,10 +377,33 @@ CREATE TABLE tenants (
     name VARCHAR(255) NOT NULL,
     slug VARCHAR(100) UNIQUE NOT NULL,
     plan VARCHAR(50) NOT NULL DEFAULT 'free',
-    status VARCHAR(50) NOT NULL DEFAULT 'active',
+    status VARCHAR(50) NOT NULL DEFAULT 'pending_kyc',
+    kyc_status VARCHAR(50) NOT NULL DEFAULT 'pending',
+    kyc_submitted_at TIMESTAMP,
+    kyc_reviewed_at TIMESTAMP,
+    kyc_reviewed_by BIGINT,
     settings JSONB,
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
+```
+
+### kyc_documents
+
+```sql
+CREATE TABLE kyc_documents (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    tenant_id BIGINT NOT NULL REFERENCES tenants(id),
+    document_type VARCHAR(100) NOT NULL,
+    filename TEXT NOT NULL,
+    storage_path TEXT NOT NULL,
+    status VARCHAR(50) NOT NULL DEFAULT 'uploaded',
+    reviewed_at TIMESTAMP,
+    reviewed_by BIGINT,
+    rejection_reason TEXT,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_kyc_tenant ON kyc_documents(tenant_id);
 ```
 
 ### api_keys

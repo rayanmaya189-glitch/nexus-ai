@@ -118,10 +118,33 @@ CREATE TABLE tenants (
     name VARCHAR(255) NOT NULL,
     slug VARCHAR(100) UNIQUE NOT NULL,
     plan VARCHAR(50) NOT NULL DEFAULT 'free',
-    status VARCHAR(50) NOT NULL DEFAULT 'active',
+    status VARCHAR(50) NOT NULL DEFAULT 'pending_kyc',
+    kyc_status VARCHAR(50) NOT NULL DEFAULT 'pending',
+    kyc_submitted_at TIMESTAMP,
+    kyc_reviewed_at TIMESTAMP,
+    kyc_reviewed_by BIGINT,
     settings JSONB,
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
+```
+
+### kyc_documents
+
+```sql
+CREATE TABLE kyc_documents (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    tenant_id BIGINT NOT NULL REFERENCES tenants(id),
+    document_type VARCHAR(100) NOT NULL,
+    filename TEXT NOT NULL,
+    storage_path TEXT NOT NULL,
+    status VARCHAR(50) NOT NULL DEFAULT 'uploaded',
+    reviewed_at TIMESTAMP,
+    reviewed_by BIGINT,
+    rejection_reason TEXT,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_kyc_tenant ON kyc_documents(tenant_id);
 ```
 
 ---
@@ -270,6 +293,58 @@ CREATE TABLE document_metadata (
     document_id BIGINT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
     metadata JSONB NOT NULL
 );
+```
+
+### document_sets
+
+```sql
+CREATE TABLE document_sets (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    tenant_id BIGINT NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    tags JSONB,
+    status VARCHAR(50) NOT NULL DEFAULT 'draft',
+    document_count INT DEFAULT 0,
+    total_chunks INT DEFAULT 0,
+    created_by BIGINT NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_docsets_tenant ON document_sets(tenant_id, status);
+```
+
+### document_set_documents
+
+```sql
+CREATE TABLE document_set_documents (
+    document_set_id BIGINT NOT NULL REFERENCES document_sets(id) ON DELETE CASCADE,
+    document_id BIGINT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+    added_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    PRIMARY KEY(document_set_id, document_id)
+);
+
+CREATE INDEX idx_dsdocs_document ON document_set_documents(document_id);
+```
+
+### agent_document_sets
+
+```sql
+CREATE TABLE agent_document_sets (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    agent_id BIGINT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+    document_set_id BIGINT NOT NULL REFERENCES document_sets(id) ON DELETE CASCADE,
+    tenant_id BIGINT NOT NULL,
+    permission_level VARCHAR(50) NOT NULL DEFAULT 'read',
+    bound_by BIGINT NOT NULL,
+    bound_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    UNIQUE(agent_id, document_set_id)
+);
+
+CREATE INDEX idx_agent_docsets_agent ON agent_document_sets(agent_id);
+CREATE INDEX idx_agent_docsets_set ON agent_document_sets(document_set_id);
+CREATE INDEX idx_agent_docsets_tenant ON agent_document_sets(tenant_id);
 ```
 
 ---

@@ -426,9 +426,41 @@ Before retrieval, security checks are applied:
 | Check | Description |
 |---|---|
 | Tenant Isolation | Only retrieve documents belonging to user's tenant |
+| Agent Scope Isolation | Agent queries filtered to bound document sets only |
 | Document Access | User must have read permission on document |
 | Data Classification | Support users cannot access financial reports |
 | Content Filtering | Filter results based on ABAC policies |
+
+### Agent Scope Isolation
+
+When an agent performs RAG search, results are filtered to its bound document sets:
+
+```sql
+-- Get document IDs from agent's bound document sets
+WITH agent_scope AS (
+    SELECT dsd.document_id
+    FROM agent_document_sets ads
+    JOIN document_set_documents dsd ON dsd.document_set_id = ads.document_set_id
+    WHERE ads.agent_id = $1
+      AND ads.tenant_id = $2
+)
+-- Search only within scoped documents
+SELECT dc.id, dc.content, dc.metadata,
+       dc.embedding <=> $3 AS distance
+FROM document_chunks dc
+WHERE dc.document_id IN (SELECT document_id FROM agent_scope)
+ORDER BY distance
+LIMIT $4;
+```
+
+### Isolation Enforcement
+
+| Layer | Enforcement |
+|---|---|
+| Agent Orchestrator | Scope injected into execution context |
+| RAG Service | Query filtered by document set scope |
+| Vector Search | pgvector query scoped to bound documents |
+| Audit | All access logged with scope info |
 
 ---
 

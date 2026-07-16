@@ -402,9 +402,58 @@ CREATE TABLE agent_steps (
 );
 ```
 
+### agent_document_sets
+
+```sql
+CREATE TABLE agent_document_sets (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    agent_id BIGINT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+    document_set_id BIGINT NOT NULL REFERENCES document_sets(id) ON DELETE CASCADE,
+    tenant_id BIGINT NOT NULL,
+    permission_level VARCHAR(50) NOT NULL DEFAULT 'read',
+    bound_by BIGINT NOT NULL,
+    bound_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    UNIQUE(agent_id, document_set_id)
+);
+
+CREATE INDEX idx_agent_docsets_agent ON agent_document_sets(agent_id);
+CREATE INDEX idx_agent_docsets_tenant ON agent_document_sets(tenant_id);
+```
+
 ---
 
-## 10. NATS Events
+## 10. Agent-Document Set Binding
+
+### Binding Rule
+
+Every agent MUST be bound to at least one document set for RAG operations. An agent can ONLY access documents from its bound sets.
+
+### Binding Flow
+
+```
+Admin selects agent → Views available document sets → Binds agent to sets → Agent scope defined
+```
+
+### Scope Enforcement
+
+```
+Agent Request → Query agent_document_sets for bound set IDs
+  → Get document IDs from bound sets
+    → RAG search filtered to those documents only
+      → Results returned from scoped documents
+```
+
+### Binding API
+
+| Method | Endpoint | Description |
+|---|---|---|
+| POST | `/api/v1/agents/:id/document-sets` | Bind agent to sets |
+| GET | `/api/v1/agents/:id/document-sets` | List bound sets |
+| DELETE | `/api/v1/agents/:id/document-sets/:set_id` | Unbind agent |
+
+---
+
+## 11. NATS Events
 
 ### Published
 
@@ -414,6 +463,8 @@ CREATE TABLE agent_steps (
 | `aeroxe.agent.completed` | `AgentCompleted` |
 | `aeroxe.agent.failed` | `AgentFailed` |
 | `aeroxe.agent.tool.executed` | `ToolExecuted` |
+| `aeroxe.agent.bound` | `AgentBoundToDocumentSet` |
+| `aeroxe.agent.unbound` | `AgentUnboundFromDocumentSet` |
 
 ### Subscribed
 

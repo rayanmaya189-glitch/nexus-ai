@@ -257,6 +257,149 @@ PRIMARY KEY(user_id,role_id)
 
 ---
 
+# 5.5 Tenants
+
+```sql
+CREATE TABLE tenants (
+
+id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+
+name VARCHAR(255) NOT NULL,
+
+slug VARCHAR(100) UNIQUE NOT NULL,
+
+plan VARCHAR(50) NOT NULL DEFAULT 'free',
+
+status VARCHAR(50) NOT NULL DEFAULT 'pending_kyc',
+
+kyc_status VARCHAR(50) NOT NULL DEFAULT 'pending',
+
+kyc_submitted_at TIMESTAMP,
+
+kyc_reviewed_at TIMESTAMP,
+
+kyc_reviewed_by BIGINT,
+
+settings JSONB,
+
+created_at TIMESTAMP NOT NULL DEFAULT NOW()
+
+);
+
+```
+
+---
+
+# 5.6 KYC Documents
+
+```sql
+CREATE TABLE kyc_documents (
+
+id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+
+tenant_id BIGINT NOT NULL REFERENCES tenants(id),
+
+document_type VARCHAR(100) NOT NULL,
+
+filename TEXT NOT NULL,
+
+storage_path TEXT NOT NULL,
+
+status VARCHAR(50) NOT NULL DEFAULT 'uploaded',
+
+reviewed_at TIMESTAMP,
+
+reviewed_by BIGINT,
+
+rejection_reason TEXT,
+
+created_at TIMESTAMP NOT NULL DEFAULT NOW()
+
+);
+
+```
+
+---
+
+# 5.7 Document Sets
+
+```sql
+CREATE TABLE document_sets (
+
+id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+
+tenant_id BIGINT NOT NULL,
+
+name VARCHAR(255) NOT NULL,
+
+description TEXT,
+
+tags JSONB,
+
+status VARCHAR(50) NOT NULL DEFAULT 'draft',
+
+document_count INT DEFAULT 0,
+
+total_chunks INT DEFAULT 0,
+
+created_by BIGINT NOT NULL,
+
+created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+
+updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+
+);
+
+```
+
+---
+
+# 5.8 Document Set Documents
+
+```sql
+CREATE TABLE document_set_documents (
+
+document_set_id BIGINT NOT NULL REFERENCES document_sets(id) ON DELETE CASCADE,
+
+document_id BIGINT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+
+added_at TIMESTAMP NOT NULL DEFAULT NOW(),
+
+PRIMARY KEY(document_set_id, document_id)
+
+);
+
+```
+
+---
+
+# 5.9 Agent Document Sets
+
+```sql
+CREATE TABLE agent_document_sets (
+
+id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+
+agent_id BIGINT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+
+document_set_id BIGINT NOT NULL REFERENCES document_sets(id) ON DELETE CASCADE,
+
+tenant_id BIGINT NOT NULL,
+
+permission_level VARCHAR(50) NOT NULL DEFAULT 'read',
+
+bound_by BIGINT NOT NULL,
+
+bound_at TIMESTAMP NOT NULL DEFAULT NOW(),
+
+UNIQUE(agent_id, document_set_id)
+
+);
+
+```
+
+---
+
 # 6. AI Gateway Database
 
 Database:
