@@ -982,13 +982,13 @@ Technology:
 Recommended:
 
 ```text
-golang-migrate
+EntORM Migrate (Go)
 ```
 
 or
 
 ```text
-sqlx migrate
+SeaORM Migrate (Rust)
 ```
 
 Structure:

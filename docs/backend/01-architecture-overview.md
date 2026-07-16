@@ -109,7 +109,7 @@ Each service:
 |---|---|---|
 | gRPC | tonic | grpc-go |
 | NATS | async-nats | nats.go |
-| Database | SeaORM + sqlx (raw queries) | EntORM |
+| Database | SeaORM | EntORM |
 | Vector | pgvector (SeaORM) | pgvector (EntORM) |
 | Serialization | serde + serde_json | encoding/json |
 | Async Runtime | Tokio | goroutines |
