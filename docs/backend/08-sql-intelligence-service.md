@@ -152,6 +152,17 @@ User Question: "Show monthly revenue for 2026"
 
 ## 6. SQL Safety Rules
 
+### Agent Scope Isolation
+
+Every query is validated against the agent's bound databases and tables:
+
+| Check | Description |
+|---|---|
+| Table whitelist | All tables in query must be in agent's bound tables |
+| Column whitelist | All columns must exist in bound table definitions |
+| No cross-database | Query cannot reference multiple databases |
+| Tenant filter | WHERE clause must include tenant_id |
+
 ### Allowed Operations
 
 | Operation | Status |
@@ -254,6 +265,83 @@ ORDER BY pending_amount DESC;
 ---
 
 ## 9. Database Connection
+
+### Agent-Database Binding
+
+Each SQL agent is bound to specific databases and tables. The agent can ONLY query bound resources.
+
+### Connection Flow
+
+```
+Admin enters database credentials
+  → Click "Test Connection"
+    → System validates credentials
+      → IF FAILED: Show error, allow retry
+      → IF SUCCESS: Introspect schema
+        → Admin selects tables
+          → Binding saved
+            → Agent ready
+```
+
+### Test Connection Button
+
+**Endpoint:**
+
+```
+POST /api/v1/agents/:agent_id/sql-connections/test
+```
+
+**Request:**
+
+```json
+{
+  "host": "db.example.com",
+  "port": 5432,
+  "database_name": "aeroxe_billing_db",
+  "username": "readonly_agent",
+  "password": "encrypted_password",
+  "ssl_mode": "require"
+}
+```
+
+**Response (Success):**
+
+```json
+{
+  "status": "connected",
+  "server_version": "PostgreSQL 18.0",
+  "tables_found": 45,
+  "latency_ms": 120
+}
+```
+
+**Response (Failure):**
+
+```json
+{
+  "status": "connection_failed",
+  "error": "password authentication failed",
+  "error_code": "AUTH_FAILED"
+}
+```
+
+### Schema Discovery
+
+After successful connection, system introspects schema:
+
+```
+POST /api/v1/agents/:agent_id/sql-connections/discover
+```
+
+Returns all tables, columns, primary keys, and row count estimates.
+
+### Table Binding
+
+Admin selects tables from discovered list:
+
+```
+POST /api/v1/agents/:agent_id/sql-connections/tables
+```
 
 ### Read Replica Strategy
 

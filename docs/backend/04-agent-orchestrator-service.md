@@ -420,6 +420,54 @@ CREATE INDEX idx_agent_docsets_agent ON agent_document_sets(agent_id);
 CREATE INDEX idx_agent_docsets_tenant ON agent_document_sets(tenant_id);
 ```
 
+### agent_databases
+
+```sql
+CREATE TABLE agent_databases (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    agent_id BIGINT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+    tenant_id BIGINT NOT NULL,
+    connection_name VARCHAR(100) NOT NULL,
+    host VARCHAR(255) NOT NULL,
+    port INT NOT NULL DEFAULT 5432,
+    database_name VARCHAR(100) NOT NULL,
+    username VARCHAR(100) NOT NULL,
+    password_encrypted TEXT NOT NULL,
+    ssl_mode VARCHAR(20) NOT NULL DEFAULT 'require',
+    status VARCHAR(50) NOT NULL DEFAULT 'pending',
+    last_tested_at TIMESTAMP,
+    last_test_result VARCHAR(50),
+    server_version VARCHAR(50),
+    discovered_tables_count INT DEFAULT 0,
+    created_by BIGINT NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    UNIQUE(agent_id, database_name)
+);
+
+CREATE INDEX idx_agent_dbs_agent ON agent_databases(agent_id);
+CREATE INDEX idx_agent_dbs_tenant ON agent_databases(tenant_id);
+```
+
+### agent_database_tables
+
+```sql
+CREATE TABLE agent_database_tables (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    agent_database_id BIGINT NOT NULL REFERENCES agent_databases(id) ON DELETE CASCADE,
+    agent_id BIGINT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+    table_name VARCHAR(255) NOT NULL,
+    columns JSONB NOT NULL,
+    primary_key JSONB,
+    row_count_estimate INT,
+    bound_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    UNIQUE(agent_database_id, table_name)
+);
+
+CREATE INDEX idx_agent_dbtables_agent ON agent_database_tables(agent_id);
+CREATE INDEX idx_agent_dbtables_db ON agent_database_tables(agent_database_id);
+```
+
 ---
 
 ## 10. Agent-Document Set Binding
@@ -453,7 +501,47 @@ Agent Request → Query agent_document_sets for bound set IDs
 
 ---
 
-## 11. NATS Events
+## 11. Agent-Database Binding (SQL Agent)
+
+### Binding Rule
+
+SQL agents MUST be bound to specific databases and tables. The agent can ONLY query bound resources. Connection credentials must be tested before binding.
+
+### Test Connection Flow
+
+```
+Admin enters credentials → Click "Test Connection"
+  → TCP connection to host:port
+    → Authentication with username/password
+      → SSL/TLS handshake
+        → Database accessible
+          → IF FAILED: Show error
+          → IF SUCCESS: Discover schema
+```
+
+### Database Binding API
+
+| Method | Endpoint | Description |
+|---|---|---|
+| POST | `/api/v1/agents/:id/sql-connections/test` | Test database connection |
+| POST | `/api/v1/agents/:id/sql-connections/discover` | Discover schema |
+| POST | `/api/v1/agents/:id/sql-connections/tables` | Bind tables |
+| GET | `/api/v1/agents/:id/sql-connections` | List bound databases |
+| DELETE | `/api/v1/agents/:id/sql-connections/:conn_id` | Unbind database |
+
+### Scope Enforcement
+
+```
+Agent SQL Query → Query agent_databases for bound connections
+  → Query agent_database_tables for bound tables
+    → Validate query only references bound tables
+      → Execute on bound connection only
+        → Return scoped results
+```
+
+---
+
+## 12. NATS Events
 
 ### Published
 
@@ -465,6 +553,10 @@ Agent Request → Query agent_document_sets for bound set IDs
 | `aeroxe.agent.tool.executed` | `ToolExecuted` |
 | `aeroxe.agent.bound` | `AgentBoundToDocumentSet` |
 | `aeroxe.agent.unbound` | `AgentUnboundFromDocumentSet` |
+| `aeroxe.agent.db.test.success` | `AgentDBConnectionTested` |
+| `aeroxe.agent.db.test.failed` | `AgentDBConnectionTestFailed` |
+| `aeroxe.agent.db.bound` | `AgentBoundToDatabase` |
+| `aeroxe.agent.db.unbound` | `AgentUnboundFromDatabase` |
 
 ### Subscribed
 

@@ -6,12 +6,13 @@
 
 ## 1. Overview
 
-This document defines four critical flows:
+This document defines five critical flows:
 
 1. **Tenant KYC Flow** — Verification before platform access
 2. **Document Set Creation** — Organizing documents into scoped collections
 3. **Agent-Document Set Binding** — Connecting agents to specific document sets
-4. **Agent Isolation** — Enforcing that agents access ONLY their bound document sets
+4. **Agent-Database Binding** — Connecting agents to specific databases and tables with credential validation
+5. **Agent Isolation** — Enforcing that agents access ONLY their bound resources
 
 ---
 
@@ -233,7 +234,338 @@ Admin Opens Agent Configuration
 
 ---
 
-## 5. Agent Isolation — Document Set Scope
+## 5. Agent-Database Binding (SQL Agent)
+
+### 5.1 Purpose
+
+When creating a SQL agent, it must be bound to specific business databases and tables. The agent can ONLY query the bound databases/tables. Connection credentials are validated before binding is allowed.
+
+### 5.2 Binding States
+
+```
+CREDENTIALS_TESTING → CONNECTED → TABLES_DISCOVERED → BOUND → ACTIVE
+                          ↓
+                     CONNECTION_FAILED
+```
+
+| State | Description |
+|---|---|
+| `CREDENTIALS_TESTING` | Test connection in progress |
+| `CONNECTED` | Credentials validated, connection successful |
+| `TABLES_DISCOVERED` | Schema introspection complete, tables listed |
+| `BOUND` | Agent bound to selected databases/tables |
+| `ACTIVE` | Binding live, agent can query |
+| `CONNECTION_FAILED` | Credentials invalid or connection refused |
+
+### 5.3 Binding Flow
+
+```
+Admin Opens Agent SQL Configuration
+  → Enter database credentials:
+      host, port, database_name, username, password, ssl_mode
+    → Click "Test Connection" button
+      → System validates credentials:
+          1. TCP connection to host:port
+          2. Authentication with username/password
+          3. SSL/TLS handshake (if required)
+          4. Database exists and is accessible
+        → IF FAILED: Show error, allow retry
+        → IF SUCCESS:
+            → Introspect schema:
+                - List all tables
+                - List columns per table
+                - Identify primary keys
+                - Detect relationships
+              → Show discovered tables to admin
+                → Admin selects which tables agent can access
+                  → Admin selects which columns per table (optional)
+                    → Save binding
+                      → Credentials encrypted and stored
+                        → Agent ready for SQL queries
+```
+
+### 5.4 Test Connection Button
+
+**Endpoint:**
+
+```
+POST /api/v1/agents/:agent_id/sql-connections/test
+```
+
+**Request:**
+
+```json
+{
+  "host": "db.example.com",
+  "port": 5432,
+  "database_name": "aeroxe_billing_db",
+  "username": "readonly_agent",
+  "password": "encrypted_password",
+  "ssl_mode": "require"
+}
+```
+
+**Response (Success):**
+
+```json
+{
+  "status": "connected",
+  "server_version": "PostgreSQL 18.0",
+  "tables_found": 45,
+  "latency_ms": 120
+}
+```
+
+**Response (Failure):**
+
+```json
+{
+  "status": "connection_failed",
+  "error": "password authentication failed for user \"readonly_agent\"",
+  "error_code": "AUTH_FAILED"
+}
+```
+
+### 5.5 Schema Discovery After Successful Connection
+
+After test connection succeeds, system introspects the database:
+
+**Endpoint:**
+
+```
+POST /api/v1/agents/:agent_id/sql-connections/discover
+```
+
+**Response:**
+
+```json
+{
+  "tables": [
+    {
+      "name": "invoices",
+      "columns": [
+        {"name": "id", "type": "bigint", "nullable": false},
+        {"name": "customer_id", "type": "bigint", "nullable": false},
+        {"name": "amount", "type": "numeric", "nullable": false},
+        {"name": "status", "type": "varchar", "nullable": false},
+        {"name": "invoice_date", "type": "date", "nullable": false}
+      ],
+      "primary_key": ["id"],
+      "row_count_estimate": 125000
+    },
+    {
+      "name": "customers",
+      "columns": [
+        {"name": "id", "type": "bigint", "nullable": false},
+        {"name": "name", "type": "varchar", "nullable": false},
+        {"name": "email", "type": "varchar", "nullable": true}
+      ],
+      "primary_key": ["id"],
+      "row_count_estimate": 8500
+    }
+  ],
+  "total_tables": 45
+}
+```
+
+### 5.6 Table Binding After Discovery
+
+Admin selects tables from discovered list:
+
+**Endpoint:**
+
+```
+POST /api/v1/agents/:agent_id/sql-connections/tables
+```
+
+**Request:**
+
+```json
+{
+  "connection_id": 123,
+  "tables": [
+    {
+      "table_name": "invoices",
+      "columns": ["id", "customer_id", "amount", "status", "invoice_date"]
+    },
+    {
+      "table_name": "customers",
+      "columns": ["id", "name", "email"]
+    }
+  ]
+}
+```
+
+### 5.7 Database Credential Storage
+
+| Property | Description |
+|---|---|
+| Encryption | AES-256-GCM at rest |
+| Key management | Vault / KMS |
+| Access | Only SQL agent service decrypts |
+| Rotation | Supported via re-test flow |
+| Audit | All access logged |
+
+### 5.8 Binding Rules
+
+| Rule | Description |
+|---|---|
+| Test before bind | Connection must pass test before table selection |
+| Credential encryption | Passwords encrypted before storage |
+| Read-only user | Platform enforces readonly database user |
+| Tenant isolation | Can only bind databases for own tenant |
+| Max 10 databases per agent | Prevents scope explosion |
+| Max 50 tables per database | Prevents excessive scope |
+| Admin-only binding | Only tenant admins can configure |
+| Re-test on update | Credential changes require new test |
+
+---
+
+## 6. Agent Isolation — Database & Table Scope
+
+### 6.1 Core Principle
+
+**An agent can ONLY query databases and tables it is explicitly bound to. No exceptions.**
+
+### 6.2 SQL Agent Isolation Architecture
+
+```
+Agent SQL Request
+  → Extract agent_id
+    → Query agent_databases for bound connection IDs
+      → Query agent_database_tables for bound tables
+        → Validate query only references bound tables
+          → Execute query against bound connection only
+            → Return scoped results
+```
+
+### 6.3 Isolation Flow
+
+```
+                    +-------------------+
+                    |  Agent SQL Query  |
+                    +--------+----------+
+                             |
+                    +--------v----------+
+                    |  Extract agent_id  |
+                    +--------+----------+
+                             |
+                    +--------v----------+
+                    | Query bindings:    |
+                    | agent_databases    |
+                    | WHERE agent_id = ? |
+                    +--------+----------+
+                             |
+                    +--------v----------+
+                    | Get bound          |
+                    | connection_ids:    |
+                    | [conn_1, conn_2]   |
+                    +--------+----------+
+                             |
+                    +--------v----------+
+                    | Query tables:      |
+                    | agent_database_    |
+                    | tables WHERE       |
+                    | agent_id = ?       |
+                    +--------+----------+
+                             |
+                    +--------v----------+
+                    | Validate query:    |
+                    | - All tables in    |
+                    |   bound list       |
+                    | - No destructive   |
+                    |   operations       |
+                    | - No injection     |
+                    +--------+----------+
+                             |
+                    +--------v----------+
+                    | Execute on bound   |
+                    | connection only    |
+                    +--------+----------+
+                             |
+                    +--------v----------+
+                    | Scoped Results     |
+                    +-------------------+
+```
+
+### 6.4 Query Validation
+
+Every SQL query from an agent is validated before execution:
+
+| Check | Description |
+|---|---|
+| Table whitelist | All tables in query exist in agent's bound tables |
+| Column whitelist | All columns exist in bound table definitions |
+| No cross-database | Query cannot reference multiple databases |
+| No destructive ops | SELECT only (no INSERT, UPDATE, DELETE, DROP) |
+| No injection | SQL injection patterns blocked |
+| Tenant filter | WHERE clause must include tenant_id |
+| Row limit | Maximum 10,000 rows returned |
+| Timeout | 30 second query timeout |
+
+### 6.5 Query Validation Example
+
+```sql
+-- Agent bound to: invoices, customers (in aeroxe_billing_db)
+-- Query: SELECT * FROM invoices JOIN customers ON ...
+
+-- VALIDATION:
+-- ✅ invoices is in bound tables
+-- ✅ customers is in bound tables
+-- ✅ JOIN is allowed
+-- ✅ SELECT only
+-- ✅ tenant_id filter present
+-- EXECUTED
+
+-- Query: SELECT * FROM employees
+-- ❌ employees is NOT in bound tables
+-- BLOCKED: Table 'employees' not in agent scope
+```
+
+### 6.6 Multi-Database Agent Example
+
+Agent: "Finance Analytics Agent"
+
+```
+Bound Databases:
+  1. aeroxe_billing_db (connection: db-billing-01)
+     Bound Tables: invoices, payments, credit_notes
+  2. aeroxe_erp_db (connection: db-erp-01)
+     Bound Tables: products, orders, inventory
+
+NOT bound to:
+  - aeroxe_hrms_db (HR data - irrelevant scope)
+  - aeroxe_crm_db (CRM data - different department)
+  - aeroxe_broadband_db (network ops - irrelevant)
+
+Result: Agent can ONLY query invoices/payments/credit_notes from billing
+        and products/orders/inventory from ERP
+```
+
+### 6.7 Isolation Enforcement Points
+
+| Layer | Enforcement |
+|---|---|
+| API Gateway | Agent SQL request validated |
+| SQL Agent Service | Table whitelist check before generation |
+| LLM Prompt | Schema context only includes bound tables |
+| Query Validator | AST analysis against bound schema |
+| Connection Router | Execute only on bound connection |
+| Result Filter | Strip any leaked metadata |
+| Audit | All queries logged with scope info |
+
+### 6.8 Isolation Violations
+
+| Violation | Detection | Response |
+|---|---|---|
+| Query unbound table | Table whitelist check | Query rejected + audit log |
+| Cross-database join | Connection router check | Query rejected + alert |
+| Credential leak | Encryption + access log | Immediate rotation + alert |
+| Schema drift | Periodic re-introspection | Alert admin, re-validate |
+
+---
+
+## 7. Complete Flow — End to End
 
 ### 5.1 Core Principle
 
@@ -349,9 +681,9 @@ Result: Agent can ONLY answer from Product Manuals, FAQ, and Troubleshooting
 
 ---
 
-## 6. Complete Flow — End to End
+## 8. Complete Flow — End to End
 
-### 6.1 Tenant Onboarding to Agent Deployment
+### 8.1 Tenant Onboarding to Agent Deployment
 
 ```
 1. Tenant Registers
@@ -377,17 +709,27 @@ Result: Agent can ONLY answer from Product Manuals, FAQ, and Troubleshooting
    → Bind to "Product Knowledge Base" (read)
    → Agent scope defined
 
-6. Agent Handles Queries
+6. Admin Binds Agent to Databases (SQL Agent)
+   → Enter database credentials
+   → Click "Test Connection" → Success
+   → Discover tables → Select tables
+   → Save binding
+   → Agent can ONLY query bound tables
+
+7. Agent Handles Queries
    → User asks product question
-   → Agent orchestrator checks bindings
+   → Agent orchestrator checks document set bindings
    → RAG searches ONLY within bound sets
-   → Response generated from scoped documents
-   → Audit log records access
+   → User asks SQL question
+   → SQL agent checks database bindings
+   → Query validated against bound tables only
+   → Response generated from scoped data
+   → Audit log records all access
 ```
 
 ---
 
-## 7. NATS Events
+## 9. NATS Events
 
 ### KYC Events
 
@@ -407,17 +749,29 @@ Result: Agent can ONLY answer from Product Manuals, FAQ, and Troubleshooting
 | `aeroxe.docset.document.removed` | `DocumentRemovedFromSet` | Doc unlinked |
 | `aeroxe.docset.archived` | `DocumentSetArchived` | Set archived |
 
-### Agent Binding Events
+### Agent Document Binding Events
 
 | Subject | Event | When |
 |---|---|---|
 | `aeroxe.agent.bound` | `AgentBoundToDocumentSet` | Binding created |
 | `aeroxe.agent.unbound` | `AgentUnboundFromDocumentSet` | Binding removed |
+
+### Agent Database Binding Events
+
+| Subject | Event | When |
+|---|---|---|
+| `aeroxe.agent.db.test.success` | `AgentDBConnectionTested` | Test connection passed |
+| `aeroxe.agent.db.test.failed` | `AgentDBConnectionTestFailed` | Test connection failed |
+| `aeroxe.agent.db.bound` | `AgentBoundToDatabase` | Database binding created |
+| `aeroxe.agent.db.unbound` | `AgentUnboundFromDatabase` | Database binding removed |
+| `aeroxe.agent.db.table.bound` | `AgentBoundToTable` | Table binding created |
+| `aeroxe.agent.db.table.unbound` | `AgentUnboundFromTable` | Table binding removed |
+| `aeroxe.agent.db.schema.drift` | `AgentDBSchemaDrift` | Schema changed after binding |
 | `aeroxe.agent.scope.changed` | `AgentScopeChanged` | Permissions updated |
 
 ---
 
-## 8. Observability
+## 10. Observability
 
 ### Metrics
 
@@ -428,9 +782,14 @@ Result: Agent can ONLY answer from Product Manuals, FAQ, and Troubleshooting
 | `kyc_status_changes_total` | tenant_id, from, to | KYC transitions |
 | `document_sets_created_total` | tenant_id | Sets created |
 | `document_set_documents_total` | set_id | Docs per set |
-| `agent_bindings_total` | agent_id, set_id | Active bindings |
+| `agent_doc_bindings_total` | agent_id, set_id | Document set bindings |
+| `agent_db_bindings_total` | agent_id, db_name | Database bindings |
+| `agent_db_table_bindings_total` | agent_id, table_name | Table bindings |
+| `agent_db_test_connections_total` | agent_id, result | Test connection results |
+| `agent_db_query_scoped_total` | agent_id, db_name | Scoped SQL queries |
+| `agent_db_query_violations_total` | agent_id, violation_type | Blocked SQL violations |
 | `agent_scope_queries_total` | agent_id, result | Scoped RAG queries |
-| `agent_scope_violations_total` | agent_id | Blocked violations |
+| `agent_scope_violations_total` | agent_id | Blocked RAG violations |
 
 ### Grafana Dashboard Panels
 
@@ -438,19 +797,25 @@ Result: Agent can ONLY answer from Product Manuals, FAQ, and Troubleshooting
 |---|---|
 | KYC Pipeline Status | Tenants by KYC state |
 | Document Set Health | Sets by status, doc count |
-| Agent Binding Map | Agents → Document Sets |
-| Scope Query Latency | RAG query time with scoping |
+| Agent Document Binding Map | Agents → Document Sets |
+| Agent Database Binding Map | Agents → Databases → Tables |
+| SQL Query Scope Latency | Scoped SQL query time |
+| DB Connection Test Results | Pass/fail rates |
 | Isolation Violations | Blocked unauthorized access |
 
 ---
 
-## 9. Security
+## 11. Security
 
 | Control | Implementation |
 |---|---|
 | KYC before access | Middleware blocks pre-KYC tenants |
 | Document set ownership | tenant_id enforced at DB level |
+| Database credential encryption | AES-256-GCM at rest |
+| Test before bind | Connection must pass before table selection |
 | Agent scope enforcement | Query-level filtering, not just middleware |
 | Binding audit trail | All changes logged to audit_events |
 | No cross-tenant sets | DB constraint + service validation |
+| No cross-tenant databases | Database binding tenant-scoped |
 | Admin-only binding | Only tenant admins can bind agents |
+| Read-only DB user | Platform enforces readonly database access |
