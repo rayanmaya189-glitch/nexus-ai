@@ -761,7 +761,7 @@ vision_db
 Technology:
 
 ```
-PostgreSQL 16
+PostgreSQL 18
 
 pgvector
 

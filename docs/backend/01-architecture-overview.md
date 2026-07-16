@@ -107,14 +107,14 @@ Each service:
 
 | Component | Rust | Go |
 |---|---|---|
-| gRPC | tonic | grpc-go |
+| gRPC | tonic | kratos |
 | NATS | async-nats | nats.go |
 | Database | SeaORM | EntORM |
 | Vector | pgvector (SeaORM) | pgvector (EntORM) |
 | Serialization | serde + serde_json | encoding/json |
 | Async Runtime | Tokio | goroutines |
-| HTTP | axum / actix-web | chi / echo |
-| WebSocket | tokio-tungstenite | gorilla/websocket |
+| HTTP | axum / actix-web | hertz |
+| WebSocket | tokio-tungstenite | coder/websocket |
 
 ### 4.3 Infrastructure
 
@@ -131,7 +131,7 @@ Each service:
 | Cache | Redis |
 | Graph | Apache AGE (PostgreSQL extension) |
 | Vector Search | pgvector (PostgreSQL extension) |
-| Primary Database | PostgreSQL 16 |
+| Primary Database | PostgreSQL 18 |
 
 ---
 

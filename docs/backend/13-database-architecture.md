@@ -22,7 +22,7 @@ AeroXe Nexus AI follows Database-per-Microservice architecture:
 
 | Requirement | Technology | Purpose |
 |---|---|---|
-| Transaction Data | PostgreSQL 16 | Primary relational database |
+| Transaction Data | PostgreSQL 18 | Primary relational database |
 | Vector Search | pgvector | Semantic search embeddings |
 | Knowledge Graph | Apache AGE | Entity relationships |
 | Cache | Redis | Short-term memory, sessions, rate limiting |

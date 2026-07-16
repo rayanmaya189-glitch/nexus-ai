@@ -119,7 +119,7 @@ Rules:
 
 | Requirement      | Technology     |
 | ---------------- | -------------- |
-| Transaction Data | PostgreSQL 16  |
+| Transaction Data | PostgreSQL 18  |
 | Vector Search    | pgvector       |
 | Knowledge Graph  | Apache AGE     |
 | Cache            | Redis          |
