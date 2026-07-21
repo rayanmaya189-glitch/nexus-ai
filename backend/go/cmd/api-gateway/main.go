@@ -35,6 +35,8 @@ var services = map[string]ServiceConfig{
 func main() {
 	log.Println("Starting API Gateway")
 
+	jwtSecret := getEnv("JWT_SECRET", "nexus-jwt-secret-2026")
+
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -63,7 +65,7 @@ func main() {
 		fmt.Fprintf(w, `{"service":"api-gateway","version":"1.0.0","available_services":[%s]}`, getServiceList())
 	})
 
-	handler := corsMiddleware(mux)
+	handler := corsMiddleware(authMiddleware(jwtSecret, mux))
 
 	port := getEnv("PORT", "8000")
 	addr := fmt.Sprintf(":%s", port)
