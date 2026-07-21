@@ -2,7 +2,7 @@
 
 ## IAM, JWT, RBAC, ABAC, Multi-Tenant User Management
 
-> **Modular Monolith Module:** This document describes the `nexus-identity` crate — a module within the single `aeroxe-nexus` binary. It communicates with other modules via Rust trait interfaces (see [Communication Architecture](12-communication-architecture.md)).
+> **Modular Monolith Module:** This document describes the `identity` module at `src/modules/identity/`. It communicates with other modules via Rust trait interfaces (see [Communication Architecture](12-communication-architecture.md)).
 
 ---
 
@@ -10,17 +10,63 @@
 
 | Attribute | Value |
 |---|---|
-| Module Name | `nexus-identity` |
-| Crate | `nexus-identity` (workspace member) |
+| Module Name | `identity` |
+| Module Path | `src/modules/identity/` |
 | Bounded Context | Identity |
 | Domain Type | Supporting Domain |
 | Language | Rust |
+| ORM | SeaORM (no raw SQL) |
 | Schema | `identity_` (in shared PostgreSQL) |
 | Dependencies | Redis (sessions, rate limiting) |
 
 ---
 
-## 2. Purpose
+## 2. Folder Structure
+
+```
+src/modules/identity/
+├── mod.rs                    # Public re-exports + IdentityService trait
+├── domain/
+│   ├── mod.rs
+│   ├── aggregates/
+│   │   └── user/
+│   │       ├── user.rs       # User aggregate root
+│   │       └── tests/        # Domain tests for User aggregate
+│   ├── entities/
+│   │   └── session.rs        # Session entity
+│   ├── value_objects/
+│   │   ├── email.rs          # EmailAddress value object
+│   │   └── password.rs       # Password value object (hashing)
+│   └── rules/
+│       └── auth_rules.rs     # Authentication business rules
+├── application/
+│   ├── mod.rs
+│   ├── commands/
+│   │   ├── login.rs          # Login command
+│   │   └── tests/            # Command handler tests (mock repo)
+│   ├── queries/
+│   │   └── get_user.rs       # GetUser query
+│   └── services/
+│       └── auth_service.rs   # Auth orchestration service
+├── infrastructure/
+│   ├── mod.rs
+│   ├── repository/
+│   │   └── postgres_user_repository.rs  # SeaORM implementation
+│   └── security/
+│       └── jwt.rs            # JWT generation/validation
+├── api/
+│   ├── mod.rs
+│   ├── http/
+│   │   ├── auth_controller.rs  # Axum HTTP handlers
+│   │   └── tests/              # API integration tests
+│   └── grpc/
+│       └── auth_service.rs     # gRPC service (tonic)
+└── migrations/               # SeaORM migration files
+```
+
+---
+
+## 3. Purpose
 
 The Identity module is the foundation of platform security. It manages:
 
@@ -30,11 +76,12 @@ The Identity module is the foundation of platform security. It manages:
 - Attribute-based access control (ABAC)
 - Multi-tenant user isolation
 - API key management
-- Session management
+- Session management (Session entity)
+- KYC document management
 
 ---
 
-## 3. Aggregate Design
+## 4. Aggregate Design
 
 ### User Aggregate
 
@@ -66,21 +113,22 @@ User (Aggregate Root)
 | Permission | PermissionId, Name, Resource, Action |
 | Tenant | TenantId, Name, Plan, Settings, Status |
 | APIKey | KeyId, TenantId, UserId, KeyHash, Scopes[], ExpiresAt |
+| **Session** | SessionId, UserId, Token, RefreshToken, ExpiresAt, CreatedAt |
 
 ### Value Objects
 
-| Value Object | Type |
-|---|---|
-| `UserId` | i64 |
-| `TenantId` | i64 |
-| `EmailAddress` | Validated string |
-| `PasswordHash` | bcrypt hash |
-| `JWTToken` | Signed JWT |
-| `Permission` | Resource + Action pair |
+| Value Object | Type | Validation |
+|---|---|---|
+| `UserId` | `i64` | Positive |
+| `TenantId` | `i64` | Positive |
+| `EmailAddress` | `String` | Regex validated (`validator` crate) |
+| `PasswordHash` | `String` | bcrypt verified (`password` module) |
+| `JWTToken` | `String` | RS256 signed + exp check |
+| `Permission` | `String` | Format: `{resource}.{action}` |
 
 ---
 
-## 4. Authentication Architecture
+## 5. Authentication Architecture
 
 ### Supported Methods
 
@@ -100,19 +148,20 @@ User
 POST /api/v1/auth/login
     |
     v
-Identity Service
+Identity Module (api/http/auth_controller.rs)
     |
-    ├── Validate email exists
-    ├── Verify password (bcrypt)
-    ├── Check account status
-    ├── Generate JWT access token
+    v
+AuthService (application/services/auth_service.rs)
+    |
+    ├── Validate email exists (SeaORM query → postgres_user_repository)
+    ├── Verify password (bcrypt → domain/value_objects/password.rs)
+    ├── Check account status (domain/rules/auth_rules.rs)
+    ├── Generate JWT access token (infrastructure/security/jwt.rs)
     ├── Generate refresh token
+    ├── Create Session entity
     |
     v
 Return tokens to client
-    |
-    v
-Frontend stores session
 ```
 
 ### JWT Token Structure
@@ -139,9 +188,9 @@ Frontend stores session
 
 ---
 
-## 5. Authorization Model
+## 6. Authorization Model
 
-### 5.1 RBAC (Role-Based Access Control)
+### 6.1 RBAC (Role-Based Access Control)
 
 **Predefined Roles:**
 
@@ -176,7 +225,7 @@ audit.read          - View audit logs
 admin.manage        - Platform administration
 ```
 
-### 5.2 ABAC (Attribute-Based Access Control)
+### 6.2 ABAC (Attribute-Based Access Control)
 
 ABAC adds context-aware authorization based on:
 
@@ -225,16 +274,20 @@ Permission Granted / Denied
 
 ---
 
-## 6. Multi-Tenant Architecture
+## 7. Multi-Tenant Architecture
 
 ### Tenant Isolation Strategy
 
 **Phase 1: Shared Database + Tenant Column**
 
-Every business table includes `tenant_id`:
+Every business table includes `tenant_id`. All access goes through SeaORM filters:
 
-```sql
-SELECT * FROM documents WHERE tenant_id = $1;
+```rust
+// SeaORM query with tenant isolation (no raw SQL)
+let users = Entity::find()
+    .filter(ModelColumn::TenantId.eq(tenant_id))
+    .all(&self.db)
+    .await?;
 ```
 
 **Phase 2 (Future): Database per Tenant**
@@ -256,10 +309,10 @@ tenant_c_database
 
 ---
 
-## 7. Public API Trait
+## 8. Public API Trait
 
 ```rust
-// nexus-identity/src/interfaces/api.rs
+// src/modules/identity/api/mod.rs
 #[async_trait]
 pub trait IdentityService: Send + Sync {
     async fn authenticate(&self, req: AuthRequest) -> Result<AuthResponse, IdentityError>;
@@ -292,126 +345,99 @@ pub struct PermissionRequest {
 }
 ```
 
-> **Note:** `IdentityService` is consumed by `nexus-gateway` middleware (auth, tenant validation) and all other modules (permission checks) — all via in-process trait dispatch.
+> **Note:** `IdentityService` is consumed by `gateway` middleware (auth, tenant validation) and all other modules (permission checks) — all via in-process trait dispatch.
 
 ---
 
-## 8. Database Schema (identity_db)
+## 9. SeaORM Entities (No Raw SQL)
 
-### users
+### users (SeaORM Entity)
 
-```sql
-CREATE TABLE identity.users (
-    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    tenant_id BIGINT NOT NULL,
-    email VARCHAR(255) UNIQUE NOT NULL,
-    password_hash TEXT NOT NULL,
-    display_name VARCHAR(255),
-    status VARCHAR(50) NOT NULL DEFAULT 'active',
-    mfa_enabled BOOLEAN DEFAULT FALSE,
-    mfa_secret TEXT,
-    last_login_at TIMESTAMP,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
-);
+```rust
+// src/modules/identity/infrastructure/repository/postgres_user_repository.rs
+use sea_orm::entity::prelude::*;
+
+#[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
+#[sea_orm(table_name = "users", schema_name = "identity")]
+pub struct Model {
+    #[sea_orm(primary_key)]
+    pub id: i64,
+    pub tenant_id: i64,
+    #[sea_orm(unique)]
+    pub email: String,
+    pub password_hash: String,
+    pub display_name: Option<String>,
+    pub status: String,
+    pub mfa_enabled: bool,
+    pub mfa_secret: Option<String>,
+    pub last_login_at: Option<chrono::NaiveDateTime>,
+    pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
+}
+
+#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+pub enum Relation {
+    #[sea_orm(has_many = "super::user_roles::Entity")]
+    UserRoles,
+    #[sea_orm(has_many = "super::api_keys::Entity")]
+    ApiKeys,
+    #[sea_orm(has_many = "super::sessions::Entity")]
+    Sessions,
+}
+
+impl ActiveModelBehavior for ActiveModel {}
 ```
 
-### roles
+### Repository Implementation
 
-```sql
-CREATE TABLE identity.roles (
-    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    tenant_id BIGINT,
-    name VARCHAR(100) NOT NULL,
-    description TEXT,
-    is_system BOOLEAN DEFAULT FALSE,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW()
-);
-```
+```rust
+#[async_trait]
+pub trait UserRepository: Send + Sync {
+    async fn find_by_id(&self, id: i64) -> Result<Option<User>, RepositoryError>;
+    async fn find_by_email(&self, email: &str) -> Result<Option<User>, RepositoryError>;
+    async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<User>, RepositoryError>;
+    async fn save(&self, user: &User) -> Result<User, RepositoryError>;
+    async fn update(&self, user: &User) -> Result<User, RepositoryError>;
+}
 
-### permissions
+pub struct PostgresUserRepository {
+    db: DatabaseConnection,
+}
 
-```sql
-CREATE TABLE identity.permissions (
-    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    name VARCHAR(100) UNIQUE NOT NULL,
-    resource VARCHAR(100) NOT NULL,
-    action VARCHAR(50) NOT NULL,
-    description TEXT
-);
-```
-
-### user_roles
-
-```sql
-CREATE TABLE identity.user_roles (
-    user_id BIGINT NOT NULL REFERENCES identity.users(id) ON DELETE CASCADE,
-    role_id BIGINT NOT NULL REFERENCES identity.roles(id) ON DELETE CASCADE,
-    assigned_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    PRIMARY KEY(user_id, role_id)
-);
-```
-
-### role_permissions
-
-```sql
-CREATE TABLE identity.role_permissions (
-    role_id BIGINT NOT NULL REFERENCES identity.roles(id) ON DELETE CASCADE,
-    permission_id BIGINT NOT NULL REFERENCES identity.permissions(id) ON DELETE CASCADE,
-    PRIMARY KEY(role_id, permission_id)
-);
-```
-
-### tenants
-
-```sql
-CREATE TABLE identity.tenants (
-    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    name VARCHAR(255) NOT NULL,
-    slug VARCHAR(100) UNIQUE NOT NULL,
-    plan VARCHAR(50) NOT NULL DEFAULT 'free',
-    status VARCHAR(50) NOT NULL DEFAULT 'pending_kyc',
-    kyc_status VARCHAR(50) NOT NULL DEFAULT 'pending',
-    settings JSONB,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW()
-);
-```
-
-### kyc_documents
-
-```sql
-CREATE TABLE identity.kyc_documents (
-    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    tenant_id BIGINT NOT NULL REFERENCES identity.tenants(id),
-    document_type VARCHAR(100) NOT NULL,
-    filename TEXT NOT NULL,
-    storage_path TEXT NOT NULL,
-    status VARCHAR(50) NOT NULL DEFAULT 'uploaded',
-    created_at TIMESTAMP NOT NULL DEFAULT NOW()
-);
-
-CREATE INDEX idx_kyc_tenant ON identity.kyc_documents(tenant_id);
-```
-
-### api_keys
-
-```sql
-CREATE TABLE identity.api_keys (
-    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    tenant_id BIGINT NOT NULL,
-    user_id BIGINT NOT NULL REFERENCES identity.users(id),
-    name VARCHAR(100) NOT NULL,
-    key_hash TEXT NOT NULL,
-    key_prefix VARCHAR(10) NOT NULL,
-    scopes TEXT[],
-    expires_at TIMESTAMP,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW()
-);
+#[async_trait]
+impl UserRepository for PostgresUserRepository {
+    async fn find_by_email(&self, email: &str) -> Result<Option<User>, RepositoryError> {
+        let model = Entity::find()
+            .filter(ModelColumn::Email.eq(email))
+            .one(&self.db)
+            .await
+            .map_err(|e| RepositoryError::DatabaseError(e.to_string()))?;
+        
+        Ok(model.map(User::from))
+    }
+    
+    async fn save(&self, user: &User) -> Result<User, RepositoryError> {
+        let active = ActiveModel {
+            tenant_id: Set(user.tenant_id),
+            email: Set(user.email.clone()),
+            password_hash: Set(user.password_hash.clone()),
+            display_name: Set(user.display_name.clone()),
+            status: Set(user.status.clone()),
+            ..Default::default()
+        };
+        
+        let result = active.insert(&self.db)
+            .await
+            .map_err(|e| RepositoryError::DatabaseError(e.to_string()))?;
+        
+        Ok(User::from(result))
+    }
+}
 ```
 
 ---
 
-## 9. REST API Endpoints
+## 10. REST API Endpoints
 
 ### Login
 
@@ -467,7 +493,28 @@ POST /api/v1/auth/change-password
 
 ---
 
-## 10. Security Requirements
+## 11. gRPC Service (Versioned)
+
+```protobuf
+// proto/identity/v1/auth_service.proto
+package identity.v1;
+
+service AuthService {
+    rpc Authenticate(AuthRequest) returns (AuthResponse);
+    rpc VerifyToken(VerifyTokenRequest) returns (JWTClaims);
+    rpc CheckPermission(PermissionRequest) returns (PermissionResponse);
+    rpc ValidateTenant(ValidateTenantRequest) returns (Tenant);
+    rpc CreateUser(CreateUserRequest) returns (User);
+    rpc GetUser(GetUserRequest) returns (User);
+    rpc AssignRole(AssignRoleRequest) returns (Empty);
+}
+```
+
+Service version is embedded in the package name (`identity.v1`).
+
+---
+
+## 12. Security Requirements
 
 | Requirement | Implementation |
 |---|---|
@@ -478,23 +525,26 @@ POST /api/v1/auth/change-password
 | Password Policy | Min 12 chars, mixed case, numbers, symbols |
 | Session Management | Invalidate on password change |
 | API Key Security | Hashed storage, prefix for identification |
+| **No Raw SQL** | All DB access through SeaORM entities |
 
 ---
 
-## 11. NATS Events
+## 13. NATS Events (Versioned Subjects)
 
 ### Published
 
 | Subject | Event |
 |---|---|
-| `aeroxe.identity.user.created` | `UserCreated` |
-| `aeroxe.identity.user.updated` | `UserUpdated` |
-| `aeroxe.identity.role.assigned` | `RoleAssigned` |
-| `aeroxe.identity.permission.changed` | `PermissionChanged` |
+| `aeroxe.v1.identity.user.created` | `UserCreated` |
+| `aeroxe.v1.identity.user.updated` | `UserUpdated` |
+| `aeroxe.v1.identity.role.assigned` | `RoleAssigned` |
+| `aeroxe.v1.identity.permission.changed` | `PermissionChanged` |
+
+All NATS subjects follow the `aeroxe.v1.<module>.<event>` format to enable future version coexistence.
 
 ---
 
-## 12. Observability
+## 14. Observability
 
 > **Note:** As a module within the monolith, identity metrics are collected via shared OpenTelemetry tracing spans in the binary, not via a separate metrics endpoint.
 

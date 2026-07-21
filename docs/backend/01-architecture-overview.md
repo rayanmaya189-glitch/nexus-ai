@@ -11,11 +11,15 @@
 | Product | AeroXe Nexus AI |
 | Domain | aeroxenexus.com |
 | Category | Enterprise Agentic AI Platform |
-| Backend Language | Rust |
-| Architecture | **Modular Monolith** (DDD Bounded Contexts → Rust Modules) |
+| Backend Language | **Rust** (edition 2024) |
+| Architecture | **Modular Monolith** (DDD Bounded Contexts → Rust modules under `src/modules/`) |
+| ORM | **SeaORM** (no raw SQL — all database access through SeaORM entities & models) |
 | AI Runtime | Ollama (local GPU inference) |
 | Internal Communication | Rust trait interfaces + NATS JetStream (async) |
 | External API | REST + WebSocket (via API Gateway module) |
+| API Versioning | URL-based (`/api/v1/`, `/api/v2/`, etc.) |
+| NATS Versioning | Subject-based (`aeroxe.v1.module.event`) |
+| gRPC Versioning | Service-level versioning (`identity.v1.AuthService`) |
 | Deployment | Single binary with optional sidecar services |
 | Testing | **TDD-First**: No code without tests |
 
@@ -25,28 +29,29 @@
 
 ### 2.1 Modular Monolithic Architecture
 
-The entire backend is a **single Rust binary** organized into DDD modules:
+The entire backend is a **single Rust binary** organized into DDD modules under `src/modules/`:
 
 ```
 +-------------------------------------------------------------------+
 |                    AeroXe Nexus AI Monolith                        |
 |                                                                   |
-|  +------------------+  +------------------+  +------------------+  |
-|  |   API Gateway    |  |  AI Gateway      |  | Agent Orchestrator| |
-|  |   Module         |  |  Module          |  | Module           | |
-|  +------------------+  +------------------+  +------------------+  |
+|  src/modules/                                                     |
+|  +------------------+  +------------------+  +------------------+ |
+|  |   gateway        |  |   ai-gateway     |  |   agent          | |
+|  |                  |  |                  |  |                  | |
+|  +------------------+  +------------------+  +------------------+ |
 |                                                                   |
-|  +------------------+  +------------------+  +------------------+  |
-|  |   RAG Module     |  |  Vision Module   |  | SQL Agent Module | |
-|  +------------------+  +------------------+  +------------------+  |
+|  +------------------+  +------------------+  +------------------+ |
+|  |   rag            |  |   vision         |  |   sql-agent      | |
+|  +------------------+  +------------------+  +------------------+ |
 |                                                                   |
-|  +------------------+  +------------------+  +------------------+  |
-|  |   Identity Module |  |  Memory Module   |  | Workflow Module  | |
-|  +------------------+  +------------------+  +------------------+  |
+|  +------------------+  +------------------+  +------------------+ |
+|  |   identity       |  |   customer       |  |   memory         | |
+|  +------------------+  +------------------+  +------------------+ |
 |                                                                   |
-|  +------------------+  +------------------+  +------------------+  |
-|  |   Security Module |  |  Audit Module    |  | Integration M.   | |
-|  +------------------+  +------------------+  +------------------+  |
+|  +------------------+  +------------------+  +------------------+ |
+|  |   workflow       |  |   security       |  |   audit          | |
+|  +------------------+  +------------------+  +------------------+ |
 +-------------------------------------------------------------------+
                               |
         +---------------------------------------------------+
@@ -60,15 +65,94 @@ The entire backend is a **single Rust binary** organized into DDD modules:
         +---------------------------------------------------+
 ```
 
-### 2.2 Domain-Driven Design (DDD)
+### 2.2 Folder Structure
 
-- **Bounded Contexts** → Rust modules (`crate::domain::*`)
+Every module follows a strict DDD layered structure within `src/modules/<name>/`:
+
+```
+src/
+├── main.rs                        # Binary entry point
+├── lib.rs                         # Common library utilities
+├── config/                        # Application configuration
+│   ├── database.rs                # SeaORM database config
+│   ├── redis.rs                   # Redis connection config
+│   ├── nats.rs                    # NATS connection config
+│   └── settings.rs                # Global settings (env-based)
+│
+└── modules/                       # Bounded contexts (business domains)
+    ├── gateway/                   # API Gateway layer
+    │   ├── mod.rs
+    │   ├── auth/
+    │   │   ├── jwt_validator.rs
+    │   │   └── api_key_validator.rs
+    │   ├── rate_limiter/
+    │   │   └── token_bucket.rs
+    │   ├── request_validator/
+    │   │   └── schemas/
+    │   ├── api_versioning/
+    │   │   └── router.rs
+    │   └── tests/
+    │
+    ├── identity/                  # Authentication & authorisation
+    │   ├── domain/
+    │   │   ├── aggregates/user/
+    │   │   ├── entities/session.rs
+    │   │   ├── value_objects/
+    │   │   └── rules/
+    │   ├── application/
+    │   │   ├── commands/
+    │   │   ├── queries/
+    │   │   └── services/
+    │   ├── infrastructure/
+    │   │   ├── repository/        # SeaORM repositories
+    │   │   └── security/          # JWT, hashing
+    │   ├── api/
+    │   │   ├── http/
+    │   │   └── grpc/
+    │   └── migrations/            # SeaORM migration files
+    │
+    ├── customer/                  # Customer aggregate, KYC, addresses
+    │   ├── domain/
+    │   │   ├── aggregates/customer/
+    │   │   ├── value_objects/
+    │   │   └── rules/
+    │   ├── application/
+    │   │   ├── commands/
+    │   │   ├── queries/
+    │   │   └── services/
+    │   ├── infrastructure/
+    │   │   ├── repository/        # SeaORM repositories
+    │   │   └── messaging/         # NATS publishers/subscribers
+    │   ├── api/
+    │   │   ├── http/
+    │   │   └── grpc/
+    │   └── migrations/            # SeaORM migration files
+    │
+    ├── ai-gateway/                # AI Gateway
+    ├── agent/                     # Agent Orchestration
+    ├── rag/                       # RAG Intelligence
+    ├── vision/                    # Vision Intelligence
+    ├── sql-agent/                 # SQL Intelligence
+    ├── memory/                    # Memory
+    ├── workflow/                  # Workflow
+    ├── security/                  # Security Intelligence
+    ├── audit/                     # Audit & Compliance
+    ├── notification/              # Notifications
+    ├── model-registry/            # Model Management
+    ├── config/                    # Dynamic Configuration
+    └── ecosystem/                 # Ecosystem Integration
+```
+
+### 2.3 Domain-Driven Design (DDD)
+
+- **Bounded Contexts** → Rust modules (`src/modules/<name>/`)
 - **Aggregates** → Rust structs with invariant enforcement
-- **Entities + Value Objects** → Typed structs with validation
+- **Entities + Value Objects** → Typed structs with validation (`validator` crate)
 - **Domain Events** → NATS JetStream (async) + in-process (sync)
-- **Repository Traits** → `#[async_trait]` with SeaORM implementations
+- **Repository Traits** → `#[async_trait]` with **SeaORM** implementations
+- **No Raw SQL** → All database access through SeaORM entity models
 
-### 2.3 Test-Driven Development (TDD)
+### 2.4 Test-Driven Development (TDD)
 
 **Hard rule:** No production code without automated tests.
 
@@ -78,18 +162,23 @@ RED (write failing test) → GREEN (implement) → REFACTOR → INTEGRATE
 
 Every module enforces:
 - **Unit tests** for domain logic (entities, value objects, aggregates)
-- **Integration tests** for repository + infrastructure
+- **Integration tests** for repository + infrastructure (SeaORM + test DB)
 - **Module boundary tests** for cross-module contracts
 - **API contract tests** for external interfaces
 
-### 2.4 Architecture Decisions
+### 2.5 Architecture Decisions
 
 | Decision | Rationale |
 |---|---|
 | **Single binary** vs microservices | Eliminates gRPC overhead, simplifies deployment, enables stronger compile-time guarantees |
+| **SeaORM** over raw SQL | Type-safe queries, migration tooling, compile-time checked schemas |
+| **No raw SQL anywhere** | All DB access through SeaORM entity models — prevents SQL injection, enables schema migrations |
+| **Schema-per-BoundedContext** | Logical database isolation without physical separation — enables future extraction to microservices |
 | **Trait-based module interfaces** | Modules communicate through Rust traits — type-safe, testable, mockable |
 | **NATS for async events only** | Background jobs, cross-module notifications, audit logging |
-| **Schema-per-BoundedContext** | Logical database isolation without physical separation — enables future extraction to microservices |
+| **API versioning in URL** | `/api/v1/` prefix — clear, cacheable, easy to route |
+| **NATS subject versioning** | `aeroxe.v1.module.event` — prevents event format conflicts |
+| **gRPC service versioning** | `package.v1.ServiceName` — supports multiple API versions |
 | **TDD enforced at module boundaries** | Each module has a public API surface + comprehensive test suite |
 
 ---
@@ -102,6 +191,7 @@ Every module enforces:
 |---|---|
 | Language | **Rust** (edition 2024) |
 | Async Runtime | Tokio (multi-threaded) |
+| ORM | **SeaORM** (with `sea-orm` crate, migration tooling) |
 | HTTP / WS Server | **axum** |
 | gRPC (external only) | tonic (optional, for SDK/partner integrations) |
 | Serialization | serde + serde_json |
@@ -114,9 +204,9 @@ Every module enforces:
 |---|---|
 | Async Traits | `async-trait` crate |
 | Mocking | `mockall` crate |
+| Validation | `validator` crate (derive macros for struct validation) |
 | Test Runners | `cargo test`, `cargo nextest` |
 | Property Testing | `proptest` crate |
-| Fuzzing | `cargo-fuzz` |
 
 ### 3.3 Infrastructure
 
@@ -150,33 +240,34 @@ Every module enforces:
 
 ### 4.1 Core Domain Modules
 
-| Module | Bounded Context | Purpose |
-|---|---|---|
-| `nexus-gateway` | API Gateway | HTTP/WS server, auth, rate-limit, routing |
-| `nexus-ai-gateway` | AI Gateway | AI request lifecycle, prompt safety |
-| `nexus-agent` | Agent Orchestration | Agent lifecycle, planning, tool execution |
-| `nexus-rag` | RAG Intelligence | Document ingestion, embeddings, search |
-| `nexus-vision` | Vision Intelligence | Image analysis, OCR |
-| `nexus-sql-agent` | SQL Intelligence | NL→SQL, safe query execution |
-| `nexus-security-ai` | Security Intelligence | Code review, threat detection |
+| Module | Bounded Context | Schema Prefix | Purpose |
+|---|---|---|---|
+| `gateway` | API Gateway | — (stateless, Redis) | HTTP/WS server, auth, rate-limit, routing |
+| `ai-gateway` | AI Gateway | `ai_` | AI request lifecycle, prompt safety |
+| `agent` | Agent Orchestration | `agent_` | Agent lifecycle, planning, tool execution |
+| `rag` | RAG Intelligence | `rag_` | Document ingestion, embeddings, search |
+| `vision` | Vision Intelligence | `vision_` | Image analysis, OCR |
+| `sql-agent` | SQL Intelligence | `sql_` | NL→SQL, safe query execution |
+| `security` | Security Intelligence | `security_` | Code review, threat detection |
 
 ### 4.2 Supporting Domain Modules
 
-| Module | Bounded Context | Purpose |
-|---|---|---|
-| `nexus-identity` | Identity & Auth | IAM, JWT, RBAC/ABAC, tenant mgmt |
-| `nexus-memory` | Memory | Short/long-term AI memory |
-| `nexus-workflow` | Workflow | Business process automation |
-| `nexus-audit` | Audit & Compliance | Full audit trail, compliance |
+| Module | Bounded Context | Schema Prefix | Purpose |
+|---|---|---|---|
+| `identity` | Identity & Auth | `identity_` | IAM, JWT, RBAC/ABAC, tenant mgmt, KYC |
+| `customer` | Customer Management | `customer_` | Customer aggregate, profiles, status, addresses |
+| `memory` | Memory | `memory_` | Short/long-term AI memory |
+| `workflow` | Workflow | `workflow_` | Business process automation |
+| `audit` | Audit & Compliance | `audit_` | Full audit trail, compliance |
 
 ### 4.3 Infrastructure Modules
 
-| Module | Bounded Context | Purpose |
-|---|---|---|
-| `nexus-model-registry` | Model Management | Ollama model lifecycle |
-| `nexus-notification` | Notifications | Email, WhatsApp, push |
-| `nexus-config` | Configuration | Dynamic config, feature flags |
-| `nexus-ecosystem` | Ecosystem Integration | AeroXe product connectors |
+| Module | Bounded Context | Schema Prefix | Purpose |
+|---|---|---|---|
+| `model-registry` | Model Management | `models_` | Ollama model lifecycle |
+| `notification` | Notifications | `notif_` | Email, WhatsApp, push |
+| `config` | Configuration | `config_` | Dynamic config, feature flags |
+| `ecosystem` | Ecosystem Integration | `eco_` | AeroXe product connectors |
 
 ---
 
@@ -184,127 +275,96 @@ Every module enforces:
 
 ```
                    +----------------+
-                   | nexus-gateway  |  ← External HTTP/WS
+                   |   gateway      |  ← External HTTP/WS
                    +----------------+
                           |
           +---------------+---------------+
           |               |               |
           v               v               v
    +-----------+   +-----------+   +-----------+
-   | nexus-    |   | nexus-    |   | nexus-    |
    | identity  |   | ai-gateway|   | model-    |
    +-----------+   +-----------+   | registry  |
           |               |        +-----------+
           |               v
           |        +-----------+
-          |        | nexus-    |
-          |        | agent     |
-          |        +-----------+
+          |        |  agent    |
+          +-------------------+
           |          |     |     |     |
           v          v     v     v     v
    +-----------+   +-----+ +---+ +---+ +--------+
-   | nexus-    |   | RAG | | V. | |SQL| |memory |
-   | workflow  |   +-----+ +---+ +---+ +--------+
-   +-----------+         |     |     |
-          |              v     v     v
-          v        +-------------------+
-   +-----------+   |   nexus-security  |
-   | nexus-    |   +-------------------+
-   | notification|          |
+   | customer  |   | RAG | | V. | |SQL| | memory |
+   +-----------+   +-----+ +---+ +---+ +--------+
+   | workflow  |         |     |     |
+   +-----------+         v     v     v
+          |        +-------------------+
+          v        |   security        |
+   +-----------+   +-------------------+
+   |notifictn  |          |
    +-----------+          v
                    +-----------+
-                   | nexus-    |
-                   | audit     |
+                   |  audit    |
                    +-----------+
 ```
 
 ---
 
-## 6. Request Flow
+## 6. Versioning Standards
 
-### 6.1 AI Chat Request (Modular Monolith)
+### 6.1 API Versioning (REST)
 
-```
-User → HTTP POST /api/v1/ai/chat
-  → nexus-gateway::router
-    → [Middleware] Auth, Tenant, Rate-Limit
-    → nexus-gateway::handlers::ai_chat
-      → nexus-ai-gateway::AIGatewayService::submit_request()
-        → nexus-agent::AgentService::start_execution()
-          → [Planning]   LFM2.5 Thinking (Ollama)
-          → [Execution]   Qwen2.5-Coder / Command-R / etc. (Ollama)
-          → [Tools]       nexus-rag / nexus-sql-agent / nexus-vision (trait calls)
-          → [Memory]      nexus-memory::MemoryService (trait call)
-        ← Response (streamed via axum WebSocket)
-      → nexus-audit::AuditService::log_event() (NATS + trait)
-    ← HTTP 200 + JSON body or WebSocket stream
-```
-
-### 6.2 Document Upload (Async via NATS)
+All routes follow `/api/v{version}/<resource>` pattern.
 
 ```
-User → POST /api/v1/rag/documents
-  → nexus-gateway → nexus-rag::RagService::upload_document()
-    → Store file in MinIO
-    → Publish NATS: aeroxe.rag.document.uploaded
-    ← HTTP 202 Accepted
-
-[NATS Consumer]
-  → nexus-rag::DocumentProcessor (async worker)
-    → Parse → Chunk → Embed (Ollama) → Store pgvector
-    → Publish NATS: aeroxe.rag.document.processed
-    → Update knowledge graph (Apache AGE)
+/api/v1/auth/login
+/api/v1/customers/{id}
+/api/v2/customers/{id}         # Future: different response schema
 ```
+
+Version is extracted by `api_versioning::router` in the gateway module and propagated to all trait calls via `RequestContext`.
+
+### 6.2 NATS Event Versioning
+
+All NATS subjects follow `aeroxe.v{version}.<module>.<event>` pattern.
+
+```
+aeroxe.v1.identity.user.created
+aeroxe.v1.customer.customer.created
+aeroxe.v2.customer.customer.created     # Future: different event schema
+```
+
+### 6.3 gRPC Service Versioning
+
+gRPC service names include the version:
+
+```protobuf
+package identity.v1;
+service AuthService { ... }
+
+package customer.v1;
+service CustomerService { ... }
+```
+
+### 6.4 Database Schema Versioning
+
+Each module's schema uses SeaORM migrations with sequential versioning:
+
+```rust
+// migrations/identity/
+// m20250701_000001_create_users_table.rs
+// m20250701_000002_create_roles_table.rs
+```
+
+Every migration is versioned and reversible via SeaORM's migration system.
 
 ---
 
-## 7. Module Internal Structure (DDD Layers)
-
-Every module follows the same layered structure:
-
-```
-nexus-<name>/
-├── Cargo.toml
-├── src/
-│   ├── lib.rs                      # Public API (re-exports)
-│   ├── domain/
-│   │   ├── mod.rs
-│   │   ├── aggregates/             # Aggregate roots with invariants
-│   │   ├── entities/               # Mutable domain objects
-│   │   ├── value_objects/          # Immutable validated types
-│   │   └── events/                 # Domain event definitions
-│   ├── application/
-│   │   ├── mod.rs
-│   │   ├── commands/               # CQRS command structs
-│   │   ├── queries/                # CQRS query structs
-│   │   ├── handlers/               # Command/query handler impls
-│   │   └── services/               # Application services (use cases)
-│   ├── infrastructure/
-│   │   ├── mod.rs
-│   │   ├── persistence/            # SeaORM repos + migrations
-│   │   ├── ollama/                 # Ollama HTTP client
-│   │   └── nats/                   # NATS publisher/subscriber
-│   └── interfaces/
-│       ├── mod.rs
-│       ├── api/                    # Module's internal API traits
-│       └── events/                 # NATS event handlers
-├── tests/
-│   ├── unit/                       # Domain unit tests
-│   ├── integration/                # Integration tests (DB, NATS, Ollama)
-│   ├── contract/                   # Module boundary contract tests
-│   └── e2e/                        # End-to-end flow tests
-└── migrations/                     # SeaORM migration files
-```
-
----
-
-## 8. Performance Targets
+## 7. Performance Targets
 
 | Component | Target |
 |---|---|
 | API Gateway (HTTP serving) | 50,000 req/sec |
 | Module trait dispatch | < 1μs overhead |
-| PostgreSQL query (indexed) | < 10ms |
+| PostgreSQL query (SeaORM, indexed) | < 10ms |
 | Vector Search (pgvector) | < 200ms |
 | Redis Lookup | < 10ms |
 | Chat First Token | < 2s |
@@ -313,17 +373,18 @@ nexus-<name>/
 
 ---
 
-## 9. Cross-Cutting Concerns
+## 8. Cross-Cutting Concerns
 
 | Concern | Implementation |
 |---|---|
-| Authentication | JWT + API Keys (`nexus-identity`) |
+| Authentication | JWT + API Keys (`identity` module) |
 | Authorization | RBAC + ABAC Hybrid |
-| Multi-Tenancy | `tenant_id` column in all tables |
+| Multi-Tenancy | `tenant_id` column in all tables (SeaORM entity filters) |
 | Input Validation | `validator` crate + serde deserialization |
 | Rate Limiting | Token Bucket (Redis) |
 | Observability | OpenTelemetry (metrics, logs, traces via `tracing`) |
-| Audit | Every sensitive action logged via `nexus-audit` |
+| Audit | Every sensitive action logged via `audit` module |
 | Secrets | Environment variables + Hashicorp Vault |
+| No Raw SQL | All DB access through SeaORM entities and models |
 | Backup | Daily full + WAL archiving |
 | DR | RPO < 15min, RTO < 2hr |

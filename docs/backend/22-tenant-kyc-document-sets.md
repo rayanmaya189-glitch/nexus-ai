@@ -2,7 +2,7 @@
 
 ## Tenant Onboarding + KYC Verification + Document Set Management + Agent-Document Binding
 
-> **Modular Monolith Context:** KYC handling is in `nexus-identity` module (schema `identity_`), document sets in `nexus-rag` (schema `rag_`), and agent bindings in `nexus-agent` (schema `agent_`). All modules communicate via trait interfaces, not gRPC. See [DDD Domain Design](02-ddd-domain-design.md).
+> **Modular Monolith Context:** KYC handling is in `identity` module (`src/modules/identity/`, schema `identity_`), document sets in `rag` module (`src/modules/rag/`, schema `rag_`), agent bindings in `agent` module (`src/modules/agent/`, schema `agent_`), and customer data in `customer` module (`src/modules/customer/`, schema `customer_`). All modules communicate via trait interfaces — not gRPC. All database access uses SeaORM — no raw SQL. See [DDD Domain Design](02-ddd-domain-design.md).
 
 ---
 
@@ -10,11 +10,12 @@
 
 This document defines five critical flows:
 
-1. **Tenant KYC Flow** — Verification before platform access (in `nexus-identity`)
-2. **Document Set Creation** — Organizing documents into scoped collections (in `nexus-rag`)
-3. **Agent-Document Set Binding** — Connecting agents to specific document sets (in `nexus-agent`)
-4. **Agent-Database Binding** — Connecting agents to specific databases and tables with credential validation (in `nexus-agent`)
+1. **Tenant KYC Flow** — Verification before platform access (in `identity` module)
+2. **Document Set Creation** — Organizing documents into scoped collections (in `rag` module)
+3. **Agent-Document Set Binding** — Connecting agents to specific document sets (in `agent` module)
+4. **Agent-Database Binding** — Connecting agents to specific databases and tables with credential validation (in `agent` module)
 5. **Agent Isolation** — Enforcing that agents access ONLY their bound resources
+6. **Customer Module Integration** — Customer lifecycle events (in `customer` module)
 
 ---
 
@@ -737,39 +738,51 @@ Result: Agent can ONLY answer from Product Manuals, FAQ, and Troubleshooting
 
 | Subject | Event | When |
 |---|---|---|
-| `aeroxe.kyc.submitted` | `KYCDocumentsSubmitted` | Documents uploaded |
-| `aeroxe.kyc.approved` | `KYCApproved` | Verification passed |
-| `aeroxe.kyc.rejected` | `KYCRejected` | Verification failed |
+### KYC Events
+
+| Subject | Event | When |
+|---|---|---|
+| `aeroxe.v1.kyc.submitted` | `KYCDocumentsSubmitted` | Documents uploaded |
+| `aeroxe.v1.kyc.approved` | `KYCApproved` | Verification passed |
+| `aeroxe.v1.kyc.rejected` | `KYCRejected` | Verification failed |
 
 ### Document Set Events
 
 | Subject | Event | When |
 |---|---|---|
-| `aeroxe.docset.created` | `DocumentSetCreated` | Set created |
-| `aeroxe.docset.activated` | `DocumentSetActivated` | Set activated |
-| `aeroxe.docset.document.added` | `DocumentAddedToSet` | Doc linked |
-| `aeroxe.docset.document.removed` | `DocumentRemovedFromSet` | Doc unlinked |
-| `aeroxe.docset.archived` | `DocumentSetArchived` | Set archived |
+| `aeroxe.v1.docset.created` | `DocumentSetCreated` | Set created |
+| `aeroxe.v1.docset.activated` | `DocumentSetActivated` | Set activated |
+| `aeroxe.v1.docset.document.added` | `DocumentAddedToSet` | Doc linked |
+| `aeroxe.v1.docset.document.removed` | `DocumentRemovedFromSet` | Doc unlinked |
+| `aeroxe.v1.docset.archived` | `DocumentSetArchived` | Set archived |
 
 ### Agent Document Binding Events
 
 | Subject | Event | When |
 |---|---|---|
-| `aeroxe.agent.bound` | `AgentBoundToDocumentSet` | Binding created |
-| `aeroxe.agent.unbound` | `AgentUnboundFromDocumentSet` | Binding removed |
+| `aeroxe.v1.agent.bound` | `AgentBoundToDocumentSet` | Binding created |
+| `aeroxe.v1.agent.unbound` | `AgentUnboundFromDocumentSet` | Binding removed |
 
 ### Agent Database Binding Events
 
 | Subject | Event | When |
 |---|---|---|
-| `aeroxe.agent.db.test.success` | `AgentDBConnectionTested` | Test connection passed |
-| `aeroxe.agent.db.test.failed` | `AgentDBConnectionTestFailed` | Test connection failed |
-| `aeroxe.agent.db.bound` | `AgentBoundToDatabase` | Database binding created |
-| `aeroxe.agent.db.unbound` | `AgentUnboundFromDatabase` | Database binding removed |
-| `aeroxe.agent.db.table.bound` | `AgentBoundToTable` | Table binding created |
-| `aeroxe.agent.db.table.unbound` | `AgentUnboundFromTable` | Table binding removed |
-| `aeroxe.agent.db.schema.drift` | `AgentDBSchemaDrift` | Schema changed after binding |
-| `aeroxe.agent.scope.changed` | `AgentScopeChanged` | Permissions updated |
+| `aeroxe.v1.agent.db.test.success` | `AgentDBConnectionTested` | Test connection passed |
+| `aeroxe.v1.agent.db.test.failed` | `AgentDBConnectionTestFailed` | Test connection failed |
+| `aeroxe.v1.agent.db.bound` | `AgentBoundToDatabase` | Database binding created |
+| `aeroxe.v1.agent.db.unbound` | `AgentUnboundFromDatabase` | Database binding removed |
+| `aeroxe.v1.agent.db.table.bound` | `AgentBoundToTable` | Table binding created |
+| `aeroxe.v1.agent.db.table.unbound` | `AgentUnboundFromTable` | Table binding removed |
+| `aeroxe.v1.agent.db.schema.drift` | `AgentDBSchemaDrift` | Schema changed after binding |
+| `aeroxe.v1.agent.scope.changed` | `AgentScopeChanged` | Permissions updated |
+
+### Customer Module Events
+
+| Subject | Event | When |
+|---|---|---|
+| `aeroxe.v1.customer.customer.created` | `CustomerCreated` | Customer created |
+| `aeroxe.v1.customer.customer.suspended` | `CustomerSuspended` | Customer suspended |
+| `aeroxe.v1.customer.customer.activated` | `CustomerActivated` | Customer activated |
 
 ---
 

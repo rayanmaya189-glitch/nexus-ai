@@ -1,6 +1,6 @@
 # AeroXe Nexus AI — API Specification
 
-## REST + WebSocket + Streaming (Modular Monolith Interface)
+## REST + WebSocket + Streaming (Modular Monolith Interface) — Versioned
 
 ---
 
@@ -11,10 +11,18 @@ Client Apps
     |
     v
 +-----------------------------------------+
-|         nexus-gateway Module            |
+|         gateway Module                  |
 |     (axum HTTP/WS Server, port 8080)    |
 |      Middleware: Auth → Tenant →        |
-|      Rate-Limit → Authz → Audit         |
+|      Rate-Limit → Version Check →       |
+|      Schema Validation → Authz → Audit  |
++-----------------------------------------+
+    |
+    v
++-----------------------------------------+
+|     API Version Router                  |
+|     /api/v1/<resource>                  |
+|     /api/v2/<resource>  (future)        |
 +-----------------------------------------+
     |
     v
@@ -24,7 +32,7 @@ Client Apps
 +-----------------------------------------+
     |
     v
-All Modules (nexus-identity, nexus-agent, ...)
+All Modules (identity, customer, agent, ...)
 ```
 
 The API Gateway does NOT proxy to separate services. It calls module trait methods directly — zero network overhead.
@@ -35,20 +43,151 @@ The API Gateway does NOT proxy to separate services. It calls module trait metho
 
 | Principle | Implementation |
 |---|---|
-| Versioning | All routes prefixed with `/api/v1/` |
+| Versioning | All routes prefixed with `/api/v{version}/` |
+| Current Version | `v1` |
 | Authentication | JWT Bearer token (`Authorization` header) |
 | Tenant Isolation | `tenant_id` extracted from JWT, enforced by gateway |
-| Rate Limiting | Token Bucket (Redis), per-tenant + per-endpoint |
+| Rate Limiting | Token Bucket (Redis), per-tenant + per-endpoint + per-version |
 | Request Tracing | `X-Request-ID` (auto-generated UUID v4) |
-| Audit | All sensitive actions logged via `nexus-audit` trait call |
+| Schema Validation | Versioned request schemas in `request_validator/schemas/` |
+| Audit | All sensitive actions logged via `audit` trait call |
+| Deprecation | Deprecated endpoints return `Sunset` header |
 | Error Format | Standard JSON error envelope (see below) |
 | CORS | Configurable per-tenant allowed origins |
 
 ---
 
-## 3. Authentication APIs
+## 3. Customer APIs (NEW)
 
-All handled by `nexus-identity` module via trait calls.
+Handled by `customer` module (`src/modules/customer/`).
+
+### Create Customer
+
+```
+POST /api/v1/customers
+Authorization: Bearer <jwt>
+```
+
+**Request:**
+```json
+{
+  "name": "Acme Corp",
+  "email": "contact@acme.com",
+  "phone": "+1234567890",
+  "addresses": [
+    {
+      "type": "billing",
+      "line1": "123 Main St",
+      "city": "New York",
+      "state": "NY",
+      "postal_code": "10001",
+      "country": "US",
+      "is_default": true
+    }
+  ],
+  "tags": ["enterprise", "isp"],
+  "custom_fields": {
+    "industry": "telecom",
+    "account_manager": "john.doe@aeroxe.com"
+  }
+}
+```
+
+**Response (201):**
+```json
+{
+  "id": 1,
+  "tenant_id": 1,
+  "name": "Acme Corp",
+  "email": "contact@acme.com",
+  "phone": "+1234567890",
+  "status": "active",
+  "addresses": [
+    {
+      "id": 1,
+      "type": "billing",
+      "line1": "123 Main St",
+      "city": "New York",
+      "state": "NY",
+      "postal_code": "10001",
+      "country": "US",
+      "is_default": true
+    }
+  ],
+  "tags": ["enterprise", "isp"],
+  "created_at": "2026-07-21T12:00:00Z"
+}
+```
+
+### Get Customer
+
+```
+GET /api/v1/customers/{id}
+Authorization: Bearer <jwt>
+```
+
+**Response (200):**
+```json
+{
+  "id": 1,
+  "tenant_id": 1,
+  "name": "Acme Corp",
+  "email": "contact@acme.com",
+  "status": "active",
+  "addresses": [...],
+  "created_at": "2026-07-21T12:00:00Z"
+}
+```
+
+### List Customers
+
+```
+GET /api/v1/customers?page=1&per_page=20&status=active
+Authorization: Bearer <jwt>
+```
+
+### Suspend Customer
+
+```
+POST /api/v1/customers/{id}/suspend
+Authorization: Bearer <jwt>
+```
+
+**Response (200):**
+```json
+{
+  "id": 1,
+  "status": "suspended",
+  "suspended_at": "2026-07-21T12:00:00Z"
+}
+```
+
+### Activate Customer
+
+```
+POST /api/v1/customers/{id}/activate
+Authorization: Bearer <jwt>
+```
+
+### Update Customer
+
+```
+PUT /api/v1/customers/{id}
+Authorization: Bearer <jwt>
+```
+
+### Delete Customer (Soft)
+
+```
+DELETE /api/v1/customers/{id}
+Authorization: Bearer <jwt>
+```
+
+---
+
+## 4. Authentication APIs
+
+All handled by `identity` module via trait calls.
 
 ### Login
 
@@ -112,9 +251,9 @@ POST /api/v1/auth/change-password
 
 ---
 
-## 4. AI Chat APIs
+## 5. AI Chat APIs
 
-Handled by `nexus-ai-gateway` → `nexus-agent` → `nexus-rag` / `nexus-memory` etc. via trait calls.
+Handled by `ai-gateway` → `agent` → `rag` / `memory` etc. via trait calls.
 
 ### Submit Chat Request
 
@@ -167,9 +306,9 @@ Upgrade: websocket
 
 ---
 
-## 5. Agent APIs
+## 6. Agent APIs
 
-Handled by `nexus-agent` module.
+Handled by `agent` module.
 
 ### Execute Agent
 
@@ -237,9 +376,9 @@ POST /api/v1/agents/{id}/sql-connections/tables
 
 ---
 
-## 6. RAG Knowledge APIs
+## 7. RAG Knowledge APIs
 
-Handled by `nexus-rag` module.
+Handled by `rag` module.
 
 ### Upload Document
 
@@ -302,9 +441,9 @@ DELETE /api/v1/document-sets/{id}/documents/{doc_id} — Remove
 
 ---
 
-## 7. Vision APIs
+## 8. Vision APIs
 
-Handled by `nexus-vision` module.
+Handled by `vision` module.
 
 ### Analyze Image
 
@@ -341,9 +480,9 @@ Content-Type: multipart/form-data
 
 ---
 
-## 8. SQL Intelligence APIs
+## 9. SQL Intelligence APIs
 
-Handled by `nexus-sql-agent` module.
+Handled by `sql-agent` module.
 
 ### Query (Generate + Execute)
 
@@ -381,9 +520,9 @@ POST /api/v1/sql/generate
 
 ---
 
-## 9. Memory APIs
+## 10. Memory APIs
 
-Handled by `nexus-memory` module.
+Handled by `memory` module.
 
 ### Store Memory
 
@@ -414,9 +553,9 @@ GET /api/v1/memory/context/{session_id}
 
 ---
 
-## 10. Workflow APIs
+## 11. Workflow APIs
 
-Handled by `nexus-workflow` module.
+Handled by `workflow` module.
 
 ### Start Workflow
 
@@ -454,9 +593,9 @@ POST /api/v1/workflows/{id}/steps/{step_id}/approve
 
 ---
 
-## 11. Model Management APIs
+## 12. Model Management APIs
 
-Handled by `nexus-model-registry` module.
+Handled by `model-registry` module.
 
 ```
 GET    /api/v1/models                    — List available models
@@ -468,9 +607,9 @@ GET    /api/v1/models/usage              — Usage statistics
 
 ---
 
-## 12. KYC APIs
+## 13. KYC APIs
 
-Handled by `nexus-identity` module.
+Handled by `identity` module.
 
 ```
 GET    /api/v1/kyc/status                — Get KYC status
@@ -482,9 +621,9 @@ POST   /api/v1/kyc/review                — Admin: approve/reject
 
 ---
 
-## 13. Security APIs
+## 14. Security APIs
 
-Handled by `nexus-security-ai` module.
+Handled by `security` module.
 
 ```
 POST /api/v1/security/scan               — Security scan
@@ -493,7 +632,7 @@ POST /api/v1/security/review             — Code review
 
 ---
 
-## 14. Health & Observability
+## 15. Health & Observability
 
 ```
 GET /health    — Module health + dependency status
@@ -506,6 +645,7 @@ GET /metrics   — Prometheus metrics
 {
   "status": "healthy",
   "version": "1.0.0",
+  "api_versions": ["v1"],
   "uptime_seconds": 86400,
   "checks": {
     "postgresql": "healthy",
@@ -518,9 +658,9 @@ GET /metrics   — Prometheus metrics
 
 ---
 
-## 15. Error Response Standard
+## 16. Error Response Standard
 
-All errors follow a consistent format:
+All errors follow a consistent format with api_version:
 
 ```json
 {
@@ -528,6 +668,7 @@ All errors follow a consistent format:
     "code": "RATE_LIMIT_EXCEEDED",
     "message": "Too many requests. Retry after 30 seconds.",
     "request_id": "uuid",
+    "api_version": "v1",
     "timestamp": "2026-07-21T12:00:00Z"
   }
 }
@@ -542,17 +683,33 @@ All errors follow a consistent format:
 | `FORBIDDEN` | 403 | Insufficient permissions |
 | `TENANT_VIOLATION` | 403 | Cross-tenant access |
 | `NOT_FOUND` | 404 | Resource not found |
+| `VERSION_NOT_FOUND` | 404 | API version does not exist |
 | `RATE_LIMIT_EXCEEDED` | 429 | Rate limit hit |
+| `VERSION_DEPRECATED` | 400 | Deprecated API version used |
 | `AI_MODEL_TIMEOUT` | 504 | Model inference timeout |
 | `INTERNAL_ERROR` | 500 | Server error |
 
 ---
 
-## 16. Performance Targets
+## 17. API Version Deprecation Flow
+
+```
+Step 1: New version v2 released
+  → v1 enters deprecation period (6 months)
+    → v1 endpoints return `Sunset: <date>` header
+      → v1 returns `X-Deprecated: true` header
+        → After deprecation period: v1 returns 404
+          → All clients should migrate to v2
+```
+
+---
+
+## 18. Performance Targets
 
 | API | Target |
 |---|---|
 | Authentication | < 200ms |
+| Customer CRUD | < 100ms |
 | Chat First Token | < 2s |
 | Chat Full Response | < 5s |
 | RAG Search | < 500ms |
