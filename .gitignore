@@ -1,0 +1,20 @@
+# Rust
+backend/rust/target/
+backend/rust/Cargo.lock
+
+# Go
+backend/go/vendor/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local

@@ -1,0 +1,269 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-gateway
+  namespace: nexus-ai
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: ai-gateway
+  template:
+    metadata:
+      labels:
+        app: ai-gateway
+    spec:
+      containers:
+        - name: ai-gateway
+          image: nexus-ai-gateway:latest
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: nexus-config
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "200m"
+            limits:
+              memory: "512Mi"
+              cpu: "1000m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-gateway
+  namespace: nexus-ai
+spec:
+  selector:
+    app: ai-gateway
+  ports:
+    - port: 80
+      targetPort: 8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: agent-orchestrator
+  namespace: nexus-ai
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: agent-orchestrator
+  template:
+    metadata:
+      labels:
+        app: agent-orchestrator
+    spec:
+      containers:
+        - name: agent-orchestrator
+          image: nexus-agent-orchestrator:latest
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: nexus-config
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "200m"
+            limits:
+              memory: "512Mi"
+              cpu: "1000m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 30
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: agent-orchestrator
+  namespace: nexus-ai
+spec:
+  selector:
+    app: agent-orchestrator
+  ports:
+    - port: 80
+      targetPort: 8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rag-service
+  namespace: nexus-ai
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: rag-service
+  template:
+    metadata:
+      labels:
+        app: rag-service
+    spec:
+      containers:
+        - name: rag-service
+          image: nexus-rag-service:latest
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: nexus-config
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "300m"
+            limits:
+              memory: "1Gi"
+              cpu: "1000m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rag-service
+  namespace: nexus-ai
+spec:
+  selector:
+    app: rag-service
+  ports:
+    - port: 80
+      targetPort: 8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vision-service
+  namespace: nexus-ai
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: vision-service
+  template:
+    metadata:
+      labels:
+        app: vision-service
+    spec:
+      containers:
+        - name: vision-service
+          image: nexus-vision-service:latest
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: nexus-config
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "200m"
+            limits:
+              memory: "512Mi"
+              cpu: "1000m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vision-service
+  namespace: nexus-ai
+spec:
+  selector:
+    app: vision-service
+  ports:
+    - port: 80
+      targetPort: 8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: memory-service
+  namespace: nexus-ai
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: memory-service
+  template:
+    metadata:
+      labels:
+        app: memory-service
+    spec:
+      containers:
+        - name: memory-service
+          image: nexus-memory-service:latest
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: nexus-config
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "200m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: memory-service
+  namespace: nexus-ai
+spec:
+  selector:
+    app: memory-service
+  ports:
+    - port: 80
+      targetPort: 8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: security-ai
+  namespace: nexus-ai
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: security-ai
+  template:
+    metadata:
+      labels:
+        app: security-ai
+    spec:
+      containers:
+        - name: security-ai
+          image: nexus-security-ai:latest
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: nexus-config
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "500m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: security-ai
+  namespace: nexus-ai
+spec:
+  selector:
+    app: security-ai
+  ports:
+    - port: 80
+      targetPort: 8080
