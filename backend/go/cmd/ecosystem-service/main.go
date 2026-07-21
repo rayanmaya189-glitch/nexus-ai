@@ -3,11 +3,14 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"sync"
 	"time"
+
+	"github.com/aeroxe/nexus-backend/internal/config"
+	"github.com/aeroxe/nexus-backend/internal/middleware"
+	"github.com/aeroxe/nexus-backend/pkg/logger"
 )
 
 type Integration struct {
@@ -61,7 +64,14 @@ func init() {
 }
 
 func main() {
-	log.Println("Starting Ecosystem Integration Service")
+	svcLogger := logger.New("ecosystem-service")
+	svcLogger.Info("Starting Ecosystem Integration Service")
+
+	cfg, err := config.LoadConfig("")
+	if err != nil {
+		svcLogger.Fatal(fmt.Sprintf("Failed to load config: %v", err))
+	}
+	_ = cfg
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", healthHandler)
@@ -71,12 +81,14 @@ func main() {
 	mux.HandleFunc("/api/v1/mcp/tools", listMCPToolsHandler)
 	mux.HandleFunc("/api/v1/mcp/tools/invoke", invokeMCPToolHandler)
 
+	handler := middleware.RequestIDMiddleware(mux)
+
 	port := getEnv("PORT", "8089")
 	addr := fmt.Sprintf(":%s", port)
-	log.Printf("Ecosystem Service listening on %s", addr)
+	svcLogger.Info(fmt.Sprintf("Ecosystem Service listening on %s", addr))
 
-	if err := http.ListenAndServe(addr, corsMiddleware(mux)); err != nil {
-		log.Fatalf("Server failed: %v", err)
+	if err := http.ListenAndServe(addr, handler); err != nil {
+		svcLogger.Fatal(fmt.Sprintf("Server failed: %v", err))
 	}
 }
 
@@ -170,21 +182,11 @@ func invokeMCPToolHandler(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"data": map[string]interface{}{
-			"tool_id":  call.ToolID,
-			"tool":     tool.Name,
-			"status":   "invoked",
-			"result":   fmt.Sprintf("Tool '%s' invoked with arguments", tool.Name),
+			"tool_id": call.ToolID,
+			"tool":    tool.Name,
+			"status":  "invoked",
+			"result":  fmt.Sprintf("Tool '%s' invoked with arguments", tool.Name),
 		},
-	})
-}
-
-func corsMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-		if r.Method == http.MethodOptions { w.WriteHeader(http.StatusOK); return }
-		next.ServeHTTP(w, r)
 	})
 }
 
@@ -201,6 +203,8 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
 }
 
 func getEnv(key, def string) string {
-	if v := os.Getenv(key); v != "" { return v }
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
 	return def
 }

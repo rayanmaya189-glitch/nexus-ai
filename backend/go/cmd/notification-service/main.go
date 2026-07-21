@@ -3,11 +3,14 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"sync"
 	"time"
+
+	"github.com/aeroxe/nexus-backend/internal/config"
+	"github.com/aeroxe/nexus-backend/internal/middleware"
+	"github.com/aeroxe/nexus-backend/pkg/logger"
 )
 
 type Notification struct {
@@ -25,12 +28,12 @@ type Notification struct {
 }
 
 type NotificationPreference struct {
-	UserID           int64    `json:"user_id"`
-	Channels         []string `json:"channels"`
-	Types            []string `json:"types"`
-	QuietHoursStart  *int     `json:"quiet_hours_start,omitempty"`
-	QuietHoursEnd    *int     `json:"quiet_hours_end,omitempty"`
-	Enabled          bool     `json:"enabled"`
+	UserID          int64    `json:"user_id"`
+	Channels        []string `json:"channels"`
+	Types           []string `json:"types"`
+	QuietHoursStart *int     `json:"quiet_hours_start,omitempty"`
+	QuietHoursEnd   *int     `json:"quiet_hours_end,omitempty"`
+	Enabled         bool     `json:"enabled"`
 }
 
 type NotificationStore struct {
@@ -52,21 +55,30 @@ func init() {
 }
 
 func main() {
-	log.Println("Starting Notification Service")
+	svcLogger := logger.New("notification-service")
+	svcLogger.Info("Starting Notification Service")
+
+	cfg, err := config.LoadConfig("")
+	if err != nil {
+		svcLogger.Fatal(fmt.Sprintf("Failed to load config: %v", err))
+	}
+	_ = cfg
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", healthHandler)
 	mux.HandleFunc("/api/v1/notifications", listHandler)
 	mux.HandleFunc("/api/v1/notifications/create", createHandler)
-	mux.HandleFunc("/api/v1/notifications/read/", readHandler)
 	mux.HandleFunc("/api/v1/notifications/preferences", preferencesHandler)
+	mux.HandleFunc("/api/v1/notifications/read/", readHandler)
+
+	handler := middleware.RequestIDMiddleware(mux)
 
 	port := getEnv("PORT", "8087")
 	addr := fmt.Sprintf(":%s", port)
-	log.Printf("Notification Service listening on %s", addr)
+	svcLogger.Info(fmt.Sprintf("Notification Service listening on %s", addr))
 
-	if err := http.ListenAndServe(addr, corsMiddleware(mux)); err != nil {
-		log.Fatalf("Server failed: %v", err)
+	if err := http.ListenAndServe(addr, handler); err != nil {
+		svcLogger.Fatal(fmt.Sprintf("Server failed: %v", err))
 	}
 }
 
@@ -151,16 +163,6 @@ func preferencesHandler(w http.ResponseWriter, r *http.Request) {
 	writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "GET or POST only")
 }
 
-func corsMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-		if r.Method == http.MethodOptions { w.WriteHeader(http.StatusOK); return }
-		next.ServeHTTP(w, r)
-	})
-}
-
 func writeJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
@@ -174,6 +176,8 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
 }
 
 func getEnv(key, def string) string {
-	if v := os.Getenv(key); v != "" { return v }
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
 	return def
 }

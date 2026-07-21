@@ -3,28 +3,31 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"sync"
 	"time"
+
+	"github.com/aeroxe/nexus-backend/internal/config"
+	"github.com/aeroxe/nexus-backend/internal/middleware"
+	"github.com/aeroxe/nexus-backend/pkg/logger"
 )
 
 type AIModel struct {
-	ID              string   `json:"id"`
-	Name            string   `json:"name"`
-	ModelID         string   `json:"model_id"`
-	Category        string   `json:"category"`
-	SizeBytes       int64    `json:"size_bytes"`
-	Parameters      string   `json:"parameters"`
-	ContextLength   int      `json:"context_length"`
-	Capabilities    []string `json:"capabilities"`
-	Status          string   `json:"status"`
-	TenantID        *int64   `json:"tenant_id,omitempty"`
-	MaxConcurrency  int      `json:"max_concurrency"`
-	RequestCount    int64    `json:"request_count"`
-	AvgLatencyMs    float64  `json:"avg_latency_ms"`
-	CreatedAt       string   `json:"created_at"`
+	ID             string   `json:"id"`
+	Name           string   `json:"name"`
+	ModelID        string   `json:"model_id"`
+	Category       string   `json:"category"`
+	SizeBytes      int64    `json:"size_bytes"`
+	Parameters     string   `json:"parameters"`
+	ContextLength  int      `json:"context_length"`
+	Capabilities   []string `json:"capabilities"`
+	Status         string   `json:"status"`
+	TenantID       *int64   `json:"tenant_id,omitempty"`
+	MaxConcurrency int      `json:"max_concurrency"`
+	RequestCount   int64    `json:"request_count"`
+	AvgLatencyMs   float64  `json:"avg_latency_ms"`
+	CreatedAt      string   `json:"created_at"`
 }
 
 type ModelMetrics struct {
@@ -36,9 +39,9 @@ type ModelMetrics struct {
 }
 
 type ModelRegistryStore struct {
-	models   map[string]*AIModel
-	metrics  map[string]*ModelMetrics
-	mu       sync.RWMutex
+	models  map[string]*AIModel
+	metrics map[string]*ModelMetrics
+	mu      sync.RWMutex
 }
 
 var store = &ModelRegistryStore{
@@ -71,22 +74,31 @@ func seedModels() {
 }
 
 func main() {
-	log.Println("Starting Model Registry Service")
+	svcLogger := logger.New("model-registry")
+	svcLogger.Info("Starting Model Registry Service")
+
+	cfg, err := config.LoadConfig("")
+	if err != nil {
+		svcLogger.Fatal(fmt.Sprintf("Failed to load config: %v", err))
+	}
+	_ = cfg
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", healthHandler)
 	mux.HandleFunc("/api/v1/models", listModelsHandler)
 	mux.HandleFunc("/api/v1/models/create", createModelHandler)
-	mux.HandleFunc("/api/v1/models/", modelHandler)
 	mux.HandleFunc("/api/v1/models/metrics/", metricsHandler)
 	mux.HandleFunc("/api/v1/models/pull/", pullModelHandler)
+	mux.HandleFunc("/api/v1/models/", modelHandler)
+
+	handler := middleware.RequestIDMiddleware(mux)
 
 	port := getEnv("PORT", "8086")
 	addr := fmt.Sprintf(":%s", port)
-	log.Printf("Model Registry listening on %s", addr)
+	svcLogger.Info(fmt.Sprintf("Model Registry listening on %s", addr))
 
-	if err := http.ListenAndServe(addr, corsMiddleware(mux)); err != nil {
-		log.Fatalf("Server failed: %v", err)
+	if err := http.ListenAndServe(addr, handler); err != nil {
+		svcLogger.Fatal(fmt.Sprintf("Server failed: %v", err))
 	}
 }
 
@@ -174,16 +186,6 @@ func pullModelHandler(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func corsMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-		if r.Method == http.MethodOptions { w.WriteHeader(http.StatusOK); return }
-		next.ServeHTTP(w, r)
-	})
-}
-
 func writeJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
@@ -197,6 +199,8 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
 }
 
 func getEnv(key, def string) string {
-	if v := os.Getenv(key); v != "" { return v }
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
 	return def
 }

@@ -5,13 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"sync"
 	"time"
 
-	"github.com/aeroxe/nexus-backend/pkg/errors"
+	"github.com/aeroxe/nexus-backend/internal/config"
+	"github.com/aeroxe/nexus-backend/internal/middleware"
 	"github.com/aeroxe/nexus-backend/pkg/logger"
 )
 
@@ -54,6 +54,7 @@ type StreamChunk struct {
 
 type AIServiceConfig struct {
 	OllamaURL string
+	Timeout   time.Duration
 	Models    map[string]string
 }
 
@@ -74,32 +75,41 @@ type ChatSession struct {
 var gateway *AIGateway
 
 func init() {
-	config := &AIServiceConfig{
-		OllamaURL: getEnv("OLLAMA_BASE_URL", "http://localhost:11434"),
+	cfg, _ := config.LoadConfig("")
+
+	ollamaURL := getEnv("OLLAMA_BASE_URL", cfg.Ollama.BaseURL)
+	ollamaTimeout := cfg.Ollama.Timeout
+	if ollamaTimeout == 0 {
+		ollamaTimeout = 120 * time.Second
+	}
+
+	aiConfig := &AIServiceConfig{
+		OllamaURL: ollamaURL,
+		Timeout:   ollamaTimeout,
 		Models: map[string]string{
-			"planner":       "lfm2.5-thinking:1.2b",
-			"customer":      "command-r7b:7b",
-			"developer":     "qwen2.5-coder:3b",
-			"vision":        "qwen3-vl:4b",
-			"security":      "whiterabbitneo:7b",
-			"business":      "llama3.1:7b",
-			"rag":           "phi4-mini:3.8b",
-			"sql":           "qwen2.5-coder:3b",
+			"planner":  "lfm2.5-thinking:1.2b",
+			"customer": "command-r7b:7b",
+			"developer": "qwen2.5-coder:3b",
+			"vision":   "qwen3-vl:4b",
+			"security": "whiterabbitneo:7b",
+			"business": "llama3.1:7b",
+			"rag":      "phi4-mini:3.8b",
+			"sql":      "qwen2.5-coder:3b",
 		},
 	}
 
 	gateway = &AIGateway{
-		config: config,
+		config: aiConfig,
 		httpClient: &http.Client{
-			Timeout: 120 * time.Second,
+			Timeout: ollamaTimeout,
 		},
 		sessions: make(map[string]*ChatSession),
 	}
 }
 
 func main() {
-	log := logger.New("ai-gateway")
-	log.Info("Starting AI Gateway Service")
+	svcLogger := logger.New("ai-gateway")
+	svcLogger.Info("Starting AI Gateway Service")
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", healthHandler)
@@ -110,12 +120,14 @@ func main() {
 	mux.HandleFunc("/api/v1/ai/models", modelsHandler)
 	mux.HandleFunc("/api/v1/ai/completions", completionsHandler)
 
+	handler := middleware.RequestIDMiddleware(mux)
+
 	port := getEnv("PORT", "8080")
 	addr := fmt.Sprintf(":%s", port)
-	log.Info(fmt.Sprintf("AI Gateway listening on %s", addr))
+	svcLogger.Info(fmt.Sprintf("AI Gateway listening on %s", addr))
 
-	if err := http.ListenAndServe(addr, corsMiddleware(mux)); err != nil {
-		log.Error(err, "Server failed")
+	if err := http.ListenAndServe(addr, handler); err != nil {
+		svcLogger.Fatal(fmt.Sprintf("Server failed: %v", err))
 	}
 }
 
@@ -413,19 +425,6 @@ func buildPrompt(messages []ChatMessage) string {
 
 func estimateTokens(text string) int {
 	return len(text) / 4
-}
-
-func corsMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-		next.ServeHTTP(w, r)
-	})
 }
 
 func writeJSON(w http.ResponseWriter, status int, data interface{}) {

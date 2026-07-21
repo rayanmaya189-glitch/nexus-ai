@@ -60,11 +60,10 @@ func (uc *AuditUseCase) ListAuditLogs(ctx context.Context, q queries.ListAuditLo
 	}
 	offset := (page - 1) * perPage
 
-	logs, err := uc.auditRepo.FindByTenantID(ctx, q.TenantID, perPage, offset)
+	logs, count, err := uc.auditRepo.FindByTenantID(ctx, q.TenantID, perPage, offset)
 	if err != nil {
 		return nil, 0, nexuserrors.Internal("Failed to list audit logs")
 	}
 
-	count, _ := uc.auditRepo.Count(ctx, q.TenantID)
 	return logs, count, nil
 }

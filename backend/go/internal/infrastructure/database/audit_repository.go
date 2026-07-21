@@ -32,7 +32,7 @@ func (r *PostgresAuditLogRepository) FindByID(ctx context.Context, id int64) (*e
 	return log, nil
 }
 
-func (r *PostgresAuditLogRepository) FindByTenantID(ctx context.Context, tenantID int64, limit, offset int) ([]*entities.AuditLog, error) {
+func (r *PostgresAuditLogRepository) FindByTenantID(ctx context.Context, tenantID int64, limit, offset int) ([]*entities.AuditLog, int64, error) {
 	rows, err := r.pool.Query(ctx,
 		`SELECT id, tenant_id, user_id, action, resource_type, resource_id, details,
 		        ip_address, user_agent, status, created_at
@@ -40,7 +40,7 @@ func (r *PostgresAuditLogRepository) FindByTenantID(ctx context.Context, tenantI
 		 ORDER BY created_at DESC LIMIT $2 OFFSET $3`, tenantID, limit, offset,
 	)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer rows.Close()
 
@@ -53,11 +53,20 @@ func (r *PostgresAuditLogRepository) FindByTenantID(ctx context.Context, tenantI
 			&log.Status, &log.CreatedAt,
 		)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		logs = append(logs, log)
 	}
-	return logs, nil
+
+	var count int64
+	err = r.pool.QueryRow(ctx,
+		`SELECT COUNT(*) FROM audit_logs WHERE tenant_id = $1`, tenantID,
+	).Scan(&count)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return logs, count, nil
 }
 
 func (r *PostgresAuditLogRepository) Create(ctx context.Context, log *entities.AuditLog) error {

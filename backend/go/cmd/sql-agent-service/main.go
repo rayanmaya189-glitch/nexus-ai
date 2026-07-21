@@ -3,17 +3,20 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"time"
+
+	"github.com/aeroxe/nexus-backend/internal/config"
+	"github.com/aeroxe/nexus-backend/internal/middleware"
+	"github.com/aeroxe/nexus-backend/pkg/logger"
 )
 
 type SQLQueryRequest struct {
-	Question    string `json:"question"`
-	DatabaseID  string `json:"database_id"`
-	Context     string `json:"context,omitempty"`
-	MaxRows     int    `json:"max_rows,omitempty"`
+	Question   string `json:"question"`
+	DatabaseID string `json:"database_id"`
+	Context    string `json:"context,omitempty"`
+	MaxRows    int    `json:"max_rows,omitempty"`
 }
 
 type SQLQueryResult struct {
@@ -47,13 +50,25 @@ type TableInfo struct {
 }
 
 type SQLValidationResult struct {
-	Valid     bool   `json:"valid"`
-	SQL       string `json:"sql"`
-	Warnings  []string `json:"warnings,omitempty"`
+	Valid    bool     `json:"valid"`
+	SQL      string   `json:"sql"`
+	Warnings []string `json:"warnings,omitempty"`
 }
 
 func main() {
-	log.Println("Starting SQL Agent Service")
+	svcLogger := logger.New("sql-agent-service")
+	svcLogger.Info("Starting SQL Agent Service")
+
+	cfg, err := config.LoadConfig("")
+	if err != nil {
+		svcLogger.Fatal(fmt.Sprintf("Failed to load config: %v", err))
+	}
+	_ = cfg
+
+	ollamaURL := getEnv("OLLAMA_BASE_URL", cfg.Ollama.BaseURL)
+	ollamaTimeout := cfg.Ollama.Timeout
+	_ = ollamaURL
+	_ = ollamaTimeout
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", healthHandler)
@@ -63,12 +78,14 @@ func main() {
 	mux.HandleFunc("/api/v1/sql/schema", schemaHandler)
 	mux.HandleFunc("/api/v1/sql/explain", explainHandler)
 
+	handler := middleware.RequestIDMiddleware(mux)
+
 	port := getEnv("PORT", "8090")
 	addr := fmt.Sprintf(":%s", port)
-	log.Printf("SQL Agent Service listening on %s", addr)
+	svcLogger.Info(fmt.Sprintf("SQL Agent Service listening on %s", addr))
 
-	if err := http.ListenAndServe(addr, corsMiddleware(mux)); err != nil {
-		log.Fatalf("Server failed: %v", err)
+	if err := http.ListenAndServe(addr, handler); err != nil {
+		svcLogger.Fatal(fmt.Sprintf("Server failed: %v", err))
 	}
 }
 
@@ -247,16 +264,6 @@ func maxRows(n int) int {
 	return n
 }
 
-func corsMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
-		if r.Method == http.MethodOptions { w.WriteHeader(http.StatusOK); return }
-		next.ServeHTTP(w, r)
-	})
-}
-
 func writeJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
@@ -270,6 +277,8 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
 }
 
 func getEnv(key, def string) string {
-	if v := os.Getenv(key); v != "" { return v }
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
 	return def
 }
