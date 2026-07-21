@@ -346,3 +346,185 @@ Content-Type: application/xml
 | Batch synthesis (100 words) | < 1s |
 | Voice list query | < 50ms |
 | SSML synthesis | < 200ms |
+
+---
+
+## 12. Voice Clone Authorization (NEW)
+
+### 12.1 Clone Authorization Flow
+
+```
+Tenant Requests Voice Clone
+    |
+    v
+[1] Authorization Check
+    |  - Tenant has clone permission?
+    |  - Clone limit not exceeded?
+    |
+    v
+[2] Source Audio Collection
+    |  - Provide reference audio samples (min 30 seconds)
+    |  - Verify speaker consent
+    |  - Store consent record
+    |
+    v
+[3] Clone Training
+    |  - Train voice model from samples
+    |  - Generate voice profile
+    |  - Quality validation
+    |
+    v
+[4] Deployment
+    |  - Add to tenant voice library
+    |  - Set usage limits
+    |  - Enable audit logging
+```
+
+### 12.2 Clone Authorization Entities
+
+```sql
+CREATE TABLE tts.voice_clones (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    clone_id UUID NOT NULL UNIQUE,
+    tenant_id BIGINT NOT NULL,
+    name VARCHAR(100) NOT NULL,
+    source_speaker VARCHAR(100),          -- Person whose voice was cloned
+    consent_recorded BOOLEAN NOT NULL DEFAULT false,
+    consent_storage_path TEXT,
+    reference_audio_path TEXT,
+    model_path TEXT,
+    status VARCHAR(20) NOT NULL DEFAULT 'training', -- training | active | revoked
+    usage_count INT NOT NULL DEFAULT 0,
+    max_usage INT,                        -- NULL = unlimited
+    created_by BIGINT NOT NULL,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    revoked_at TIMESTAMP
+);
+```
+
+---
+
+## 13. Multi-Language Voice Switching (NEW)
+
+### 13.1 Language-Voice Mapping
+
+```rust
+pub struct LanguageVoiceMapping {
+    pub language: String,              // "en", "hi", "mr", etc.
+    pub primary_voice: VoiceId,        // Default voice for this language
+    pub fallback_voice: VoiceId,       // Backup if primary unavailable
+    pub accent: String,                // "us", "uk", "in", etc.
+}
+
+pub struct TenantLanguageConfig {
+    pub tenant_id: TenantId,
+    pub mappings: Vec<LanguageVoiceMapping>,
+    pub auto_switch: bool,             // Auto-switch on language change
+    pub confirmation_required: bool,   // Ask before switching
+}
+```
+
+### 13.2 Auto-Switch Flow
+
+```
+STT Detects Language Change
+    |
+    v
+[1] Compare to Previous Language
+    |  - Same: Continue with current voice
+    |  - Different: Check auto-switch config
+    |
+    v
+[2] Auto-Switch Decision
+    |  - Auto-switch enabled: Switch voice immediately
+    |  - Confirmation required: "I detect you're speaking Hindi. Switch to Hindi voice?"
+    |
+    v
+[3] Voice Switch
+    |  - Load new language voice model
+    |  - Apply prosody settings
+    |  - Continue synthesis
+```
+
+---
+
+## 14. Sentiment-Aware Voice Adaptation (NEW)
+
+### 14.1 Sentiment → Voice Mapping
+
+| Sentiment | TTS Adaptation |
+|---|---|
+| **Happy/Satisfied** | Cheerful tone, normal pace |
+| **Neutral** | Neutral tone, normal pace |
+| **Frustrated** | Empathetic tone, slightly slower |
+| **Angry** | Calm tone, slower pace, softer volume |
+| **Confused** | Clear articulation, slower pace |
+| **Urgent** | Faster pace, clear enunciation |
+
+### 14.2 Adaptation Flow
+
+```
+Sentiment Analysis Result
+    |
+    v
+[1] Map Sentiment to Voice Style
+    |  - Angry → empathetic + slow
+    |  - Frustrated → calm + slower
+    |  - Happy → cheerful + normal
+    |
+    v
+[2] Apply to TTS
+    |  - Update SSML prosody
+    |  - Adjust rate, pitch, volume
+    |  - Select emotion style
+    |
+    v
+[3] Synthesize with Adapted Voice
+```
+
+---
+
+## 15. Post-Call Survey (NEW)
+
+### 15.1 Survey Flow
+
+```
+Call Ended
+    |
+    v
+[1] Play Survey Prompt
+    |  - "Please rate your experience from 1 to 5"
+    |  - "Press 1 for poor, 5 for excellent"
+    |
+    v
+[2] Collect Response
+    |  - DTMF: 1-5 rating
+    |  - Or speech: "Four" → "4"
+    |
+    v
+[3] Optional Follow-up
+    |  - "Would you like to leave a comment?"
+    |  - Record voicemail-style comment
+    |
+    v
+[4] Store & Process
+    |  - Save to CSAT database
+    |  - Update customer satisfaction score
+    |  - Trigger alert if low score
+```
+
+### 15.2 Survey Entities
+
+```sql
+CREATE TABLE tts.post_call_surveys (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    survey_id UUID NOT NULL UNIQUE,
+    call_id BIGINT NOT NULL REFERENCES telephony.calls(id),
+    tenant_id BIGINT NOT NULL,
+    customer_id BIGINT,
+    rating INT,                          -- 1-5
+    comment TEXT,
+    comment_audio_path TEXT,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+```

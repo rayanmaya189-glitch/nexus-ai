@@ -249,10 +249,10 @@ Every module enforces:
 | `vision` | Vision Intelligence | `vision_` | Image analysis, OCR |
 | `sql-agent` | SQL Intelligence | `sql_` | NL→SQL, safe query execution |
 | `security` | Security Intelligence | `security_` | Code review, threat detection |
-| **`telephony`** | **Telephony** | **`telephony_`** | **Voice channel, SIP/WebRTC, call management, audio streaming** |
-| **`conversation`** | **Conversation Management** | **`conversation_`** | **Conversation state machine, context, turn-taking, flow control** |
-| **`stt`** | **Speech Processing** | **`stt_`** | **Speech-to-Text, real-time transcription, audio processing** |
-| **`tts`** | **Speech Processing** | **`tts_`** | **Text-to-Speech, voice synthesis, voice personalization** |
+| **`telephony`** | **Telephony** | **`telephony_`** | **Voice channel, SIP/WebRTC, call management, audio streaming, caller auth, anti-fraud, voicemail, IVR, audio quality, live monitoring** |
+| **`conversation`** | **Conversation Management** | **`conversation_`** | **Conversation state machine, context, turn-taking, flow control, SLA management, sentiment tracking, GDPR** |
+| **`stt`** | **Speech Processing** | **`stt_`** | **Speech-to-Text, real-time transcription, audio processing, confidence thresholds, anti-injection** |
+| **`tts`** | **Speech Processing** | **`tts_`** | **Text-to-Speech, voice synthesis, voice personalization, voice cloning, sentiment adaptation, post-call survey** |
 
 ### 4.2 Supporting Domain Modules
 
@@ -263,7 +263,7 @@ Every module enforces:
 | `memory` | Memory | `memory_` | Short/long-term AI memory |
 | `workflow` | Workflow | `workflow_` | Business process automation |
 | `audit` | Audit & Compliance | `audit_` | Full audit trail, compliance |
-| **`analytics`** | **Analytics & Intelligence** | **`analytics_`** | **Conversation analytics, AI performance, business intelligence** |
+| **`analytics`** | **Analytics & Intelligence** | **`analytics_`** | **Conversation analytics, AI performance, business intelligence, call center metrics, cost allocation, agent scoring** |
 | **`webhook`** | **Integration** | **`webhook_`** | **Outbound webhooks, event delivery, retry logic** |
 | **`outbound`** | **Outbound Communication** | **`outbound_`** | **Proactive AI calls, campaign management, DNC compliance** |
 

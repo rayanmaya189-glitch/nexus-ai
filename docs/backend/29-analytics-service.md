@@ -442,3 +442,246 @@ Authorization: Bearer <jwt>
 | Report generation | < 5s |
 | Event ingestion | < 10ms per event |
 | Snapshot aggregation | < 1s per bucket |
+
+---
+
+## 11. Call Center Metrics (NEW)
+
+### 11.1 Standard Call Center KPIs
+
+| Metric | Description | Target |
+|---|---|---|
+| **AHT** (Average Handle Time) | Total talk + hold + wrap-up time | < 5 min |
+| **ASA** (Average Speed of Answer) | Time to answer in queue | < 30s |
+| **ACW** (After Call Work) | Post-call processing time | < 30s |
+| **FCR** (First Call Resolution) | Resolved without callback | > 80% |
+| **Abandonment Rate** | Calls abandoned in queue | < 5% |
+| **Service Level** | % answered within threshold | > 80% |
+| **Occupancy Rate** | Agent busy time / available time | 70-85% |
+| **Utilization Rate** | Agent productive time / shift time | > 70% |
+
+### 11.2 Real-Time Call Center Dashboard
+
+```rust
+pub struct CallCenterMetrics {
+    pub active_calls: u32,
+    pub calls_in_queue: u32,
+    pub agents_available: u32,
+    pub agents_busy: u32,
+    pub agents_offline: u32,
+    pub avg_wait_time_seconds: f64,
+    pub longest_wait_seconds: f64,
+    pub avg_handle_time_seconds: f64,
+    pub service_level_percent: f64,
+    pub abandonment_rate_percent: f64,
+    pub calls_today: u64,
+    pub avg_talk_time_seconds: f64,
+    pub avg_acw_seconds: f64,
+}
+```
+
+### 11.3 Call Routing Analytics
+
+```rust
+pub struct RoutingAnalytics {
+    pub route_id: RouteId,
+    pub route_name: String,
+    pub total_calls: u64,
+    pub avg_wait_seconds: f64,
+    pub avg_handle_seconds: f64,
+    pub success_rate: f64,
+    pub transfer_rate: f64,
+    pub abandonment_rate: f64,
+    pub cost_per_call: f64,
+}
+
+pub struct ProviderAnalytics {
+    pub provider_name: String,
+    pub total_calls: u64,
+    pub avg_latency_ms: f64,
+    pub packet_loss_percent: f64,
+    pub failure_rate: f64,
+    pub cost_per_minute: f64,
+}
+```
+
+---
+
+## 12. Conversation Cost Allocation (NEW)
+
+### 12.1 Cost Tracking
+
+```rust
+pub struct ConversationCost {
+    pub conversation_id: ConversationId,
+    pub tenant_id: TenantId,
+    pub llm_cost: f64,
+    pub llm_tokens_input: u64,
+    pub llm_tokens_output: u64,
+    pub stt_cost: f64,
+    pub stt_duration_seconds: u32,
+    pub tts_cost: f64,
+    pub tts_characters: u32,
+    pub telephony_cost: f64,
+    pub call_duration_seconds: u32,
+    pub storage_cost: f64,
+    pub total_cost: f64,
+    pub cost_per_minute: f64,
+}
+
+pub struct CostAlert {
+    pub alert_id: AlertId,
+    pub tenant_id: TenantId,
+    pub alert_type: CostAlertType,
+    pub threshold: f64,
+    pub current_value: f64,
+    pub triggered_at: DateTime,
+    pub acknowledged: bool,
+}
+
+pub enum CostAlertType {
+    DailyLimit,
+    MonthlyLimit,
+    PerConversationLimit,
+    PerCustomerLimit,
+    CostPerMinuteThreshold,
+}
+```
+
+### 12.2 Cost Tracking Entities
+
+```sql
+CREATE TABLE analytics.conversation_costs (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    conversation_id BIGINT NOT NULL,
+    tenant_id BIGINT NOT NULL,
+    customer_id BIGINT,
+    llm_cost DECIMAL(10,6) DEFAULT 0,
+    llm_tokens_input BIGINT DEFAULT 0,
+    llm_tokens_output BIGINT DEFAULT 0,
+    stt_cost DECIMAL(10,6) DEFAULT 0,
+    stt_duration_seconds INT DEFAULT 0,
+    tts_cost DECIMAL(10,6) DEFAULT 0,
+    tts_characters INT DEFAULT 0,
+    telephony_cost DECIMAL(10,6) DEFAULT 0,
+    call_duration_seconds INT DEFAULT 0,
+    storage_cost DECIMAL(10,6) DEFAULT 0,
+    total_cost DECIMAL(10,6) DEFAULT 0,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX idx_conv_costs_tenant ON analytics.conversation_costs(tenant_id, created_at DESC);
+```
+
+---
+
+## 13. Agent Performance Scoring (NEW)
+
+### 13.1 Scoring Model
+
+```rust
+pub struct AgentPerformanceScore {
+    pub agent_id: AgentId,
+    pub period: DateRange,
+    pub overall_score: f32,          // 0-100
+    pub dimensions: Vec<ScoreDimension>,
+}
+
+pub struct ScoreDimension {
+    pub name: String,                // "response_quality", "resolution_rate", "customer_satisfaction"
+    pub score: f32,                  // 0-100
+    pub weight: f32,                 // Contribution to overall
+    pub trend: TrendDirection,       // Up, Down, Stable
+}
+
+pub enum TrendDirection {
+    Improving,
+    Declining,
+    Stable,
+}
+```
+
+### 13.2 Scoring Factors
+
+| Factor | Weight | Description |
+|---|---|---|
+| Customer Satisfaction | 30% | CSAT scores |
+| Resolution Rate | 25% | Issues resolved without escalation |
+| Response Time | 20% | Speed of response |
+| First Contact Resolution | 15% | Resolved in first interaction |
+| Compliance Score | 10% | Script adherence, policy compliance |
+
+---
+
+## 14. Sentiment Tracking Across Calls (NEW)
+
+### 14.1 Customer Sentiment History
+
+```rust
+pub struct CustomerSentimentProfile {
+    pub customer_id: CustomerId,
+    pub overall_sentiment: f32,      // -1.0 to 1.0
+    pub sentiment_trend: TrendDirection,
+    pub call_sentiments: Vec<CallSentiment>,
+    pub risk_score: f32,             // 0-1.0, risk of churn
+    pub last_negative_interaction: Option<DateTime>,
+}
+
+pub struct CallSentiment {
+    pub call_id: CallId,
+    pub start_sentiment: f32,
+    pub end_sentiment: f32,
+    pub average_sentiment: f32,
+    pub lowest_point: f32,
+    pub triggers: Vec<String>,       // What caused negative sentiment
+}
+```
+
+### 14.2 Churn Risk Detection
+
+| Risk Level | Score | Action |
+|---|---|---|
+| Low | 0.0-0.3 | Monitor |
+| Medium | 0.3-0.6 | Proactive outreach |
+| High | 0.6-0.8 | Escalate to account manager |
+| Critical | 0.8-1.0 | Immediate intervention |
+
+---
+
+## 15. Real-Time Agent Monitoring (NEW)
+
+### 15.1 Live Agent Dashboard
+
+```rust
+pub struct LiveAgentStatus {
+    pub agent_id: AgentId,
+    pub agent_name: String,
+    pub status: AgentLiveStatus,
+    pub current_call_id: Option<CallId>,
+    pub current_conversation_id: Option<ConversationId>,
+    pub call_duration_seconds: u32,
+    pub calls_today: u32,
+    pub avg_csat_today: f32,
+    pub current_sentiment: f32,
+    pub queue_depth: u32,
+}
+
+pub enum AgentLiveStatus {
+    Available,
+    OnCall,
+    InACW,              // After Call Work
+    OnBreak,
+    Offline,
+    Training,
+}
+```
+
+### 15.2 Supervisor Real-Time View
+
+| View | Data |
+|---|---|
+| Agent list with status | Who's available, busy, offline |
+| Active calls | Live calls with duration and sentiment |
+| Queue depth | Calls waiting, longest wait |
+| Real-time metrics | Service level, AHT, abandonment |
+| Alert feed | Active alerts and escalations |

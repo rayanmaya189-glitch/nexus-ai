@@ -375,3 +375,74 @@ Never store in code:
 |---|---|
 | RPO (Recovery Point Objective) | < 15 minutes |
 | RTO (Recovery Time Objective) | < 2 hours |
+
+---
+
+## 16. Voice Security (NEW - CRITICAL)
+
+### 16.1 Anti-Spoofing Measures
+
+| Attack | Detection | Prevention |
+|---|---|---|
+| Caller ID Spoofing | ANI validation, carrier lookup | Require additional auth |
+| Voice Clone Attack | Deepfake detection, liveness | Voice biometric verification |
+| SIM Swap | Number portability check | Cross-reference account changes |
+| Replay Attack | Audio nonce, timestamp | Reject non-real-time audio |
+| Toll Fraud | Outbound pattern analysis | Rate limiting + monitoring |
+
+### 16.2 Audio Security
+
+| Layer | Protection |
+|---|---|
+| In-transit | SRTP encryption (AES-128) |
+| At-rest | AES-256 encryption for recordings |
+| STT processing | No audio storage after transcription |
+| TTS output | Encrypted delivery to call session |
+
+### 16.3 Voice Biometrics Security
+
+| Requirement | Implementation |
+|---|---|
+| Template storage | Encrypted, isolated per tenant |
+| Spoofing detection | Liveness verification |
+| Template update | Re-enroll periodically |
+| Consent | Explicit consent for biometric collection |
+| Deletion | Delete templates on account closure |
+
+---
+
+## 17. Compliance Framework Mapping (NEW)
+
+### 17.1 SOC 2 Controls
+
+| Control | Implementation |
+|---|---|
+| CC6.1 Logical access | JWT + RBAC + ABAC |
+| CC6.2 Authentication | Multi-factor auth |
+| CC6.3 Authorization | Role-based permissions |
+| CC6.6 Encryption | TLS 1.3, AES-256 |
+| CC7.1 Monitoring | OpenTelemetry, audit logs |
+| CC7.2 Anomaly detection | Fraud detection, sentiment alerts |
+| CC8.1 Change management | Database migrations, code review |
+
+### 17.2 GDPR Controls
+
+| Control | Implementation |
+|---|---|
+| Art. 6 Lawful basis | Consent, contract, legitimate interest |
+| Art. 12 Transparency | Clear privacy policy |
+| Art. 15 Right of access | Data export API |
+| Art. 17 Right to erasure | Deletion pipeline |
+| Art. 20 Data portability | JSON export format |
+| Art. 25 Privacy by design | Tenant isolation, encryption |
+| Art. 32 Security | Encryption, access control |
+
+### 17.3 HIPAA Controls (if healthcare)
+
+| Control | Implementation |
+|---|---|
+| Access control | RBAC, minimum necessary |
+| Audit controls | Comprehensive audit trail |
+| Integrity controls | Data validation, checksums |
+| Transmission security | TLS 1.3, SRTP |
+| Business associates | BAAs with providers |

@@ -643,30 +643,11 @@ POST /api/v1/telephony/webhook/inbound
 Content-Type: application/json
 ```
 
-**Request (from telephony provider):**
-```json
-{
-  "call_id": "uuid",
-  "caller_number": "+919876543210",
-  "callee_number": "+911800123456",
-  "channel": "pstn"
-}
-```
-
 ### Initiate Outbound Call
 
 ```
 POST /api/v1/telephony/calls/outbound
 Authorization: Bearer <jwt>
-```
-
-**Request:**
-```json
-{
-  "callee_number": "+919876543210",
-  "agent_id": "support-agent",
-  "context": { "reason": "follow_up" }
-}
 ```
 
 ### Call Control
@@ -678,6 +659,44 @@ POST /api/v1/telephony/calls/{call_id}/transfer
 POST /api/v1/telephony/calls/{call_id}/end
 POST /api/v1/telephony/calls/{call_id}/recording/start
 POST /api/v1/telephony/calls/{call_id}/recording/stop
+```
+
+### Caller Authentication (NEW)
+
+```
+POST /api/v1/telephony/calls/{call_id}/auth/verify-pin
+POST /api/v1/telephony/calls/{call_id}/auth/verify-voice
+GET  /api/v1/telephony/calls/{call_id}/auth/status
+```
+
+### Voicemail (NEW)
+
+```
+GET  /api/v1/telephony/voicemails
+GET  /api/v1/telephony/voicemails/{id}
+POST /api/v1/telephony/voicemails/{id}/listen
+POST /api/v1/telephony/voicemails/{id}/handle
+GET  /api/v1/telephony/voicemails/{id}/audio
+GET  /api/v1/telephony/voicemails/{id}/transcript
+```
+
+### IVR Management (NEW)
+
+```
+POST   /api/v1/telephony/ivr-flows
+GET    /api/v1/telephony/ivr-flows
+GET    /api/v1/telephony/ivr-flows/{id}
+PUT    /api/v1/telephony/ivr-flows/{id}
+DELETE /api/v1/telephony/ivr-flows/{id}
+```
+
+### Live Monitoring (NEW)
+
+```
+POST /api/v1/telephony/calls/{call_id}/monitor/listen
+POST /api/v1/telephony/calls/{call_id}/monitor/whisper
+POST /api/v1/telephony/calls/{call_id}/monitor/barge-in
+POST /api/v1/telephony/calls/{call_id}/monitor/stop
 ```
 
 ### Call Query
@@ -692,6 +711,12 @@ GET /api/v1/telephony/calls/{call_id}/transcript
 
 ```
 wss://host/ws/v1/telephony/{call_id}
+```
+
+### WebSocket Live Monitoring (NEW)
+
+```
+wss://host/ws/v1/telephony/monitor/{call_id}
 ```
 
 ---

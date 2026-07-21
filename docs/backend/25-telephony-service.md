@@ -847,15 +847,413 @@ pub struct CustomSipProvider { ... }
 
 ---
 
-## 17. Security
+## 17. Caller Authentication (NEW - CRITICAL)
+
+### 17.1 Authentication Methods
+
+| Method | Security Level | Use Case |
+|---|---|---|
+| **Caller ID Match** | Low | Match number to customer record |
+| **PIN Verification** | Medium | 4-6 digit PIN entry |
+| **Voice Biometrics** | High | Speaker verification |
+| **Knowledge-Based** | Medium | Security questions |
+| **Multi-Factor** | High | Number + PIN + Voice |
+
+### 17.2 Caller Authentication Flow
+
+```
+Inbound Call Received
+    |
+    v
+[1] Extract Caller Number (ANI/CLI)
+    |
+    v
+[2] Lookup Customer Record
+    |  - Match phone number to customer
+    |  - Check verification level required
+    |
+    v
+[3] Determine Auth Level Required
+    |  - General inquiry: No auth needed
+    |  - Account info: PIN required
+    |  - Sensitive data: Voice biometrics + PIN
+    |
+    v
+[4] Perform Authentication
+    |  - Play PIN prompt: "Please enter your 4-digit PIN"
+    |  - Collect DTMF digits
+    |  - Validate PIN against customer record
+    |  - Optional: Voice sample comparison
+    |
+    v
+[5] Auth Result
+    |  - Success: Attach verified_customer context
+    |  - Failure: Limit data access, offer fallback
+    |  - Max attempts (3): Transfer to human
+```
+
+### 17.3 Caller Authentication Entities
+
+```sql
+CREATE TABLE telephony.caller_auth (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    call_id BIGINT NOT NULL REFERENCES telephony.calls(id) ON DELETE CASCADE,
+    tenant_id BIGINT NOT NULL,
+    customer_id BIGINT,
+    auth_method VARCHAR(30) NOT NULL,       -- caller_id | pin | voice_biometric | knowledge
+    auth_status VARCHAR(20) NOT NULL,       -- pending | success | failed | skipped
+    attempt_count INT NOT NULL DEFAULT 0,
+    max_attempts INT NOT NULL DEFAULT 3,
+    verified_at TIMESTAMP,
+    failure_reason VARCHAR(100),
+    voice_biometric_score FLOAT,            -- 0.0-1.0 similarity score
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+```
+
+---
+
+## 18. Anti-Fraud & Anti-Spoofing (NEW - CRITICAL)
+
+### 18.1 Fraud Detection Rules
+
+| Threat | Detection Method | Action |
+|---|---|---|
+| Caller ID Spoofing | ANI validation, carrier lookup | Flag + require additional auth |
+| SIM Swap | Recent number change detection | Block + alert |
+| Voice Clone | Liveness detection, deepfake detection | Block + alert |
+| Replay Attack | Audio nonce verification | Reject audio |
+| Toll Fraud | Outbound call pattern analysis | Block + alert |
+| Brute Force PIN | Failed attempt rate limiting | Lock account |
+| Social Engineering | Conversation pattern analysis | Alert supervisor |
+
+### 18.2 Fraud Detection Pipeline
+
+```
+Call Received
+    |
+    v
+[1] Pre-Call Fraud Check
+    |  - Caller reputation score (external service)
+    |  - Number validity check (carrier API)
+    |  - Recent fraud patterns
+    |
+    v
+[2] During-Call Monitoring
+    |  - PIN attempt counting
+    |  - Voice biometric confidence
+    |  - Conversation anomaly detection
+    |
+    v
+[3] Post-Call Analysis
+    |  - Call pattern analysis
+    |  - Fraud scoring
+    |  - Alert if suspicious
+```
+
+### 18.3 Fraud Entities
+
+```sql
+CREATE TABLE telephony.fraud_checks (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    call_id BIGINT NOT NULL REFERENCES telephony.calls(id) ON DELETE CASCADE,
+    tenant_id BIGINT NOT NULL,
+    check_type VARCHAR(50) NOT NULL,       -- caller_reputation | number_validity | sim_swap | deepfake
+    result VARCHAR(20) NOT NULL,           -- pass | flag | block
+    score FLOAT,                           -- 0.0-1.0 risk score
+    details JSONB,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+```
+
+---
+
+## 19. Audio Quality Monitoring (NEW)
+
+### 19.1 Quality Metrics
+
+| Metric | Target | Alert Threshold |
+|---|---|---|
+| MOS (Mean Opinion Score) | > 4.0 | < 3.0 |
+| Jitter | < 30ms | > 50ms |
+| Packet Loss | < 1% | > 3% |
+| Round-trip Latency | < 150ms | > 300ms |
+| Echo | None | Detected |
+| Noise Floor | < -40dB | > -30dB |
+
+### 19.2 Quality Monitoring Pipeline
+
+```
+RTP Audio Stream
+    |
+    v
+[1] Quality Analysis (per 5-second window)
+    |  - Calculate MOS
+    |  - Measure jitter
+    |  - Detect packet loss
+    |
+    v
+[2] Alert Evaluation
+    |  - Compare to thresholds
+    |  - Check degradation trend
+    |
+    v
+[3] Actions
+    |  - Degrading: Log warning
+    |  - Critical: Alert supervisor
+    |  - Unusable: Offer callback
+```
+
+### 19.3 Quality Entities
+
+```sql
+CREATE TABLE telephony.audio_quality (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    call_id BIGINT NOT NULL REFERENCES telephony.calls(id) ON DELETE CASCADE,
+    tenant_id BIGINT NOT NULL,
+    window_start_ms INT NOT NULL,
+    window_end_ms INT NOT NULL,
+    mos_score FLOAT,
+    jitter_ms FLOAT,
+    packet_loss_percent FLOAT,
+    latency_ms FLOAT,
+    noise_floor_db FLOAT,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+```
+
+---
+
+## 20. Voicemail System (NEW)
+
+### 20.1 Voicemail Flow
+
+```
+Call Not Answered / Agent Unavailable
+    |
+    v
+[1] Voicemail Prompt
+    |  - "Please leave a message after the tone"
+    |  - Play tone
+    |
+    v
+[2] Record Voicemail
+    |  - Record caller audio
+    |  - Max duration: 3 minutes
+    |  - Store in MinIO
+    |
+    v
+[3] Post-Processing
+    |  - Transcribe voicemail (STT)
+    |  - Detect caller number → customer match
+    |  - Generate summary (AI)
+    |
+    v
+[4] Notification
+    |  - Notify assigned agent
+    |  - Send email with transcript
+    |  - Add to agent queue
+    |
+    v
+[5] Agent Action
+    |  - Listen to voicemail
+    |  - Read transcript
+    |  - Call back customer
+    |  - Mark as handled
+```
+
+### 20.2 Voicemail Entities
+
+```sql
+CREATE TABLE telephony.voicemails (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    voicemail_id UUID NOT NULL UNIQUE,
+    tenant_id BIGINT NOT NULL,
+    call_id BIGINT REFERENCES telephony.calls(id),
+    customer_id BIGINT,
+    caller_number VARCHAR(20) NOT NULL,
+    agent_id BIGINT,
+    storage_path TEXT NOT NULL,
+    duration_seconds INT,
+    transcription TEXT,
+    summary TEXT,
+    status VARCHAR(20) NOT NULL DEFAULT 'new',  -- new | listened | handled | archived
+    handled_by BIGINT,
+    handled_at TIMESTAMP,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+```
+
+---
+
+## 21. IVR System (NEW)
+
+### 21.1 IVR Flow
+
+```
+Call Answered
+    |
+    v
+[1] Play Welcome Message
+    |  - "Welcome to AeroXe. Press 1 for support, press 2 for billing..."
+    |
+    v
+[2] Collect Input
+    |  - DTMF digit
+    |  - Or speech: "Say sales or support"
+    |
+    v
+[3] Route Based on Input
+    |  - 1 → Support queue
+    |  - 2 → Billing queue
+    |  - 3 → Technical support
+    |  - 0 → Operator
+    |
+    v
+[4] Nested Menus
+    |  - Sub-menus for department
+    |  - Agent selection
+    |
+    v
+[5] Fallback
+    |  - Invalid input → repeat menu
+    |  - No input → repeat menu
+    |  - Max 3 repeats → transfer to operator
+```
+
+### 21.2 IVR Configuration
+
+```rust
+pub struct IVRFlow {
+    pub flow_id: FlowId,
+    pub tenant_id: TenantId,
+    pub name: String,
+    pub nodes: Vec<IVRNode>,
+    pub default_timeout_ms: u32,
+    pub max_retries: u32,
+}
+
+pub struct IVRNode {
+    pub node_id: String,
+    pub node_type: IVRNodeType,
+    pub prompt: String,
+    pub options: Vec<IVROption>,
+}
+
+pub enum IVRNodeType {
+    Menu,           // Press 1 for X, press 2 for Y
+    PlayMessage,    // Play audio message
+    CollectDigits,  // Collect DTMF input
+    SpeechRecognize, // Voice command
+    Transfer,       // Transfer to agent/queue
+    Voicemail,      // Route to voicemail
+    Hangup,         // End call
+}
+
+pub struct IVROption {
+    pub digit: Option<char>,           // DTMF option
+    pub speech_text: Option<String>,   // Voice command text
+    pub next_node: String,             // Next IVR node
+    pub action: IVRAction,
+}
+
+pub enum IVRAction {
+    TransferToQueue(QueueId),
+    TransferToAgent(AgentId),
+    PlayMessage(String),
+    CollectDigits(u32), // max digits
+    Voicemail,
+    Hangup,
+}
+```
+
+### 21.3 IVR Entities
+
+```sql
+CREATE TABLE telephony.ivr_flows (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    flow_id UUID NOT NULL UNIQUE,
+    tenant_id BIGINT NOT NULL,
+    name VARCHAR(100) NOT NULL,
+    definition JSONB NOT NULL,
+    default_timeout_ms INT NOT NULL DEFAULT 5000,
+    max_retries INT NOT NULL DEFAULT 3,
+    status VARCHAR(20) NOT NULL DEFAULT 'active',
+    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+```
+
+---
+
+## 22. Real-Time Call Monitoring (NEW)
+
+### 22.1 Supervisor Capabilities
+
+| Capability | Description |
+|---|---|
+| **Listen-In** | Hear call without being detected |
+| **Whisper** | Coach agent privately (caller can't hear) |
+| **Barge-In** | Join call as third party |
+| **Transfer** | Force transfer to human |
+| **End Call** | Terminate call |
+| **View Transcript** | See live transcription |
+
+### 22.2 Monitoring Flow
+
+```
+Supervisor Monitors Active Call
+    |
+    v
+[1] WebSocket Connection
+    |  - Supervisor connects to monitoring stream
+    |  - Authenticate with supervisor role
+    |
+    v
+[2] Live Data Stream
+    |  - Real-time transcription
+    |  - Agent/customer audio (listen-in)
+    |  - Sentiment indicators
+    |  - Call metadata
+    |
+    v
+[3] Supervisor Actions
+    |  - Whisper: Private channel to agent
+    |  - Barge-in: Join conversation
+    |  - Transfer: Force escalation
+```
+
+### 22.3 Monitoring Entities
+
+```sql
+CREATE TABLE telephony.call_monitoring (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    call_id BIGINT NOT NULL REFERENCES telephony.calls(id) ON DELETE CASCADE,
+    tenant_id BIGINT NOT NULL,
+    supervisor_id BIGINT NOT NULL,
+    action VARCHAR(20) NOT NULL,          -- listen | whisper | barge_in
+    started_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    ended_at TIMESTAMP
+);
+```
+
+---
+
+## 23. Security (Updated)
 
 | Requirement | Implementation |
 |---|---|
+| **Caller authentication** | **Multi-factor: caller ID + PIN + voice biometrics** |
+| **Anti-fraud** | **Caller reputation, SIM swap detection, deepfake detection** |
+| **Audio injection prevention** | **Liveness detection, nonce verification** |
 | Call encryption | SRTP for RTP, TLS for SIP |
-| Recording consent | Configurable per-tenant (required/optional) |
+| **Recording consent** | **Mandatory consent prompt, audit trail, two-party support** |
 | PII in recordings | Auto-redact credit cards, SSN |
-| Access control | Only authorized users can listen to recordings |
+| Access control | RBAC on recordings, playback audit |
 | DNC compliance | Check outbound against DNC list |
 | Recording retention | Configurable, auto-delete after period |
 | Phone number validation | E.164 format enforcement |
 | Rate limiting | Per-tenant concurrent call limits |
+| **Audio quality monitoring** | **MOS, jitter, packet loss tracking** |
+| **Voicemail security** | **Encrypted storage, access-controlled playback** |
+| **IVR security** | **Input validation, rate limiting per menu** |

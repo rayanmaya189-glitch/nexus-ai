@@ -372,3 +372,87 @@ GET /api/v1/stt/sessions/{session_id}
 | Language detection | < 500ms |
 | Speaker diarization | < 10s (1 min audio) |
 | PII redaction | < 10ms per segment |
+
+---
+
+## 10. Confidence Threshold Configuration (NEW)
+
+### 10.1 Per-Tenant Configuration
+
+```rust
+pub struct STTConfig {
+    pub tenant_id: TenantId,
+    pub min_confidence_threshold: f32,   // Default: 0.7
+    pub low_confidence_action: LowConfidenceAction,
+    pub language_override: Option<String>, // Force specific language
+    pub enable_pii_redaction: bool,
+    pub enable_diarization: bool,
+    pub max_silence_ms: u32,             // Default: 3000
+    pub min_speech_ms: u32,              // Default: 200
+}
+
+pub enum LowConfidenceAction {
+    AcceptAll,           // Accept even low confidence
+    Reject,              // Reject and ask to repeat
+    FlagForReview,       // Accept but flag for quality review
+    FallbackToHuman,     // Transfer to human agent
+    AskConfirmation,     // "Did you say X? Press 1 to confirm"
+}
+```
+
+### 10.2 Confidence-Based Routing
+
+```
+Transcription Received
+    |
+    v
+[1] Check Confidence Score
+    |  - High confidence (>0.85): Process normally
+    |  - Medium confidence (0.7-0.85): Ask confirmation
+    |  - Low confidence (<0.7): Apply configured action
+    |
+    v
+[2] Apply Action
+    |  - AcceptAll: Process
+    |  - Reject: "Sorry, I didn't catch that. Could you repeat?"
+    |  - FlagForReview: Process + quality flag
+    |  - FallbackToHuman: Transfer call
+    |  - AskConfirmation: "Did you say [X]? Press 1 for yes, 2 for no"
+```
+
+---
+
+## 11. Anti-Injection Protection (NEW)
+
+### 11.1 Audio Injection Detection
+
+| Attack | Detection | Action |
+|---|---|---|
+| Pre-recorded speech | Liveness detection, audio analysis | Reject audio |
+| Deepfake voice | Deepfake detection model | Block call |
+| Replay attack | Nonce verification | Reject audio |
+| Background audio injection | Audio source analysis | Flag for review |
+
+### 11.2 Liveness Detection Pipeline
+
+```
+Audio Stream
+    |
+    v
+[1] Audio Provenance
+    |  - Verify RTP sequence continuity
+    |  - Check timestamp consistency
+    |  - Detect audio source (real-time vs pre-recorded)
+    |
+    v
+[2] Liveness Analysis
+    |  - Speech pattern naturalness
+    |  - Background noise consistency
+    |  - Microphone characteristics
+    |
+    v
+[3] Decision
+    |  - Live: Process transcription
+    |  - Suspicious: Flag + require additional auth
+    |  - Fake: Block + alert
+```

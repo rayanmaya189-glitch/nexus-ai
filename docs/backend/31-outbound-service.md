@@ -411,3 +411,183 @@ POST /api/v1/outbound/dnc
 | `outbound_callbacks_completed` | Callbacks completed |
 | `outbound_dnc_hits` | DNC blocks |
 | `outbound_success_rate` | Campaign success rate |
+
+---
+
+## 11. Telephony Provider Failover (NEW)
+
+### 11.1 Provider Health Monitoring
+
+```rust
+pub struct ProviderHealth {
+    pub provider_name: String,
+    pub status: ProviderStatus,
+    pub last_check: DateTime,
+    pub avg_latency_ms: f64,
+    pub failure_rate_percent: f64,
+    pub active_calls: u32,
+    pub max_calls: u32,
+}
+
+pub enum ProviderStatus {
+    Healthy,
+    Degraded,
+    Unhealthy,
+    Offline,
+}
+```
+
+### 11.2 Failover Flow
+
+```
+Primary Provider Health Check
+    |
+    v
+[1] Monitor Provider
+    |  - Ping test every 30s
+    |  - Monitor call success rate
+    |  - Track latency
+    |
+    v
+[2] Detect Failure
+    |  - 3 consecutive failures → mark Unhealthy
+    |  - Success rate < 80% → mark Degraded
+    |
+    v
+[3] Automatic Failover
+    |  - Switch to secondary provider
+    |  - Route new calls to secondary
+    |  - Active calls on primary continue
+    |
+    v
+[4] Recovery
+    |  - Primary becomes healthy
+    |  - Gradually shift traffic back
+    |  - Confirm stability before full switch
+```
+
+### 11.3 Provider Load Balancing
+
+| Strategy | Description |
+|---|---|
+| Weighted round-robin | Distribute by weight |
+| Least-cost | Choose cheapest provider |
+| Lowest-latency | Choose fastest provider |
+| Geographic | Route to nearest provider |
+| Failover-only | Primary until failure |
+
+### 11.4 Provider Configuration
+
+```rust
+pub struct TelephonyProviderConfig {
+    pub provider_name: String,
+    pub provider_type: ProviderType,
+    pub priority: u32,                    // Lower = higher priority
+    pub weight: u32,                      // For weighted distribution
+    pub max_concurrent_calls: u32,
+    pub cost_per_minute: f64,
+    pub supports_recording: bool,
+    pub supports_stt: bool,
+    pub supports_dtmf: bool,
+    pub health_check_interval_seconds: u32,
+    pub failover_threshold: f64,          // Failure rate threshold
+    pub credentials: ProviderCredentials,
+}
+
+pub enum ProviderType {
+    Twilio,
+    Vonage,
+    FreeSWITCH,
+    Asterisk,
+    Custom,
+}
+```
+
+---
+
+## 12. Agent Load Balancing (NEW)
+
+### 12.1 Load Balancing Strategies
+
+| Strategy | Description | Use Case |
+|---|---|---|
+| Round-robin | Distribute evenly | Equal skill agents |
+| Least-busy | Route to least loaded | Variable agent capacity |
+| Skill-based | Route by capability | Specialized agents |
+| Priority-based | VIP customers first | Premium service |
+| Geographic | Route to nearest | Multi-location |
+| Time-based | Route by schedule | Global teams |
+
+### 12.2 Load Balancer Flow
+
+```
+Incoming Call / Request
+    |
+    v
+[1] Determine Required Skills
+    |  - Intent from IVR or first utterance
+    |  - Customer profile (VIP, language, etc.)
+    |
+    v
+[2] Query Agent Pool
+    |  - Filter by available agents
+    |  - Filter by required skills
+    |  - Filter by language match
+    |
+    v
+[3] Apply Load Balancing
+    |  - Score each agent
+    |  - Select best match
+    |
+    v
+[4] Route
+    |  - Assign to selected agent
+    |  - Update agent load
+    |  - Start call/conversation
+```
+
+### 12.3 Agent Load Entities
+
+```sql
+CREATE TABLE outbound.agent_load (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    agent_id BIGINT NOT NULL,
+    tenant_id BIGINT NOT NULL,
+    current_load INT NOT NULL DEFAULT 0,     // Active conversations/calls
+    max_load INT NOT NULL DEFAULT 5,
+    status VARCHAR(20) NOT NULL DEFAULT 'available',
+    skills JSONB,
+    last_activity_at TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+```
+
+---
+
+## 13. Cost Per Customer Tracking (NEW)
+
+### 13.1 Customer Cost Dashboard
+
+```rust
+pub struct CustomerCostProfile {
+    pub customer_id: CustomerId,
+    pub tenant_id: TenantId,
+    pub period: DateRange,
+    pub total_cost: f64,
+    pub cost_breakdown: CostBreakdown,
+    pub cost_per_conversation: f64,
+    pub cost_per_call: f64,
+    pub cost_trend: TrendDirection,
+    pub cost_alerts: Vec<CostAlert>,
+}
+```
+
+### 13.2 Cost Alerts
+
+| Alert Type | Threshold | Action |
+|---|---|---|
+| Daily cost limit | Configurable | Notify admin |
+| Monthly cost limit | Configurable | Notify admin + pause |
+| Per-conversation limit | Configurable | Limit response length |
+| Per-customer limit | Configurable | Reduce agent resources |
+| Cost spike detection | 2x average | Alert + investigate |

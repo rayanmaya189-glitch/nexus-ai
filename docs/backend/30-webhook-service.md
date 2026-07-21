@@ -351,3 +351,79 @@ GET /api/v1/webhooks/{id}/deliveries?limit=50
 | `webhook_delivery_latency_ms` | Delivery latency |
 | `webhook_retry_total` | Retry attempts |
 | `webhook_rate_limit_hits` | Rate limit rejections |
+
+---
+
+## 11. Webhook Security (NEW - CRITICAL)
+
+### 11.1 IP Whitelisting
+
+```rust
+pub struct WebhookSecurityConfig {
+    pub subscription_id: SubscriptionId,
+    pub allowed_ips: Vec<String>,        // CIDR ranges allowed
+    pub allowed_ip_ranges: Vec<CIDRRange>,
+    pub require_tls: bool,               // Reject non-HTTPS
+    pub min_tls_version: String,         // "1.2" or "1.3"
+    pub timeout_ms: u32,                 // Max response time
+    pub max_payload_bytes: u64,          // Max body size
+}
+
+pub struct CIDRRange {
+    pub start: String,                   // e.g., "192.168.1.0"
+    pub prefix_len: u8,                  // e.g., 24
+}
+```
+
+### 11.2 Source Validation Flow
+
+```
+Webhook Request Received
+    |
+    v
+[1] IP Whitelist Check
+    |  - Verify source IP is in allowed list
+    |  - Reject if not whitelisted
+    |
+    v
+[2] TLS Check
+    |  - Verify HTTPS connection
+    |  - Check TLS version (>= 1.2)
+    |
+    v
+[3] HMAC Signature Verification
+    |  - Verify X-AeroXe-Signature header
+    |  - Validate timestamp (prevent replay)
+    |
+    v
+[4] Rate Limit Check
+    |  - Per-source-IP rate limit
+    |  - Per-subscription rate limit
+    |
+    v
+[5] Payload Validation
+    |  - Content-Type check
+    |  - Size limit check
+    |  - Schema validation
+    |
+    v
+[6] Process Request
+```
+
+### 11.3 Security Entities
+
+```sql
+ALTER TABLE webhook.subscriptions ADD COLUMN allowed_ips JSONB;
+ALTER TABLE webhook.subscriptions ADD COLUMN require_tls BOOLEAN DEFAULT true;
+ALTER TABLE webhook.subscriptions ADD COLUMN min_tls_version VARCHAR(5) DEFAULT '1.2';
+ALTER TABLE webhook.subscriptions ADD COLUMN max_payload_bytes BIGINT DEFAULT 1048576;
+ALTER TABLE webhook.subscriptions ADD COLUMN timeout_ms INT DEFAULT 30000;
+```
+
+### 11.4 Webhook Inbound Rate Limiting
+
+| Scope | Limit | Window |
+|---|---|---|
+| Per source IP | 1000 requests | 1 minute |
+| Per subscription | 100 requests | 1 minute |
+| Per tenant (total) | 10000 requests | 1 minute |

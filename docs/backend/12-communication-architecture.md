@@ -328,16 +328,36 @@ pub trait AuditService: Send + Sync {
 ```rust
 #[async_trait]
 pub trait TelephonyService: Send + Sync {
+    // Inbound/Outbound
     async fn handle_inbound_call(&self, req: InboundCallRequest) -> Result<CallResponse>;
     async fn initiate_outbound_call(&self, req: OutboundCallRequest) -> Result<CallResponse>;
     async fn answer_call(&self, call_id: CallId) -> Result<()>;
     async fn end_call(&self, call_id: CallId, reason: String) -> Result<()>;
+    // Call control
     async fn hold_call(&self, call_id: CallId) -> Result<()>;
     async fn resume_call(&self, call_id: CallId) -> Result<()>;
     async fn transfer_call(&self, req: TransferRequest) -> Result<()>;
+    // Audio
     async fn send_audio(&self, call_id: CallId, audio: AudioFrame) -> Result<()>;
     async fn receive_audio(&self, call_id: CallId) -> Result<Receiver<AudioFrame>>;
+    // Caller authentication (NEW)
+    async fn authenticate_caller(&self, call_id: CallId, method: AuthMethod) -> Result<CallerAuthResult>;
+    async fn verify_pin(&self, call_id: CallId, pin: String) -> Result<bool>;
+    async fn verify_voice_biometric(&self, call_id: CallId, voice_sample: Vec<u8>) -> Result<f32>;
+    // Anti-fraud (NEW)
+    async fn check_fraud(&self, call_id: CallId) -> Result<FraudCheckResult>;
+    // Voicemail (NEW)
+    async fn start_voicemail(&self, call_id: CallId) -> Result<VoicemailId>;
+    async fn end_voicemail(&self, call_id: CallId) -> Result<VoicemailId>;
+    // IVR (NEW)
+    async fn start_ivr_flow(&self, call_id: CallId, flow_id: FlowId) -> Result<()>;
+    async fn handle_dtmf_input(&self, call_id: CallId, digit: char) -> Result<IVRResponse>;
+    // Live monitoring (NEW)
+    async fn start_monitoring(&self, call_id: CallId, supervisor_id: UserId, action: MonitorAction) -> Result<()>;
+    async fn end_monitoring(&self, call_id: CallId) -> Result<()>;
+    // Query
     async fn get_call_status(&self, call_id: CallId) -> Result<CallStatus>;
+    async fn get_voicemails(&self, tenant_id: TenantId) -> Result<Vec<Voicemail>>;
 }
 ```
 
@@ -364,6 +384,11 @@ pub trait STTService: Send + Sync {
     async fn send_audio_chunk(&self, session_id: SessionId, chunk: AudioChunk) -> Result<PartialTranscript>;
     async fn end_streaming_session(&self, session_id: SessionId) -> Result<FinalTranscript>;
     async fn transcribe_audio(&self, req: TranscribeRequest) -> Result<Transcript>;
+    // Confidence threshold (NEW)
+    async fn get_config(&self, tenant_id: TenantId) -> Result<STTConfig>;
+    async fn update_config(&self, tenant_id: TenantId, config: STTConfig) -> Result<()>;
+    // Anti-injection (NEW)
+    async fn check_liveness(&self, audio: Vec<u8>) -> Result<LivenessResult>;
 }
 ```
 
@@ -376,6 +401,13 @@ pub trait TTSService: Send + Sync {
     async fn synthesize_chunk(&self, session_id: SessionId, text: String) -> Result<Receiver<AudioChunk>>;
     async fn synthesize(&self, req: SynthesisRequest) -> Result<SynthesisResult>;
     async fn list_voices(&self, tenant_id: TenantId) -> Result<Vec<VoiceProfile>>;
+    // Voice cloning (NEW)
+    async fn clone_voice(&self, req: VoiceCloneRequest) -> Result<VoiceClone>;
+    async fn revoke_clone(&self, clone_id: CloneId) -> Result<()>;
+    // Sentiment adaptation (NEW)
+    async fn synthesize_with_sentiment(&self, req: SentimentSynthesisRequest) -> Result<SynthesisResult>;
+    // Post-call survey (NEW)
+    async fn play_survey_prompt(&self, call_id: CallId) -> Result<()>;
 }
 ```
 

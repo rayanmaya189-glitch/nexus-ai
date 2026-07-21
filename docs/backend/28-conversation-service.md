@@ -531,3 +531,247 @@ POST /api/v1/conversations/{id}/branch
 | Token counting | < 10ms |
 | Summarize messages | < 2s |
 | Branch conversation | < 100ms |
+
+---
+
+## 13. Conversation SLA Management (NEW)
+
+### 13.1 SLA Definitions
+
+```rust
+pub struct ConversationSLA {
+    pub sla_id: SLAId,
+    pub tenant_id: TenantId,
+    pub name: String,
+    pub channel: Option<ConversationChannel>,  // NULL = all channels
+    pub priority: u32,
+    rules: Vec<SLARule>,
+}
+
+pub struct SLARule {
+    pub metric: SLAMetric,
+    pub target_seconds: u32,
+    pub warning_seconds: u32,       // Alert before breach
+    pub breach_action: SLABreachAction,
+}
+
+pub enum SLAMetric {
+    FirstResponseTime,              // Time to first agent response
+    ResolutionTime,                 // Time to resolve issue
+    EscalationTime,                 // Time to escalate to human
+    CustomerWaitTime,               // Time customer waits in queue
+}
+
+pub enum SLABreachAction {
+    NotifySupervisor,
+    EscalateToHuman,
+    LogWarning,
+    AutoTransfer,
+}
+```
+
+### 13.2 SLA Enforcement
+
+```
+Conversation Created
+    |
+    v
+[1] Load SLA Rules
+    |  - Match tenant + channel + priority
+    |
+    v
+[2] Start SLA Timer
+    |  - Track first response time
+    |  - Track resolution time
+    |
+    v
+[3] Monitor During Conversation
+    |  - Warning threshold: Alert supervisor
+    |  - Breach: Execute breach action
+    |
+    v
+[4] SLA Complete
+    |  - Record actual vs target
+    |  - Update SLA compliance metrics
+```
+
+---
+
+## 14. Real-Time Sentiment Tracking (NEW)
+
+### 14.1 Sentiment Analysis
+
+```rust
+pub struct SentimentResult {
+    pub score: f32,                   // -1.0 (negative) to 1.0 (positive)
+    pub label: SentimentLabel,
+    pub confidence: f32,
+    pub keywords: Vec<String>,
+}
+
+pub enum SentimentLabel {
+    VeryNegative,
+    Negative,
+    Neutral,
+    Positive,
+    VeryPositive,
+}
+
+pub struct SentimentAlert {
+    pub conversation_id: ConversationId,
+    pub trigger: SentimentTrigger,
+    pub severity: AlertSeverity,
+    pub action: AlertAction,
+}
+
+pub enum SentimentTrigger {
+    ScoreBelow(f32),                  // e.g., score < -0.5
+    RapidDecline(f32),                // e.g., dropped 0.3 in 2 messages
+    ConsecutiveNegative(i32),         // e.g., 3 negative messages in row
+}
+
+pub enum AlertAction {
+    LogOnly,
+    NotifySupervisor,
+    AutoEscalate,
+    TriggerCoaching,
+}
+```
+
+### 14.2 Sentiment Tracking Flow
+
+```
+Each Message in Conversation
+    |
+    v
+[1] Analyze Sentiment
+    |  - LLM-based or ML model
+    |  - Score + label + confidence
+    |
+    v
+[2] Update Conversation Sentiment
+    |  - Store sentiment per message
+    |  - Calculate rolling average
+    |  - Detect trends
+    |
+    v
+[3] Evaluate Alerts
+    |  - Check against thresholds
+    |  - Trigger alerts if needed
+    |
+    v
+[4] Adapt Agent Behavior
+    |  - Positive: Maintain approach
+    |  - Negative: Switch to empathetic mode
+    |  - Very negative: Escalate to human
+```
+
+### 14.3 Sentiment Entities
+
+```sql
+CREATE TABLE conversation.sentiment (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    conversation_id BIGINT NOT NULL REFERENCES conversation.conversations(id) ON DELETE CASCADE,
+    message_id BIGINT NOT NULL,
+    tenant_id BIGINT NOT NULL,
+    score FLOAT NOT NULL,              -- -1.0 to 1.0
+    label VARCHAR(20) NOT NULL,
+    confidence FLOAT NOT NULL,
+    keywords JSONB,
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+```
+
+---
+
+## 15. Conversation Deletion & Export (GDPR) (NEW)
+
+### 15.1 GDPR Export Flow
+
+```
+Customer Requests Data Export
+    |
+    v
+[1] Verify Identity
+    |  - Confirm customer identity
+    |  - Log export request
+    |
+    v
+[2] Collect Data
+    |  - All conversations
+    |  - All messages
+    |  - All recordings (if voice)
+    |  - All transcripts
+    |  - All sentiment data
+    |  - All entity extractions
+    |
+    v
+[3] Package Data
+    |  - JSON format
+    |  - Include metadata
+    |  - Remove internal IDs
+    |
+    v
+[4] Deliver
+    |  - Download link (time-limited)
+    |  - Or email delivery
+```
+
+### 15.2 GDPR Deletion Flow
+
+```
+Customer Requests Deletion
+    |
+    v
+[1] Verify Identity + Authorization
+    |  - Confirm customer owns data
+    |  - Check retention requirements (some data must be kept for compliance)
+    |
+    v
+[2] Mark for Deletion
+    |  - Anonymize conversation content
+    |  - Delete recordings
+    |  - Delete transcripts
+    |  - Keep anonymized audit trail (compliance requirement)
+    |
+    v
+[3] Cascading Deletion
+    |  - Delete from conversation schema
+    |  - Delete from memory schema
+    |  - Delete from telephony schema
+    |  - Delete from analytics (anonymize)
+    |
+    v
+[4] Confirm Deletion
+    |  - Generate deletion certificate
+    |  - Log deletion event
+    |  - Notify customer
+```
+
+### 15.3 Data Retention Configuration
+
+```rust
+pub struct DataRetentionPolicy {
+    pub tenant_id: TenantId,
+    pub data_type: DataType,
+    pub retention_days: u32,
+    pub deletion_method: DeletionMethod,
+    pub compliance_hold: bool,         // Prevent deletion during legal hold
+}
+
+pub enum DataType {
+    Conversation,
+    Message,
+    Recording,
+    Transcript,
+    Sentiment,
+    Entity,
+    AuditLog,     // Never fully deleted, anonymized only
+}
+
+pub enum DeletionMethod {
+    HardDelete,    // Completely remove
+    SoftDelete,    // Mark as deleted, purge later
+    Anonymize,     // Replace with anonymized data
+}
+```
