@@ -95,6 +95,27 @@ PostgreSQL 18 Cluster — All access via SeaORM entities
 │
 └── Schema: eco_
     └── Module: ecosystem
+
+├── Schema: telephony_
+│   └── Module: telephony (Voice channel, calls)
+│
+├── Schema: conversation_
+│   └── Module: conversation (State machine, context)
+│
+├── Schema: stt_
+│   └── Module: stt (Speech-to-Text)
+│
+├── Schema: tts_
+│   └── Module: tts (Text-to-Speech)
+│
+├── Schema: analytics_
+│   └── Module: analytics (Metrics, BI)
+│
+├── Schema: webhook_
+│   └── Module: webhook (Event delivery)
+│
+└── Schema: outbound_
+    └── Module: outbound (Campaigns, callbacks)
 ```
 
 ---

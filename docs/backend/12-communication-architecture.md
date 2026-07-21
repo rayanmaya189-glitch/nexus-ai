@@ -189,6 +189,17 @@ async fn main() {
                              |     |
                              v     v
                       notification  audit
+
+   +=============================================================+
+   |              Voice / Telephony Channel                       |
+   +=============================================================+
+   gateway (webhooks) --> telephony --> stt --> agent --> tts
+                             |                    |
+                             v                    v
+                        conversation          analytics
+                             |                    |
+                             v                    v
+                        outbound              webhook
 ```
 
 ---
@@ -312,6 +323,100 @@ pub trait AuditService: Send + Sync {
 }
 ```
 
+### nexus-telephony (NEW)
+
+```rust
+#[async_trait]
+pub trait TelephonyService: Send + Sync {
+    async fn handle_inbound_call(&self, req: InboundCallRequest) -> Result<CallResponse>;
+    async fn initiate_outbound_call(&self, req: OutboundCallRequest) -> Result<CallResponse>;
+    async fn answer_call(&self, call_id: CallId) -> Result<()>;
+    async fn end_call(&self, call_id: CallId, reason: String) -> Result<()>;
+    async fn hold_call(&self, call_id: CallId) -> Result<()>;
+    async fn resume_call(&self, call_id: CallId) -> Result<()>;
+    async fn transfer_call(&self, req: TransferRequest) -> Result<()>;
+    async fn send_audio(&self, call_id: CallId, audio: AudioFrame) -> Result<()>;
+    async fn receive_audio(&self, call_id: CallId) -> Result<Receiver<AudioFrame>>;
+    async fn get_call_status(&self, call_id: CallId) -> Result<CallStatus>;
+}
+```
+
+### nexus-conversation (NEW)
+
+```rust
+#[async_trait]
+pub trait ConversationService: Send + Sync {
+    async fn create_conversation(&self, req: CreateConversationRequest) -> Result<Conversation>;
+    async fn get_conversation(&self, id: ConversationId) -> Result<Option<Conversation>>;
+    async fn transition_state(&self, id: ConversationId, trigger: TransitionTrigger) -> Result<ConversationState>;
+    async fn add_message(&self, id: ConversationId, msg: NewMessage) -> Result<Message>;
+    async fn get_context(&self, id: ConversationId) -> Result<ConversationContext>;
+    async fn end_conversation(&self, id: ConversationId, outcome: ConversationOutcome) -> Result<()>;
+}
+```
+
+### nexus-stt (NEW)
+
+```rust
+#[async_trait]
+pub trait STTService: Send + Sync {
+    async fn start_streaming_session(&self, req: StreamingSessionRequest) -> Result<StreamingSessionHandle>;
+    async fn send_audio_chunk(&self, session_id: SessionId, chunk: AudioChunk) -> Result<PartialTranscript>;
+    async fn end_streaming_session(&self, session_id: SessionId) -> Result<FinalTranscript>;
+    async fn transcribe_audio(&self, req: TranscribeRequest) -> Result<Transcript>;
+}
+```
+
+### nexus-tts (NEW)
+
+```rust
+#[async_trait]
+pub trait TTSService: Send + Sync {
+    async fn start_streaming_synthesis(&self, req: StreamingSynthesisRequest) -> Result<StreamingSynthesisHandle>;
+    async fn synthesize_chunk(&self, session_id: SessionId, text: String) -> Result<Receiver<AudioChunk>>;
+    async fn synthesize(&self, req: SynthesisRequest) -> Result<SynthesisResult>;
+    async fn list_voices(&self, tenant_id: TenantId) -> Result<Vec<VoiceProfile>>;
+}
+```
+
+### nexus-analytics (NEW)
+
+```rust
+#[async_trait]
+pub trait AnalyticsService: Send + Sync {
+    async fn get_dashboard(&self, tenant_id: TenantId, time_range: TimeRange) -> Result<Dashboard>;
+    async fn get_conversation_metrics(&self, req: ConversationMetricsRequest) -> Result<ConversationMetrics>;
+    async fn get_call_metrics(&self, req: CallMetricsRequest) -> Result<CallMetrics>;
+    async fn get_agent_performance(&self, agent_id: AgentId, time_range: TimeRange) -> Result<AgentPerformance>;
+    async fn get_cost_breakdown(&self, tenant_id: TenantId, time_range: TimeRange) -> Result<CostBreakdown>;
+}
+```
+
+### nexus-webhook (NEW)
+
+```rust
+#[async_trait]
+pub trait WebhookService: Send + Sync {
+    async fn create_subscription(&self, req: CreateWebhookRequest) -> Result<WebhookSubscription>;
+    async fn delete_subscription(&self, id: SubscriptionId) -> Result<()>;
+    async fn list_subscriptions(&self, tenant_id: TenantId) -> Result<Vec<WebhookSubscription>>;
+    async fn test_webhook(&self, id: SubscriptionId) -> Result<WebhookTestResult>;
+}
+```
+
+### nexus-outbound (NEW)
+
+```rust
+#[async_trait]
+pub trait OutboundService: Send + Sync {
+    async fn create_campaign(&self, req: CreateCampaignRequest) -> Result<Campaign>;
+    async fn start_campaign(&self, id: CampaignId) -> Result<()>;
+    async fn make_outbound_call(&self, req: OutboundCallRequest) -> Result<OutboundCallResult>;
+    async fn schedule_callback(&self, req: ScheduleCallbackRequest) -> Result<ScheduledCallback>;
+    async fn check_dnc(&self, phone: PhoneNumber, tenant_id: TenantId) -> Result<bool>;
+}
+```
+
 ---
 
 ## 7. NATS JetStream Architecture
@@ -354,6 +459,10 @@ Currently active version: **`v1`**
 | `aeroxe.v1.memory.*` | Memory | Memory lifecycle events |
 | `aeroxe.v1.gateway.*` | Gateway | Gateway operational events |
 | `aeroxe.v1.config.*` | Config | Configuration changes |
+| `aeroxe.v1.telephony.call.*` | Telephony | Call lifecycle events |
+| `aeroxe.v1.conversation.*` | Conversation | Conversation state events |
+| `aeroxe.v1.outbound.*` | Outbound | Campaign and callback events |
+| `aeroxe.v1.webhook.*` | Webhook | Webhook delivery events |
 
 ---
 

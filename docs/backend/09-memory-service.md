@@ -313,7 +313,60 @@ Organizational (Apache AGE)
 
 ---
 
-## 11. Performance Targets
+## 11. Context Window Management (NEW)
+
+### Token Budget Strategy
+
+| Component | Budget | Purpose |
+|---|---|---|
+| System prompt | ~2000 tokens | Agent personality + rules |
+| Conversation history | ~4000 tokens | Recent messages (sliding window) |
+| RAG context | ~2000 tokens | Retrieved knowledge |
+| Tool results | ~1000 tokens | Tool call outputs |
+| Response generation | ~1000 tokens | Agent response |
+| **Total per turn** | **~10000 tokens** | Context limit |
+
+### Context Assembly Algorithm
+
+```
+Full Conversation History
+    |
+    v
+[1] Count tokens per message
+    |
+    v
+[2] Identify important messages (entity mentions, decisions)
+    |
+    v
+[3] Summarize old messages (beyond sliding window)
+    |
+    v
+[4] Assemble context:
+    |  - System prompt (fixed)
+    |  - Conversation summary (compressed old messages)
+    |  - Recent messages (sliding window, full detail)
+    |  - RAG context (relevant knowledge)
+    |  - Tool results (recent tool outputs)
+    |
+    v
+[5] Validate total tokens < budget
+    |
+    v
+[6] Send to LLM
+```
+
+### Summarization Strategy
+
+| Trigger | Action |
+|---|---|
+| Token count > 80% budget | Summarize oldest 50% of messages |
+| Conversation > 20 turns | Summarize first 10 turns |
+| Explicit user request | Generate full summary |
+| Conversation end | Store summary in long-term memory |
+
+---
+
+## 12. Performance Targets
 
 | Operation | Target |
 |---|---|
@@ -323,3 +376,6 @@ Organizational (Apache AGE)
 | Long-Term Write | < 100ms |
 | Embedding Generation | < 500ms |
 | Memory Consolidation | Background job |
+| Context Assembly | < 100ms |
+| Token Counting | < 10ms |
+| Message Summarization | < 2s |

@@ -302,7 +302,7 @@ pub async fn log_middleware(req: Request, next: Next) -> Response { ... }
 
 ```
 /api/v1/auth/*             → nexus-identity trait calls
-/api/v1/customers/*        → nexus-customer trait calls       ← NEW
+/api/v1/customers/*        → nexus-customer trait calls
 /api/v1/ai/chat            → nexus-ai-gateway trait calls
 /api/v1/ai/stream          → nexus-ai-gateway (WebSocket upgrade)
 /api/v1/agents/*           → nexus-agent trait calls
@@ -315,6 +315,13 @@ pub async fn log_middleware(req: Request, next: Next) -> Response { ... }
 /api/v1/admin/*            → nexus-identity / nexus-audit trait calls
 /api/v1/document-sets/*    → nexus-rag trait calls
 /api/v1/kyc/*              → nexus-identity trait calls
+/api/v1/telephony/*        → nexus-telephony trait calls      ← NEW (Voice/Calls)
+/api/v1/conversations/*    → nexus-conversation trait calls    ← NEW (State Machine)
+/api/v1/stt/*              → nexus-stt trait calls             ← NEW (Speech-to-Text)
+/api/v1/tts/*              → nexus-tts trait calls             ← NEW (Text-to-Speech)
+/api/v1/outbound/*         → nexus-outbound trait calls        ← NEW (Campaigns)
+/api/v1/webhooks/*         → nexus-webhook trait calls         ← NEW (Event Delivery)
+/api/v1/analytics/*        → nexus-analytics trait calls       ← NEW (Metrics/BI)
 /health                    → Gateway (self) — module health
 /metrics                   → Gateway (self) — prometheus metrics
 ```
@@ -326,6 +333,7 @@ pub async fn log_middleware(req: Request, next: Next) -> Response { ... }
 | `ws://host/ws/v1/chat/{conversation_id}` | AI chat streaming (versioned) |
 | `ws://host/ws/v1/agent/{agent_id}` | Agent execution streaming (versioned) |
 | `ws://host/ws/v1/notifications` | Real-time notifications (versioned) |
+| `ws://host/ws/v1/telephony/{call_id}` | Audio streaming for voice calls (NEW) |
 
 ### 8.3 Route Registration (axum Router Example)
 
@@ -362,7 +370,7 @@ The gateway holds trait object references to all modules:
 // src/modules/gateway/mod.rs
 pub struct AppState {
     pub identity: Arc<dyn IdentityService>,
-    pub customer: Arc<dyn CustomerService>,           // ← NEW
+    pub customer: Arc<dyn CustomerService>,
     pub ai_gateway: Arc<dyn AIGatewayService>,
     pub agent: Arc<dyn AgentService>,
     pub rag: Arc<dyn RagService>,
@@ -376,6 +384,14 @@ pub struct AppState {
     pub model_registry: Arc<dyn ModelRegistryService>,
     pub config: Arc<dyn ConfigService>,
     pub ecosystem: Arc<dyn EcosystemService>,
+    // NEW: Voice/Telephony modules
+    pub telephony: Arc<dyn TelephonyService>,
+    pub conversation: Arc<dyn ConversationService>,
+    pub stt: Arc<dyn STTService>,
+    pub tts: Arc<dyn TTSService>,
+    pub analytics: Arc<dyn AnalyticsService>,
+    pub webhook: Arc<dyn WebhookService>,
+    pub outbound: Arc<dyn OutboundService>,
 }
 ```
 

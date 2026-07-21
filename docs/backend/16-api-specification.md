@@ -632,7 +632,224 @@ POST /api/v1/security/review             — Code review
 
 ---
 
-## 15. Health & Observability
+## 15. Telephony & Voice APIs (NEW)
+
+Handled by `telephony`, `conversation`, `stt`, `tts` modules.
+
+### Inbound Call Webhook
+
+```
+POST /api/v1/telephony/webhook/inbound
+Content-Type: application/json
+```
+
+**Request (from telephony provider):**
+```json
+{
+  "call_id": "uuid",
+  "caller_number": "+919876543210",
+  "callee_number": "+911800123456",
+  "channel": "pstn"
+}
+```
+
+### Initiate Outbound Call
+
+```
+POST /api/v1/telephony/calls/outbound
+Authorization: Bearer <jwt>
+```
+
+**Request:**
+```json
+{
+  "callee_number": "+919876543210",
+  "agent_id": "support-agent",
+  "context": { "reason": "follow_up" }
+}
+```
+
+### Call Control
+
+```
+POST /api/v1/telephony/calls/{call_id}/hold
+POST /api/v1/telephony/calls/{call_id}/resume
+POST /api/v1/telephony/calls/{call_id}/transfer
+POST /api/v1/telephony/calls/{call_id}/end
+POST /api/v1/telephony/calls/{call_id}/recording/start
+POST /api/v1/telephony/calls/{call_id}/recording/stop
+```
+
+### Call Query
+
+```
+GET /api/v1/telephony/calls/{call_id}
+GET /api/v1/telephony/calls?status=active
+GET /api/v1/telephony/calls/{call_id}/transcript
+```
+
+### WebSocket Audio Stream
+
+```
+wss://host/ws/v1/telephony/{call_id}
+```
+
+---
+
+## 16. Conversation APIs (NEW)
+
+Handled by `conversation` module.
+
+### Create Conversation
+
+```
+POST /api/v1/conversations
+Authorization: Bearer <jwt>
+```
+
+**Request:**
+```json
+{
+  "channel": "voice",
+  "customer_id": 123,
+  "agent_id": "support-agent",
+  "initial_message": "Hello"
+}
+```
+
+### Send Message
+
+```
+POST /api/v1/conversations/{id}/messages
+```
+
+### Get Conversation State
+
+```
+GET /api/v1/conversations/{id}/state
+```
+
+### End Conversation
+
+```
+POST /api/v1/conversations/{id}/end
+```
+
+---
+
+## 17. STT/TTS APIs (NEW)
+
+Handled by `stt` and `tts` modules.
+
+### Start STT Session
+
+```
+POST /api/v1/stt/sessions
+```
+
+### Send Audio to STT
+
+```
+POST /api/v1/stt/sessions/{session_id}/audio
+Content-Type: application/octet-stream
+```
+
+### Synthesize Speech (TTS)
+
+```
+POST /api/v1/tts/synthesize
+```
+
+### List TTS Voices
+
+```
+GET /api/v1/tts/voices?language=en
+```
+
+---
+
+## 18. Outbound Campaign APIs (NEW)
+
+Handled by `outbound` module.
+
+### Create Campaign
+
+```
+POST /api/v1/outbound/campaigns
+Authorization: Bearer <jwt>
+```
+
+### Start Campaign
+
+```
+POST /api/v1/outbound/campaigns/{id}/start
+```
+
+### Schedule Callback
+
+```
+POST /api/v1/outbound/callbacks
+```
+
+### Add to DNC List
+
+```
+POST /api/v1/outbound/dnc
+```
+
+---
+
+## 19. Webhook APIs (NEW)
+
+Handled by `webhook` module.
+
+### Create Webhook
+
+```
+POST /api/v1/webhooks
+Authorization: Bearer <jwt>
+```
+
+### Test Webhook
+
+```
+POST /api/v1/webhooks/{id}/test
+```
+
+### Get Delivery Logs
+
+```
+GET /api/v1/webhooks/{id}/deliveries
+```
+
+---
+
+## 20. Analytics APIs (NEW)
+
+Handled by `analytics` module.
+
+### Get Dashboard
+
+```
+GET /api/v1/analytics/dashboard?start=2026-07-01&end=2026-07-21
+Authorization: Bearer <jwt>
+```
+
+### Get Call Metrics
+
+```
+GET /api/v1/analytics/calls?start=2026-07-01&end=2026-07-21
+```
+
+### Get Agent Performance
+
+```
+GET /api/v1/analytics/agents/{agent_id}/performance
+```
+
+---
+
+## 21. Health & Observability
 
 ```
 GET /health    — Module health + dependency status

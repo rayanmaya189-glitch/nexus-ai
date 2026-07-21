@@ -579,6 +579,90 @@ Action executed (or rejected with reason)
 
 ---
 
+## 11.1 Voice Call Agent Support (NEW)
+
+The agent orchestrator supports voice call contexts alongside text chat:
+
+### Voice Call Agent Flow
+
+```
+Inbound Call Received (via nexus-telephony)
+    |
+    v
+Agent Orchestrator receives call context
+    |  - caller_number
+    |  - customer_id (if matched)
+    |  - call_id
+    |
+    v
+Select Agent
+    |  - Match caller intent to agent
+    |  - Load agent voice/personality config
+    |
+    v
+Initialize Conversation
+    |  - Create conversation (nexus-conversation)
+    |  - Set channel: voice
+    |
+    v
+Audio Processing Loop
+    |  - Receive audio (nexus-telephony)
+    |  - Transcribe (nexus-stt)
+    |  - Process text (agent reasoning)
+    |  - Generate response text
+    |  - Synthesize speech (nexus-tts)
+    |  - Send audio (nexus-telephony)
+    |
+    v
+Handle Barge-in
+    |  - Detect caller interrupt
+    |  - Pause current TTS
+    |  - Process new input
+    |
+    v
+Transfer to Human (if needed)
+    |  - Queue for human agent
+    |  - Transfer call
+    |  - Pass conversation context
+    |
+    v
+Call Ended
+    |  - Save transcript
+    |  - Update analytics
+    |  - Publish audit event
+```
+
+### Voice-Specific Agent Tools
+
+| Tool | Description |
+|---|---|
+| `call.hold()` | Put caller on hold |
+| `call.transfer(target)` | Transfer call to human/queue |
+| `call.play_message(text)` | Play TTS message without waiting for response |
+| `call.play_audio(file)` | Play pre-recorded audio |
+| `call.dtmf.send(digits)` | Send DTMF tones |
+| `call.recording.start()` | Start call recording |
+| `call.recording.stop()` | Stop call recording |
+
+### Agent Voice Configuration
+
+```rust
+pub struct AgentVoiceConfig {
+    pub voice_id: VoiceId,                    // TTS voice
+    pub speed: f32,                           // Speech rate (0.5-2.0)
+    pub pitch: f32,                           // Voice pitch
+    pub emotion_default: String,              // Default emotion style
+    pub greeting_message: String,             // Opening script
+    pub transfer_message: String,             // Pre-transfer message
+    pub hold_music: Option<String>,           // Hold music file
+    pub max_silence_seconds: u32,             // Max silence before prompt
+    pub barge_in_enabled: bool,               // Allow caller interrupt
+    pub speech_timeout_ms: u32,               // Silence before considering speech ended
+}
+```
+
+---
+
 ## 12. Observability
 
 ### Tracked Metrics

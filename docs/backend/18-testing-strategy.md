@@ -415,7 +415,50 @@ export default function () {
 
 ---
 
-## 16. Security Testing
+## 16. Voice/Telephony Testing (NEW)
+
+### STT Testing
+
+| Test | Expected |
+|---|---|
+| Clear speech transcription | > 95% accuracy |
+| Noisy environment transcription | > 85% accuracy |
+| Multi-language detection | Correct language identified |
+| Streaming latency | < 200ms per partial result |
+| PII redaction | Credit cards, SSN redacted |
+
+### TTS Testing
+
+| Test | Expected |
+|---|---|
+| Voice naturalness | Human-like quality |
+| SSML prosody control | Rate/pitch/volume applied correctly |
+| Streaming latency | < 150ms first audio chunk |
+| Multi-language synthesis | Correct pronunciation |
+
+### Call Flow Testing
+
+| Scenario | Expected |
+|---|---|
+| Inbound call → AI answer | Call connected, greeting played |
+| Barge-in detection | Agent pauses, caller speaks |
+| Transfer to human | Call transferred with context |
+| Call recording | Recording saved, transcript generated |
+| DTMF input | Digits captured correctly |
+| Queue overflow | Voicemail/fallback triggered |
+
+### Conversation State Machine Testing
+
+| Scenario | Expected |
+|---|---|
+| State transitions | Correct flow: greeting → intent → processing → closing |
+| Timeout handling | Conversation times out gracefully |
+| Escalation | Transfer to human at correct state |
+| Branching | Conversation branches from any point |
+
+---
+
+## 17. Security Testing
 
 | Tool | Purpose |
 |---|---|

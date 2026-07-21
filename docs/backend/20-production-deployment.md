@@ -234,6 +234,17 @@ Minimum 4 nodes:
 | LFM2.5 Thinking 1.2B | Planning      | MEDIUM    |
 | Phi-4 Mini 3.8B      | General Chat  | MEDIUM    |
 | WhiteRabbitNeo 7B    | Security      | ON DEMAND |
+| **Whisper Small**    | **STT**       | **HIGH**  |
+| **Piper TTS**        | **TTS**       | **HIGH**  |
+
+### Voice/Telephony Hardware (NEW)
+
+| Component | Spec | Purpose |
+|---|---|---|
+| STT Server | 8 cores, 32GB RAM, GPU optional | Real-time transcription |
+| TTS Server | 4 cores, 16GB RAM | Voice synthesis |
+| SIP Server | 4 cores, 8GB RAM | Call routing (FreeSWITCH) |
+| Audio Processing | 4 cores, 8GB RAM | Noise reduction, VAD |
 
 ---
 

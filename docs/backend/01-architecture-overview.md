@@ -249,6 +249,10 @@ Every module enforces:
 | `vision` | Vision Intelligence | `vision_` | Image analysis, OCR |
 | `sql-agent` | SQL Intelligence | `sql_` | NL→SQL, safe query execution |
 | `security` | Security Intelligence | `security_` | Code review, threat detection |
+| **`telephony`** | **Telephony** | **`telephony_`** | **Voice channel, SIP/WebRTC, call management, audio streaming** |
+| **`conversation`** | **Conversation Management** | **`conversation_`** | **Conversation state machine, context, turn-taking, flow control** |
+| **`stt`** | **Speech Processing** | **`stt_`** | **Speech-to-Text, real-time transcription, audio processing** |
+| **`tts`** | **Speech Processing** | **`tts_`** | **Text-to-Speech, voice synthesis, voice personalization** |
 
 ### 4.2 Supporting Domain Modules
 
@@ -259,6 +263,9 @@ Every module enforces:
 | `memory` | Memory | `memory_` | Short/long-term AI memory |
 | `workflow` | Workflow | `workflow_` | Business process automation |
 | `audit` | Audit & Compliance | `audit_` | Full audit trail, compliance |
+| **`analytics`** | **Analytics & Intelligence** | **`analytics_`** | **Conversation analytics, AI performance, business intelligence** |
+| **`webhook`** | **Integration** | **`webhook_`** | **Outbound webhooks, event delivery, retry logic** |
+| **`outbound`** | **Outbound Communication** | **`outbound_`** | **Proactive AI calls, campaign management, DNC compliance** |
 
 ### 4.3 Infrastructure Modules
 
@@ -275,7 +282,7 @@ Every module enforces:
 
 ```
                    +----------------+
-                   |   gateway      |  ← External HTTP/WS
+                   |   gateway      |  ← External HTTP/WS + Telephony Webhooks
                    +----------------+
                           |
           +---------------+---------------+
@@ -304,6 +311,29 @@ Every module enforces:
                    +-----------+
                    |  audit    |
                    +-----------+
+
+   +=============================================================+
+   |               Voice / Telephony Channel                      |
+   +=============================================================+
+   +-----------+   +-----------+   +-----------+   +-----------+
+   |telephony  |-->|   stt     |-->|  agent    |-->|   tts     |
+   |(SIP/WebRTC|   |(Speech-to |   |(AI Process|   |(Text-to   |
+   | Call Mgmt)|   | Text)     |   | ing)      |   | Speech)   |
+   +-----------+   +-----------+   +-----------+   +-----------+
+          |                            |                |
+          v                            v                v
+   +-----------+              +-----------+      +-----------+
+   |outbound   |              |conversation|     | analytics |
+   |(Campaigns |              |(State     |      |(Metrics,  |
+   | Proactive)|              | Machine)  |      | Reports)  |
+   +-----------+              +-----------+      +-----------+
+          |                                                |
+          v                                                v
+   +-----------+                                  +-----------+
+   |  webhook  |                                  |  audit    |
+   |(Event     |                                  |(Compliance|
+   | Delivery) |                                  | Logging)  |
+   +-----------+                                  +-----------+
 ```
 
 ---

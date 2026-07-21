@@ -336,6 +336,13 @@ aeroxe-nexus-ai/
 ├── nexus-model-registry/           # Model registry module crate
 ├── nexus-config/                   # Config module crate
 ├── nexus-ecosystem/                # Ecosystem integration module crate
+├── nexus-telephony/                # Voice/Telephony module crate        ← NEW
+├── nexus-conversation/             # Conversation state machine crate    ← NEW
+├── nexus-stt/                      # Speech-to-Text module crate         ← NEW
+├── nexus-tts/                      # Text-to-Speech module crate         ← NEW
+├── nexus-analytics/                # Analytics module crate              ← NEW
+├── nexus-webhook/                  # Webhook module crate                ← NEW
+├── nexus-outbound/                 # Outbound campaign module crate      ← NEW
 ├── proto/                          # Optional external gRPC protos
 ├── infrastructure/
 │   ├── kubernetes/

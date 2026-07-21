@@ -251,6 +251,30 @@ resources:
 | Concurrent Requests | 10+ per GPU |
 | Model Load Time | < 30s |
 | Embedding Latency | < 500ms |
+| **STT Latency (streaming)** | **< 200ms** |
+| **TTS Latency (first chunk)** | **< 150ms** |
+
+---
+
+## 9. STT/TTS Models (NEW)
+
+### STT Models
+
+| Model | Purpose | Hardware |
+|---|---|---|
+| whisper-tiny | Low-latency commands | CPU |
+| whisper-base | Balanced speed/accuracy | CPU |
+| whisper-small | Production quality | GPU optional |
+| whisper-medium | High accuracy | GPU |
+| whisper-large-v3 | Maximum accuracy | GPU |
+
+### TTS Engines
+
+| Engine | Purpose | Hardware |
+|---|---|---|
+| Piper | Fast local TTS | CPU |
+| Coqui TTS | High quality | GPU |
+| Edge-TTS | Cloud fallback | Network |
 
 ---
 

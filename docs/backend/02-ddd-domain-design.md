@@ -38,6 +38,18 @@ AeroXe Nexus AI is designed using **Domain-Driven Design** principles organized 
 | Audit | Supporting | `audit` | `audit_` |
 | Workflow | Supporting | `workflow` | `workflow_` |
 
+### Voice/AI Channel Modules (NEW)
+
+| Domain | Type | Module Name | Schema Prefix |
+|---|---|---|---|
+| Telephony | **Core Domain** | `telephony` | `telephony_` |
+| Conversation Management | **Core Domain** | `conversation` | `conversation_` |
+| Speech-to-Text | **Core Domain** | `stt` | `stt_` |
+| Text-to-Speech | **Core Domain** | `tts` | `tts_` |
+| Analytics & Intelligence | Supporting | `analytics` | `analytics_` |
+| Integration (Webhooks) | Supporting | `webhook` | `webhook_` |
+| Outbound Communication | Supporting | `outbound` | `outbound_` |
+
 ### Infrastructure Modules
 
 | Module | Purpose | Schema Prefix |
@@ -569,14 +581,21 @@ src/modules/
 |  ├── rag           (Document knowledge)                  rag_  |
 |  ├── vision        (Image intelligence)                  vision|
 |  ├── sql-agent     (Natural language SQL)                sql_  |
-|  └── security      (Security intelligence)               secur |
+|  ├── security      (Security intelligence)               secur |
+|  ├── telephony     (Voice channel, SIP/WebRTC)          tele_ |
+|  ├── conversation  (State machine, context)             conv_ |
+|  ├── stt           (Speech-to-Text)                     stt_  |
+|  └── tts           (Text-to-Speech)                     tts_  |
 |                                                               |
 |  Supporting Domain Modules:                                    |
 |  ├── identity      (IAM, RBAC, ABAC, KYC)               ident |
 |  ├── customer      (Customer management)                 cust_ |
 |  ├── memory        (AI memory system)                    memor |
 |  ├── workflow      (Business automation)                 workf |
-|  └── audit         (Compliance logging)                  audit |
+|  ├── audit         (Compliance logging)                  audit |
+|  ├── analytics     (Metrics, reports, BI)                anly_ |
+|  ├── webhook       (Event delivery, retry)               whk_  |
+|  └── outbound      (Proactive calls, campaigns)         out_  |
 |                                                               |
 |  Infrastructure Modules:                                       |
 |  ├── gateway       (API Gateway — HTTP/WS + middleware)   —    |

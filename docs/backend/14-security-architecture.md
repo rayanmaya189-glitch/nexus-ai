@@ -287,7 +287,45 @@ Never store in code:
 
 ---
 
-## 12. Security Monitoring
+## 12. Telephony Security (NEW)
+
+### Voice Channel Security
+
+| Requirement | Implementation |
+|---|---|
+| Call encryption | SRTP for RTP, TLS for SIP |
+| Recording consent | Configurable per-tenant (required/optional) |
+| PII in audio | Auto-redact credit cards, SSN in transcripts |
+| DNC compliance | Check outbound against DNC list |
+| Phone number validation | E.164 format enforcement |
+| Rate limiting | Per-tenant concurrent call limits |
+| Call recording access | RBAC on recording playback |
+| STT data retention | Configurable transcript retention |
+| TTS voice cloning | Tenant-scoped voice profiles |
+| Webhook security | HMAC signature verification |
+
+### Call Recording Compliance
+
+| Regulation | Requirement |
+|---|---|
+| GDPR | Consent before recording, right to deletion |
+| CCPA | Disclosure of recording, opt-out option |
+| TCPA | DNC compliance for outbound calls |
+| Industry-specific | Varies by sector |
+
+### Audio Data Protection
+
+| Component | Protection |
+|---|---|
+| Call audio (in-transit) | SRTP encryption |
+| Call recordings (at-rest) | AES-256 encryption in MinIO |
+| Transcripts (at-rest) | PostgreSQL TDE or column encryption |
+| TTS voice profiles | Encrypted storage |
+| DNC list | Access-controlled, audit-logged |
+
+---
+
+## 13. Security Monitoring
 
 | Component | Purpose |
 |---|---|
