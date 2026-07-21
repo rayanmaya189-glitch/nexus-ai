@@ -415,78 +415,44 @@ CREATE TABLE conversation.entities (
 
 ## 9. REST API Endpoints
 
-### Create Conversation
+| Method | Endpoint | Business Status | HTTP | Description |
+|---|---|---|---|---|
+| `POST` | `/api/v1/conversations` | `CREATED` | `201` | Create conversation |
+| `GET` | `/api/v1/conversations/{id}` | `SUCCESS` | `200` | Get conversation |
+| `GET` | `/api/v1/conversations?limit=10&offset=0` | `SUCCESS` | `200` | List conversations |
+| `GET` | `/api/v1/conversations/{id}/messages?limit=10&offset=0` | `SUCCESS` | `200` | Get messages |
+| `POST` | `/api/v1/conversations/{id}/messages` | `CREATED` | `201` | Send message |
+| `GET` | `/api/v1/conversations/{id}/state` | `SUCCESS` | `200` | Get state |
+| `POST` | `/api/v1/conversations/{id}/end` | `UPDATED` | `200` | End conversation |
+| `POST` | `/api/v1/conversations/{id}/branch` | `CREATED` | `201` | Branch conversation |
+| `DELETE` | `/api/v1/conversations/{id}` | `DELETED` | `204` | Delete conversation |
 
-```
-POST /api/v1/conversations
-Authorization: Bearer <jwt>
-```
+### List Conversations Response
 
-**Request:**
 ```json
 {
-  "channel": "chat",
-  "customer_id": 123,
-  "agent_id": "support-agent",
-  "initial_message": "Hello, I need help with my internet"
+  "status": "SUCCESS",
+  "data": [...],
+  "summary": {
+    "total_items": 2000,
+    "active_conversations": 42,
+    "completed_conversations": 1900,
+    "escalated_conversations": 58,
+    "avg_duration_seconds": 342,
+    "avg_turns": 8.5,
+    "avg_csat_score": 4.2,
+    "recent_activity": {
+      "created_today": 150,
+      "completed_today": 140,
+      "escalated_today": 10
+    }
+  },
+  "pagination": {"total": 2000, "limit": 10, "offset": 0, "has_more": true},
+  "meta": {"request_id": "uuid", "timestamp": "2026-07-21T12:00:00Z"}
 }
 ```
 
-### Send Message
-
-```
-POST /api/v1/conversations/{id}/messages
-Authorization: Bearer <jwt>
-```
-
-**Request:**
-```json
-{
-  "role": "user",
-  "content": "My internet has been slow for 3 days"
-}
-```
-
-### Get Conversation
-
-```
-GET /api/v1/conversations/{id}
-```
-
-### Get Messages
-
-```
-GET /api/v1/conversations/{id}/messages?limit=50
-```
-
-### End Conversation
-
-```
-POST /api/v1/conversations/{id}/end
-```
-
-**Request:**
-```json
-{
-  "outcome": "resolved",
-  "satisfaction_score": 5,
-  "summary": "Resolved slow internet by resetting ONU"
-}
-```
-
-### Branch Conversation
-
-```
-POST /api/v1/conversations/{id}/branch
-```
-
-**Request:**
-```json
-{
-  "from_message_id": "uuid",
-  "new_content": "Actually, let me try a different approach"
-}
-```
+**Note:** No PUT method. Use PATCH for updates. All list endpoints support `limit` (default 10) and `offset`.
 
 ---
 

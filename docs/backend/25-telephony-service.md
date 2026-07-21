@@ -664,74 +664,84 @@ CREATE TABLE telephony.dtmf_events (
 
 ## 12. REST API Endpoints
 
-### Inbound Call Webhook
+| Method | Endpoint | Business Status | HTTP | Description |
+|---|---|---|---|---|
+| `POST` | `/api/v1/telephony/webhook/inbound` | `SUCCESS` | `200` | Inbound call webhook |
+| `POST` | `/api/v1/telephony/calls/outbound` | `CREATED` | `201` | Initiate outbound call |
+| `GET` | `/api/v1/telephony/calls/{call_id}` | `SUCCESS` | `200` | Get call details |
+| `GET` | `/api/v1/telephony/calls?limit=10&offset=0` | `SUCCESS` | `200` | List calls |
+| `POST` | `/api/v1/telephony/calls/{call_id}/hold` | `UPDATED` | `200` | Hold call |
+| `POST` | `/api/v1/telephony/calls/{call_id}/resume` | `UPDATED` | `200` | Resume call |
+| `POST` | `/api/v1/telephony/calls/{call_id}/transfer` | `UPDATED` | `200` | Transfer call |
+| `POST` | `/api/v1/telephony/calls/{call_id}/end` | `UPDATED` | `200` | End call |
+| `POST` | `/api/v1/telephony/calls/{call_id}/recording/start` | `UPDATED` | `200` | Start recording |
+| `POST` | `/api/v1/telephony/calls/{call_id}/recording/stop` | `UPDATED` | `200` | Stop recording |
+| `GET` | `/api/v1/telephony/calls/{call_id}/transcript` | `SUCCESS` | `200` | Get transcript |
+| `POST` | `/api/v1/telephony/calls/{call_id}/auth/verify-pin` | `SUCCESS` | `200` | Verify PIN |
+| `POST` | `/api/v1/telephony/calls/{call_id}/auth/verify-voice` | `SUCCESS` | `200` | Verify voice |
+| `GET` | `/api/v1/telephony/calls/{call_id}/auth/status` | `SUCCESS` | `200` | Auth status |
+| `GET` | `/api/v1/telephony/voicemails?limit=10&offset=0` | `SUCCESS` | `200` | List voicemails |
+| `GET` | `/api/v1/telephony/voicemails/{id}` | `SUCCESS` | `200` | Get voicemail |
+| `POST` | `/api/v1/telephony/voicemails/{id}/handle` | `UPDATED` | `200` | Handle voicemail |
+| `POST` | `/api/v1/telephony/ivr-flows` | `CREATED` | `201` | Create IVR flow |
+| `GET` | `/api/v1/telephony/ivr-flows?limit=10&offset=0` | `SUCCESS` | `200` | List IVR flows |
+| `PATCH` | `/api/v1/telephony/ivr-flows/{id}` | `UPDATED` | `200` | Update IVR flow |
+| `DELETE` | `/api/v1/telephony/ivr-flows/{id}` | `DELETED` | `204` | Delete IVR flow |
+| `POST` | `/api/v1/telephony/calls/{call_id}/monitor/listen` | `SUCCESS` | `200` | Listen-in |
+| `POST` | `/api/v1/telephony/calls/{call_id}/monitor/whisper` | `SUCCESS` | `200` | Whisper to agent |
+| `POST` | `/api/v1/telephony/calls/{call_id}/monitor/barge-in` | `SUCCESS` | `200` | Barge-in |
+| `POST` | `/api/v1/telephony/calls/{call_id}/monitor/stop` | `UPDATED` | `200` | Stop monitoring |
+| `WS` | `wss://host/ws/v1/telephony/{call_id}` | — | — | Audio stream |
+| `WS` | `wss://host/ws/v1/telephony/monitor/{call_id}` | — | — | Live monitoring |
 
-```
-POST /api/v1/telephony/webhook/inbound
-Content-Type: application/json
-```
+### List Calls Response
 
-**Request (from telephony provider):**
 ```json
 {
-  "call_id": "uuid",
-  "caller_number": "+919876543210",
-  "callee_number": "+911800123456",
-  "channel": "pstn",
-  "sip_headers": {
-    "From": "<sip:+919876543210@aeroxe.com>",
-    "To": "<sip:+911800123456@aeroxe.com>"
-  }
+  "status": "SUCCESS",
+  "data": [...],
+  "summary": {
+    "total_items": 5000,
+    "active_calls": 12,
+    "completed_calls": 4900,
+    "failed_calls": 88,
+    "abandoned_calls": 256,
+    "avg_duration_seconds": 245,
+    "avg_wait_seconds": 32,
+    "avg_handle_time_seconds": 180,
+    "recent_activity": {
+      "calls_today": 150,
+      "calls_this_hour": 15
+    }
+  },
+  "pagination": {"total": 5000, "limit": 10, "offset": 0, "has_more": true},
+  "meta": {"request_id": "uuid", "timestamp": "2026-07-21T12:00:00Z"}
 }
 ```
 
-### Initiate Outbound Call
+### List Voicemails Response
 
-```
-POST /api/v1/telephony/calls/outbound
-Authorization: Bearer <jwt>
-```
-
-**Request:**
 ```json
 {
-  "callee_number": "+919876543210",
-  "agent_id": "support-agent",
-  "context": {
-    "reason": "follow_up",
-    "ticket_id": "tkt_123"
-  }
+  "status": "SUCCESS",
+  "data": [...],
+  "summary": {
+    "total_items": 150,
+    "new_voicemails": 8,
+    "listened_voicemails": 100,
+    "handled_voicemails": 42,
+    "avg_duration_seconds": 45,
+    "recent_activity": {
+      "new_today": 3,
+      "handled_today": 5
+    }
+  },
+  "pagination": {"total": 150, "limit": 10, "offset": 0, "has_more": true},
+  "meta": {"request_id": "uuid", "timestamp": "2026-07-21T12:00:00Z"}
 }
 ```
 
-### Call Control
-
-```
-POST /api/v1/telephony/calls/{call_id}/hold
-POST /api/v1/telephony/calls/{call_id}/resume
-POST /api/v1/telephony/calls/{call_id}/transfer
-POST /api/v1/telephony/calls/{call_id}/end
-POST /api/v1/telephony/calls/{call_id}/recording/start
-POST /api/v1/telephony/calls/{call_id}/recording/stop
-```
-
-### Call Query
-
-```
-GET /api/v1/telephony/calls/{call_id}
-GET /api/v1/telephony/calls?status=active&tenant_id=1
-GET /api/v1/telephony/calls/{call_id}/transcript
-GET /api/v1/telephony/calls/{call_id}/recording
-```
-
-### WebSocket Audio Stream
-
-```
-wss://host/ws/v1/telephony/{call_id}
-```
-
-**Binary frames:** Audio data (G.711/Opus)
-**Text frames:** Control messages (DTMF, status)
+**Note:** No PUT method. Use PATCH for updates. All list endpoints support `limit` (default 10) and `offset`.
 
 ---
 

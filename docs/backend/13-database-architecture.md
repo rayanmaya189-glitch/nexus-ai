@@ -11,6 +11,7 @@ AeroXe Nexus AI uses a **shared PostgreSQL cluster with schema-per-module** arch
 | Rule | Description |
 |---|---|
 | **Schema-per-BoundedContext** | Each module owns a PostgreSQL schema (namespace) |
+| **Service-Wise DB Isolation** | Each service has its own schema for easy extraction to microservices |
 | **No Cross-Schema Access via SQL** | Modules access other module's data only through Rust trait methods |
 | **No Raw SQL** | All DB access through SeaORM entities, models, and query builders |
 | **Single ORM** | SeaORM is the only ORM — unified across all modules |
@@ -18,7 +19,38 @@ AeroXe Nexus AI uses a **shared PostgreSQL cluster with schema-per-module** arch
 | **Shared Cluster** | Single PostgreSQL cluster for all modules (replication + failover) |
 | **Mandatory tenant_id** | All business tables include `tenant_id` for multi-tenancy |
 
-### Why Schema-per-Module (Not Database-per-Service)
+### Service-Wise DB Isolation
+
+Each service/module has its own PostgreSQL schema, enabling:
+- **Independent schema migrations** per service
+- **Easy microservice extraction** — move schema to standalone DB
+- **Clear ownership** — each team owns their schema
+- **Security isolation** — cross-schema access blocked by design
+
+| Service | Schema | Tables |
+|---|---|---|
+| identity | `identity` | users, roles, permissions, tenants, api_keys, sessions, kyc_documents |
+| customer | `customer` | customers, addresses |
+| ai-gateway | `ai` | sessions, requests |
+| agent | `agent` | agents, executions, steps, document_sets, databases, database_tables |
+| rag | `rag` | documents, chunks, document_metadata, document_sets |
+| vision | `vision` | images, analysis, ocr_results |
+| sql-agent | `sql` | (via agent schema) |
+| memory | `memory` | memories, conversation_history |
+| workflow | `workflow` | definitions, instances, steps, approvals |
+| security | `security` | (scan results) |
+| audit | `audit` | chat_trail, events (partitioned) |
+| telephony | `telephony` | calls, recordings, transcripts, phone_numbers, queues, voicemails, ivr_flows, caller_auth, fraud_checks, audio_quality |
+| conversation | `conversation` | conversations, messages, entities, sentiment |
+| stt | `stt` | sessions, segments, models |
+| tts | `tts` | voices, voice_clones, synthesis_log, post_call_surveys |
+| analytics | `analytics` | conversation_metrics, call_metrics, agent_metrics, cost_tracking, snapshots |
+| webhook | `webhook` | subscriptions, deliveries |
+| outbound | `outbound` | campaigns, targets, callbacks, dnc_list |
+| notification | `notif` | (notification templates) |
+| model-registry | `models` | (model registry) |
+| config | `config` | (configuration) |
+| ecosystem | `eco` | (integration) |
 
 | Aspect | Microservice DB-per-Service | Modular Monolith Schema-per-Module |
 |---|---|---|

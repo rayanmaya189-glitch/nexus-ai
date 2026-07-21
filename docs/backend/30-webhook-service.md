@@ -283,40 +283,59 @@ CREATE INDEX idx_webhook_deliveries_pending ON webhook.deliveries(status, next_r
 
 ## 8. REST API Endpoints
 
-### Create Webhook
+| Method | Endpoint | Business Status | HTTP | Description |
+|---|---|---|---|---|
+| `POST` | `/api/v1/webhooks` | `CREATED` | `201` | Create webhook |
+| `GET` | `/api/v1/webhooks/{id}` | `SUCCESS` | `200` | Get webhook |
+| `GET` | `/api/v1/webhooks?limit=10&offset=0` | `SUCCESS` | `200` | List webhooks |
+| `PATCH` | `/api/v1/webhooks/{id}` | `UPDATED` | `200` | Update webhook |
+| `DELETE` | `/api/v1/webhooks/{id}` | `DELETED` | `204` | Delete webhook |
+| `POST` | `/api/v1/webhooks/{id}/test` | `SUCCESS` | `200` | Test webhook |
+| `GET` | `/api/v1/webhooks/{id}/deliveries?limit=10&offset=0` | `SUCCESS` | `200` | List deliveries |
+| `POST` | `/api/v1/webhooks/{id}/deliveries/{delivery_id}/retry` | `SUCCESS` | `200` | Retry delivery |
 
-```
-POST /api/v1/webhooks
-Authorization: Bearer <jwt>
-```
+### List Webhooks Response
 
-**Request:**
 ```json
 {
-  "name": "CRM Sync",
-  "url": "https://crm.example.com/webhooks/aeroxe",
-  "secret": "whsec_abc123...",
-  "event_types": ["conversation.ended", "customer.created"]
+  "status": "SUCCESS",
+  "data": [...],
+  "summary": {
+    "total_items": 25,
+    "active_webhooks": 20,
+    "paused_webhooks": 3,
+    "failed_webhooks": 2,
+    "total_deliveries_today": 1500,
+    "delivery_success_rate": 0.96
+  },
+  "pagination": {"total": 25, "limit": 10, "offset": 0, "has_more": false},
+  "meta": {"request_id": "uuid", "timestamp": "2026-07-21T12:00:00Z"}
 }
 ```
 
-### List Webhooks
+### List Deliveries Response
 
-```
-GET /api/v1/webhooks
+```json
+{
+  "status": "SUCCESS",
+  "data": [...],
+  "summary": {
+    "total_items": 5000,
+    "delivered": 4800,
+    "failed": 150,
+    "pending": 50,
+    "avg_latency_ms": 245,
+    "recent_activity": {
+      "delivered_today": 200,
+      "failed_today": 5
+    }
+  },
+  "pagination": {"total": 5000, "limit": 10, "offset": 0, "has_more": true},
+  "meta": {"request_id": "uuid", "timestamp": "2026-07-21T12:00:00Z"}
+}
 ```
 
-### Test Webhook
-
-```
-POST /api/v1/webhooks/{id}/test
-```
-
-### Get Delivery Logs
-
-```
-GET /api/v1/webhooks/{id}/deliveries?limit=50
-```
+**Note:** No PUT method. Use PATCH for updates. All list endpoints support `limit` (default 10) and `offset`.
 
 ---
 

@@ -275,74 +275,15 @@ CREATE TABLE stt.models (
 
 ## 7. REST API Endpoints
 
-### Start Streaming Session
+| Method | Endpoint | Business Status | HTTP | Description |
+|---|---|---|---|---|
+| `POST` | `/api/v1/stt/sessions` | `CREATED` | `201` | Start streaming session |
+| `POST` | `/api/v1/stt/sessions/{session_id}/audio` | `SUCCESS` | `200` | Send audio chunk |
+| `POST` | `/api/v1/stt/sessions/{session_id}/end` | `UPDATED` | `200` | End session |
+| `POST` | `/api/v1/stt/transcribe` | `SUCCESS` | `200` | Batch transcribe |
+| `GET` | `/api/v1/stt/sessions/{session_id}` | `SUCCESS` | `200` | Get transcript |
 
-```
-POST /api/v1/stt/sessions
-Authorization: Bearer <jwt>
-```
-
-**Request:**
-```json
-{
-  "call_id": "uuid",
-  "language": "auto",
-  "model": "whisper-small",
-  "sample_rate": 16000,
-  "enable_punctuation": true,
-  "enable_speaker_labels": true,
-  "redact_pii": true
-}
-```
-
-**Response:**
-```json
-{
-  "session_id": "uuid",
-  "status": "active",
-  "model": "whisper-small",
-  "language": "en"
-}
-```
-
-### Send Audio Chunk
-
-```
-POST /api/v1/stt/sessions/{session_id}/audio
-Content-Type: application/octet-stream
-```
-
-**Response:**
-```json
-{
-  "text": "What is my current balance",
-  "is_final": false,
-  "confidence": 0.85,
-  "words": [
-    {"word": "What", "start_ms": 0, "end_ms": 200, "confidence": 0.95},
-    {"word": "is", "start_ms": 200, "end_ms": 300, "confidence": 0.98}
-  ]
-}
-```
-
-### End Session
-
-```
-POST /api/v1/stt/sessions/{session_id}/end
-```
-
-### Batch Transcribe
-
-```
-POST /api/v1/stt/transcribe
-Content-Type: multipart/form-data
-```
-
-### Get Session Transcript
-
-```
-GET /api/v1/stt/sessions/{session_id}
-```
+**Note:** No PUT method. Use PATCH for updates.
 
 ---
 

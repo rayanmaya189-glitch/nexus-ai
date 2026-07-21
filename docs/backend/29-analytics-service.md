@@ -364,48 +364,44 @@ CREATE INDEX idx_snapshots_tenant_metric ON analytics.snapshots(tenant_id, metri
 
 ---
 
-## 7. Dashboard API
+## 7. REST API Endpoints
 
-### Get Dashboard
+| Method | Endpoint | Business Status | HTTP | Description |
+|---|---|---|---|---|
+| `GET` | `/api/v1/analytics/dashboard?start=...&end=...` | `SUCCESS` | `200` | Get dashboard |
+| `GET` | `/api/v1/analytics/realtime` | `SUCCESS` | `200` | Real-time metrics |
+| `GET` | `/api/v1/analytics/conversations?start=...&end=...` | `SUCCESS` | `200` | Conversation metrics |
+| `GET` | `/api/v1/analytics/calls?start=...&end=...` | `SUCCESS` | `200` | Call metrics |
+| `GET` | `/api/v1/analytics/agents?limit=10&offset=0` | `SUCCESS` | `200` | List agent metrics |
+| `GET` | `/api/v1/analytics/agents/{agent_id}/performance` | `SUCCESS` | `200` | Agent performance |
+| `GET` | `/api/v1/analytics/costs?start=...&end=...` | `SUCCESS` | `200` | Cost breakdown |
+| `GET` | `/api/v1/analytics/costs/customers/{customer_id}` | `SUCCESS` | `200` | Customer cost |
+| `POST` | `/api/v1/analytics/reports` | `CREATED` | `201` | Generate report |
+| `GET` | `/api/v1/analytics/reports?limit=10&offset=0` | `SUCCESS` | `200` | List reports |
+| `GET` | `/api/v1/analytics/reports/{id}` | `SUCCESS` | `200` | Get report |
 
-```
-GET /api/v1/analytics/dashboard?start=2026-07-01&end=2026-07-21&granularity=day
-Authorization: Bearer <jwt>
-```
+### List Agent Metrics Response
 
-**Response:**
 ```json
 {
-  "realtime": {
-    "active_conversations": 42,
-    "active_calls": 12,
-    "queue_size": 5,
+  "status": "SUCCESS",
+  "data": [...],
+  "summary": {
+    "total_items": 50,
     "avg_response_time_ms": 1250,
-    "messages_per_minute": 85
+    "avg_csat_score": 4.2,
+    "avg_resolution_rate": 0.87,
+    "total_tokens_used": 1500000,
+    "total_cost": 1250.50,
+    "top_performers": 5,
+    "underperformers": 2
   },
-  "conversations": {
-    "total": 15234,
-    "avg_duration_seconds": 342,
-    "resolution_rate": 0.87,
-    "escalation_rate": 0.12,
-    "avg_csat_score": 4.2
-  },
-  "calls": {
-    "total": 3456,
-    "answered": 3200,
-    "abandoned": 256,
-    "avg_handle_time_seconds": 245,
-    "avg_wait_time_seconds": 32,
-    "service_level": 0.85
-  },
-  "costs": {
-    "total": 1250.50,
-    "per_conversation": 0.082,
-    "llm": 890.25,
-    "telephony": 235.00
-  }
+  "pagination": {"total": 50, "limit": 10, "offset": 0, "has_more": true},
+  "meta": {"request_id": "uuid", "timestamp": "2026-07-21T12:00:00Z"}
 }
 ```
+
+**Note:** No PUT method. Use PATCH for updates. All list endpoints support `limit` (default 10) and `offset`.
 
 ---
 

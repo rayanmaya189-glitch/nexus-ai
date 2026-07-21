@@ -322,54 +322,51 @@ pub trait CustomerService: Send + Sync {
 
 ## 9. REST API Endpoints
 
-### Create Customer
+| Method | Endpoint | Business Status | HTTP | Description |
+|---|---|---|---|---|
+| `POST` | `/api/v1/customers` | `CREATED` | `201` | Create customer |
+| `GET` | `/api/v1/customers/{id}` | `SUCCESS` | `200` | Get customer |
+| `GET` | `/api/v1/customers?limit=10&offset=0` | `SUCCESS` | `200` | List customers |
+| `PATCH` | `/api/v1/customers/{id}` | `UPDATED` | `200` | Update customer |
+| `DELETE` | `/api/v1/customers/{id}` | `DELETED` | `204` | Delete customer |
+| `POST` | `/api/v1/customers/{id}/suspend` | `UPDATED` | `200` | Suspend customer |
+| `POST` | `/api/v1/customers/{id}/activate` | `UPDATED` | `200` | Activate customer |
 
-```
-POST /api/v1/customers
-Authorization: Bearer <jwt>
+### List Customers Response
+
+```json
+{
+  "status": "SUCCESS",
+  "data": [
+    {"id": 1, "name": "Acme Corp", "status": "active", "email": "contact@acme.com"},
+    {"id": 2, "name": "Beta Inc", "status": "active", "email": "info@beta.com"}
+  ],
+  "summary": {
+    "total_items": 500,
+    "active_items": 420,
+    "suspended_items": 30,
+    "inactive_items": 50,
+    "recent_activity": {
+      "created_today": 5,
+      "updated_today": 12,
+      "suspended_today": 1,
+      "activated_today": 3
+    }
+  },
+  "pagination": {
+    "total": 500,
+    "limit": 10,
+    "offset": 0,
+    "has_more": true
+  },
+  "meta": {
+    "request_id": "uuid",
+    "timestamp": "2026-07-21T12:00:00Z"
+  }
+}
 ```
 
-### Get Customer
-
-```
-GET /api/v1/customers/{id}
-Authorization: Bearer <jwt>
-```
-
-### List Customers
-
-```
-GET /api/v1/customers?page=1&per_page=20&status=active
-Authorization: Bearer <jwt>
-```
-
-### Suspend Customer
-
-```
-POST /api/v1/customers/{id}/suspend
-Authorization: Bearer <jwt>
-```
-
-### Activate Customer
-
-```
-POST /api/v1/customers/{id}/activate
-Authorization: Bearer <jwt>
-```
-
-### Update Customer
-
-```
-PUT /api/v1/customers/{id}
-Authorization: Bearer <jwt>
-```
-
-### Delete Customer (Soft)
-
-```
-DELETE /api/v1/customers/{id}
-Authorization: Bearer <jwt>
-```
+**Note:** No PUT method. Use PATCH for updates. All list endpoints support `limit` (default 10) and `offset`.
 
 ---
 

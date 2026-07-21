@@ -354,36 +354,66 @@ CREATE UNIQUE INDEX idx_dnc_unique ON outbound.dnc_list(tenant_id, phone_number)
 
 ## 8. REST API Endpoints
 
-### Create Campaign
+| Method | Endpoint | Business Status | HTTP | Description |
+|---|---|---|---|---|
+| `POST` | `/api/v1/outbound/campaigns` | `CREATED` | `201` | Create campaign |
+| `GET` | `/api/v1/outbound/campaigns/{id}` | `SUCCESS` | `200` | Get campaign |
+| `GET` | `/api/v1/outbound/campaigns?limit=10&offset=0` | `SUCCESS` | `200` | List campaigns |
+| `POST` | `/api/v1/outbound/campaigns/{id}/start` | `UPDATED` | `200` | Start campaign |
+| `POST` | `/api/v1/outbound/campaigns/{id}/pause` | `UPDATED` | `200` | Pause campaign |
+| `POST` | `/api/v1/outbound/campaigns/{id}/cancel` | `UPDATED` | `200` | Cancel campaign |
+| `GET` | `/api/v1/outbound/campaigns/{id}/stats` | `SUCCESS` | `200` | Campaign stats |
+| `POST` | `/api/v1/outbound/callbacks` | `CREATED` | `201` | Schedule callback |
+| `GET` | `/api/v1/outbound/callbacks?limit=10&offset=0` | `SUCCESS` | `200` | List callbacks |
+| `DELETE` | `/api/v1/outbound/callbacks/{id}` | `DELETED` | `204` | Cancel callback |
+| `POST` | `/api/v1/outbound/dnc` | `CREATED` | `201` | Add to DNC |
+| `GET` | `/api/v1/outbound/dnc?limit=10&offset=0` | `SUCCESS` | `200` | List DNC |
+| `DELETE` | `/api/v1/outbound/dnc/{id}` | `DELETED` | `204` | Remove from DNC |
 
-```
-POST /api/v1/outbound/campaigns
-Authorization: Bearer <jwt>
+### List Campaigns Response
+
+```json
+{
+  "status": "SUCCESS",
+  "data": [...],
+  "summary": {
+    "total_items": 50,
+    "active_campaigns": 5,
+    "completed_campaigns": 40,
+    "failed_campaigns": 5,
+    "total_calls_attempted": 10000,
+    "total_calls_connected": 8500,
+    "avg_success_rate": 0.85,
+    "recent_activity": {
+      "created_today": 2,
+      "started_today": 1,
+      "completed_today": 3
+    }
+  },
+  "pagination": {"total": 50, "limit": 10, "offset": 0, "has_more": true},
+  "meta": {"request_id": "uuid", "timestamp": "2026-07-21T12:00:00Z"}
+}
 ```
 
-### Start Campaign
+### List Callbacks Response
 
-```
-POST /api/v1/outbound/campaigns/{id}/start
+```json
+{
+  "status": "SUCCESS",
+  "data": [...],
+  "summary": {
+    "total_items": 200,
+    "scheduled_callbacks": 30,
+    "completed_callbacks": 160,
+    "cancelled_callbacks": 10,
+    "avg_wait_time_seconds": 3600
+  },
+  "pagination": {"total": 200, "limit": 10, "offset": 0, "has_more": true},
+  "meta": {"request_id": "uuid", "timestamp": "2026-07-21T12:00:00Z"}
+}
 ```
 
-### Get Campaign Stats
-
-```
-GET /api/v1/outbound/campaigns/{id}/stats
-```
-
-### Schedule Callback
-
-```
-POST /api/v1/outbound/callbacks
-```
-
-### Add to DNC
-
-```
-POST /api/v1/outbound/dnc
-```
+**Note:** No PUT method. Use PATCH for updates. All list endpoints support `limit` (default 10) and `offset`.
 
 ---
 

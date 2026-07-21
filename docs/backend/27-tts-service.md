@@ -283,44 +283,17 @@ CREATE INDEX idx_tts_log_tenant ON tts.synthesis_log(tenant_id, created_at DESC)
 
 ## 9. REST API Endpoints
 
-### Synthesize Speech
+| Method | Endpoint | Business Status | HTTP | Description |
+|---|---|---|---|---|
+| `POST` | `/api/v1/tts/synthesize` | `SUCCESS` | `200` | Synthesize speech |
+| `POST` | `/api/v1/tts/ssml` | `SUCCESS` | `200` | Synthesize SSML |
+| `GET` | `/api/v1/tts/voices?limit=10&offset=0&language=en` | `SUCCESS` | `200` | List voices |
+| `GET` | `/api/v1/tts/voices/{voice_id}` | `SUCCESS` | `200` | Get voice |
+| `GET` | `/api/v1/tts/voices/{voice_id}/preview?text=Hello` | `SUCCESS` | `200` | Preview voice |
+| `POST` | `/api/v1/tts/voices/clone` | `CREATED` | `201` | Clone voice |
+| `DELETE` | `/api/v1/tts/voices/clone/{clone_id}` | `DELETED` | `204` | Revoke clone |
 
-```
-POST /api/v1/tts/synthesize
-Authorization: Bearer <jwt>
-```
-
-**Request:**
-```json
-{
-  "text": "Hello! Your account balance is ₹2,450.",
-  "voice_id": "en-us-female-1",
-  "speed": 1.0,
-  "pitch": 0.0,
-  "emotion": "cheerful"
-}
-```
-
-**Response:** Audio stream (audio/wav)
-
-### List Voices
-
-```
-GET /api/v1/tts/voices?language=en&gender=female
-```
-
-### Preview Voice
-
-```
-GET /api/v1/tts/voices/{voice_id}/preview?text=Hello+world
-```
-
-### Synthesize SSML
-
-```
-POST /api/v1/tts/ssml
-Content-Type: application/xml
-```
+**Note:** No PUT method. Use PATCH for updates. All list endpoints support `limit` (default 10) and `offset`.
 
 ---
 

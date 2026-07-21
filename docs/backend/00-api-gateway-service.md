@@ -330,10 +330,51 @@ pub async fn log_middleware(req: Request, next: Next) -> Response { ... }
 
 | Route | Purpose |
 |---|---|
-| `ws://host/ws/v1/chat/{conversation_id}` | AI chat streaming (versioned) |
-| `ws://host/ws/v1/agent/{agent_id}` | Agent execution streaming (versioned) |
-| `ws://host/ws/v1/notifications` | Real-time notifications (versioned) |
-| `ws://host/ws/v1/telephony/{call_id}` | Audio streaming for voice calls (NEW) |
+| `ws://host/ws/v1/chat/{conversation_id}` | AI chat streaming |
+| `ws://host/ws/v1/agent/{agent_id}` | Agent execution streaming |
+| `ws://host/ws/v1/notifications` | Real-time notifications |
+| `ws://host/ws/v1/telephony/{call_id}` | Audio streaming for voice calls |
+| `ws://host/ws/v1/telephony/monitor/{call_id}` | Live call monitoring |
+
+### 8.3 REST API Method Standards
+
+| Method | Usage | Allowed |
+|---|---|---|
+| `GET` | Read resource(s) | Yes |
+| `POST` | Create / Execute action | Yes |
+| `PATCH` | Partial update | Yes |
+| `DELETE` | Remove resource | Yes |
+| `PUT` | Full replace | **NOT ALLOWED** |
+
+### 8.4 Pagination Standards
+
+All list endpoints MUST support server-side pagination:
+
+```
+GET /api/v1/resource?limit=10&offset=0
+```
+
+| Parameter | Default | Max |
+|---|---|---|
+| `limit` | 10 | 100 |
+| `offset` | 0 | — |
+
+### 8.5 HTTP Status Code Standards
+
+| Code | Usage |
+|---|---|
+| `200` | Successful GET, PATCH |
+| `201` | Successful POST (created) |
+| `204` | Successful DELETE (no body) |
+| `400` | Bad request / validation error |
+| `401` | Unauthorized (missing/invalid JWT) |
+| `403` | Forbidden (insufficient permissions) |
+| `404` | Resource not found |
+| `409` | Conflict (already exists) |
+| `422` | Business rule violation |
+| `429` | Rate limit exceeded |
+| `500` | Internal server error |
+| `503` | Service unavailable |
 
 ### 8.3 Route Registration (axum Router Example)
 
@@ -473,38 +514,150 @@ Client connects: ws://host/ws/v1/chat/{conversation_id}
 | Message buffer size | 64KB |
 | Heartbeat interval | 30 seconds |
 
+### WebSocket Routes
+
+| Route | Purpose |
+|---|---|
+| `ws://host/ws/v1/chat/{conversation_id}` | AI chat streaming |
+| `ws://host/ws/v1/agent/{agent_id}` | Agent execution streaming |
+| `ws://host/ws/v1/notifications` | Real-time notifications |
+| `ws://host/ws/v1/telephony/{call_id}` | Audio streaming for voice calls |
+| `ws://host/ws/v1/telephony/monitor/{call_id}` | Live call monitoring |
+
 ---
 
-## 12. Error Response Standard
+## 12. API Method Standards
 
+| Method | Usage | Request Body | Idempotent |
+|---|---|---|---|
+| `GET` | Read resource(s) | No | Yes |
+| `POST` | Create / Execute action | Yes | No |
+| `PATCH` | Partial update | Yes | Yes |
+| `DELETE` | Remove resource | No | Yes |
+
+**PUT is NOT allowed.** Use POST for creation, PATCH for updates.
+
+### Pagination Standards
+
+All list endpoints MUST support server-side pagination:
+
+```
+GET /api/v1/resource?limit=10&offset=0
+```
+
+| Parameter | Default | Max | Description |
+|---|---|---|---|
+| `limit` | 10 | 100 | Items per page |
+| `offset` | 0 | — | Items to skip |
+
+---
+
+## 13. Error Response Standard
+
+### Business Status Codes
+
+Every response MUST include a `status` field with a business-specific code:
+
+| Status | Description | HTTP Code |
+|---|---|---|
+| `SUCCESS` | Operation completed successfully | 200, 201, 204 |
+| `CREATED` | Resource created successfully | 201 |
+| `UPDATED` | Resource updated successfully | 200 |
+| `DELETED` | Resource deleted successfully | 204 |
+| `VALIDATION_ERROR` | Request body validation failed | 400 |
+| `UNAUTHORIZED` | Missing or invalid JWT | 401 |
+| `TOKEN_EXPIRED` | JWT has expired | 401 |
+| `FORBIDDEN` | Insufficient permissions | 403 |
+| `NOT_FOUND` | Resource does not exist | 404 |
+| `CONFLICT` | Resource already exists | 409 |
+| `UNPROCESSABLE_ENTITY` | Business rule violation | 422 |
+| `RATE_LIMIT_EXCEEDED` | Rate limit exceeded | 429 |
+| `INTERNAL_ERROR` | Unexpected server error | 500 |
+| `SERVICE_UNAVAILABLE` | Service temporarily down | 503 |
+
+### Consistent Response Envelope
+
+**Success (Single Resource):**
 ```json
 {
-  "error": {
-    "code": "RATE_LIMIT_EXCEEDED",
-    "message": "Too many requests. Retry after 30 seconds.",
-    "request_id": "uuid",
-    "api_version": "v1",
-    "timestamp": "2026-07-21T12:00:00Z"
-  }
+  "status": "SUCCESS",
+  "data": {"id": 1, "name": "Example"},
+  "meta": {"request_id": "uuid", "timestamp": "2026-07-21T12:00:00Z"}
 }
 ```
 
-### Error Codes
+**Success (Create):**
+```json
+{
+  "status": "CREATED",
+  "data": {"id": 1, "name": "Example"},
+  "meta": {"request_id": "uuid", "timestamp": "2026-07-21T12:00:00Z"}
+}
+```
 
-| Code | HTTP Status | Description |
-|---|---|---|
-| `UNAUTHORIZED` | 401 | Missing or invalid JWT |
-| `TOKEN_EXPIRED` | 401 | JWT has expired |
-| `FORBIDDEN` | 403 | Insufficient permissions |
-| `TENANT_VIOLATION` | 403 | Cross-tenant access attempt |
-| `NOT_FOUND` | 404 | Resource not found |
-| `VERSION_NOT_FOUND` | 404 | API version does not exist |
-| `RATE_LIMIT_EXCEEDED` | 429 | Rate limit hit |
-| `REQUEST_TIMEOUT` | 504 | Module processing timeout |
-| `AI_MODEL_TIMEOUT` | 504 | AI model inference timeout |
-| `INTERNAL_ERROR` | 500 | Unexpected server error |
-| `SERVICE_UNAVAILABLE` | 503 | Module unavailable |
-| `VERSION_DEPRECATED` | 400 | Deprecated API version |
+**Success (Delete):**
+```json
+{
+  "status": "DELETED",
+  "data": null,
+  "meta": {"request_id": "uuid", "timestamp": "2026-07-21T12:00:00Z"}
+}
+```
+
+**List with Summary + Pagination:**
+```json
+{
+  "status": "SUCCESS",
+  "data": [...],
+  "summary": {
+    "total_items": 1234,
+    "active_items": 980,
+    "inactive_items": 254,
+    "recent_activity": {
+      "created_today": 15,
+      "updated_today": 42,
+      "deleted_today": 3
+    }
+  },
+  "pagination": {
+    "total": 1234,
+    "limit": 10,
+    "offset": 0,
+    "has_more": true
+  },
+  "meta": {"request_id": "uuid", "timestamp": "2026-07-21T12:00:00Z"}
+}
+```
+
+**Error:**
+```json
+{
+  "status": "VALIDATION_ERROR",
+  "error": {
+    "code": "VALIDATION_ERROR",
+    "message": "Email is required",
+    "details": [{"field": "email", "message": "is required"}]
+  },
+  "meta": {"request_id": "uuid", "timestamp": "2026-07-21T12:00:00Z"}
+}
+```
+
+### Summary Fields Per Resource
+
+| Resource | Summary Fields |
+|---|---|
+| **Customers** | total_items, active_items, inactive_items, created_today, updated_today |
+| **Agents** | total_items, bound_items, unbound_items |
+| **Documents** | total_items, processed_items, processing_items, failed_items, total_chunks |
+| **Workflows** | total_items, running_items, completed_items, failed_items, avg_duration |
+| **Calls** | total_items, active_calls, completed_calls, failed_calls, avg_duration |
+| **Voicemails** | total_items, new_voicemails, listened, handled, avg_duration |
+| **Conversations** | total_items, active, completed, escalated, avg_duration, avg_csat |
+| **Campaigns** | total_items, active, completed, failed, total_calls, avg_success_rate |
+| **Callbacks** | total_items, scheduled, completed, cancelled |
+| **Webhooks** | total_items, active, paused, failed |
+| **Deliveries** | total_items, delivered, failed, pending, avg_latency |
+| **Agent Metrics** | total_items, avg_response_time, avg_csat, total_tokens, total_cost |
 
 ---
 
