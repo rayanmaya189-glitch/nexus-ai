@@ -16,6 +16,7 @@ AeroXe Nexus AI production platform must support:
 * Multiple AeroXe products integration
 * Multi-tenant SaaS
 * Private/on-premise deployment
+* **Single binary deployment** (modular monolith)
 * Offline AI operation after model download
 * GPU-based local inference
 * High availability
@@ -48,13 +49,15 @@ AeroXe Nexus AI production platform must support:
 ================================================================
 
 
-                      Kubernetes Cluster
+                     Single Binary: aeroxe-nexus
 
 
 ================================================================
 
 
-                         API Gateway
+                     gateway (axum HTTP/WS)
+
+                     src/modules/gateway/
 
 
                                |
@@ -63,31 +66,19 @@ AeroXe Nexus AI production platform must support:
 ================================================================
 
 
-                      Application Layer
+                      All Modules (in-process)
 
 
 ================================================================
 
 
- Identity Service
+ identity    customer    ai-gateway    agent
 
- AI Gateway
+ rag         vision      sql-agent     memory
 
- Agent Orchestrator
+ workflow    security    audit         notification
 
- RAG Service
-
- Vision Service
-
- SQL Agent
-
- Workflow Service
-
- Memory Service
-
- Integration Service
-
- Notification Service
+ model-registry  config  ecosystem
 
 
 ================================================================
@@ -99,7 +90,7 @@ AeroXe Nexus AI production platform must support:
 ================================================================
 
 
- PostgreSQL Cluster
+ Shared PostgreSQL 18 Cluster (Schema-per-Module)
 
  Redis Cluster
 
@@ -122,16 +113,8 @@ AeroXe Nexus AI production platform must support:
  Ollama GPU Servers
 
 
- Mistral
-
- Qwen
-
- Llama
-
- Command-R
-
- Qwen3-VL
-
+ LFM | Hermes3 | Qwen
+ Llama | Command-R | Qwen3-VL
  WhiteRabbitNeo
 
 

@@ -12,12 +12,11 @@
 
 AeroXe Nexus AI is not a simple chatbot.
 
-It is an **Agentic AI Platform** where multiple specialized AI agents collaborate.
+It is an **Agentic AI Platform** where multiple specialized AI agents collaborate within a modular monolith.
 
 Architecture:
 
 ```text
- id="9w7l2q"
                     User
 
 
@@ -25,14 +24,18 @@ Architecture:
 
                       |
 
-              AI Gateway
+              gateway module
+
+              src/modules/gateway/
 
 
                       |
 
                       |
 
-             Agent Orchestrator
+              ai-gateway module
+
+              (trait call → agent module)
 
 
                       |
@@ -42,26 +45,15 @@ Architecture:
 
               AI Intelligence Layer
 
-
-================================================
-
-
- Planner Agent
-
- Reasoning Agent
-
- Tool Agent
-
- Memory Agent
-
- RAG Agent
-
- Vision Agent
-
- Security Agent
+              (src/modules/*)
 
 
 ================================================
+
+
+ ai-gateway    agent    rag     vision
+
+ memory        sql-agent  security
 
 
                       |
@@ -71,11 +63,13 @@ Architecture:
 
              Knowledge & Data Layer
 
+             (Schema-per-Module, SeaORM)
+
 
 ================================================
 
 
- PostgreSQL
+ PostgreSQL 18 (shared cluster)
 
  pgvector
 
@@ -97,7 +91,6 @@ Architecture:
 
 
 ================================================
-
 
 ```
 
@@ -413,12 +406,12 @@ Capabilities:
 
 ---
 
-# 6. Agent Orchestrator Design
+# 6. Agent Module Design
 
-Service:
+Module:
 
 ```
-agent-orchestrator-service
+agent (src/modules/agent/)
 ```
 
 Responsibilities:
@@ -427,6 +420,7 @@ Responsibilities:
 * Execution planning
 * Tool management
 * Context management
+* Published versioned NATS events
 
 ---
 
@@ -570,12 +564,13 @@ Example:
 
 Purpose:
 
-Select best model.
+Select best model for the task.
+
+Implemented as a service within the `ai-gateway` module (not a separate service).
 
 Flow:
 
 ```text
- id="3b7j2n"
 Request
 
 
@@ -586,7 +581,7 @@ Classifier
 
  |
 
-Model Router
+Model Router (ai-gateway module)
 
 
  |

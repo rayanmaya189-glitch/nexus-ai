@@ -998,7 +998,7 @@ Unit Security Tests
 
 API Security Tests
 
-gRPC Security Tests
+Trait Interface Security Tests
 
 Penetration Tests
 

@@ -4,22 +4,23 @@
 
 # Part 4 — Database Architecture & Data Design
 
-## PostgreSQL + pgvector + Apache AGE + Redis + Elasticsearch + MinIO
+## Shared PostgreSQL + Schema-per-Module + SeaORM (No Raw SQL) + pgvector + Apache AGE + Redis + Elasticsearch + MinIO
 
 ---
 
 # 1. Database Architecture Principles
 
-AeroXe Nexus AI follows **Database-per-Microservice** architecture.
+AeroXe Nexus AI follows **Schema-per-Module** architecture — all modules share a single PostgreSQL cluster.
 
 Rules:
 
-✅ Each microservice owns its database
-✅ No direct database access between services
-✅ Communication through gRPC/NATS only
-✅ Data consistency through events
-✅ Read models can be optimized separately
-✅ Tenant isolation mandatory
+✅ All modules share a single PostgreSQL cluster
+✅ Each module owns a PostgreSQL schema (namespace)
+✅ **No raw SQL** — all access through SeaORM entities and models
+✅ No direct cross-schema SQL access — communicate through Rust trait methods
+✅ Data consistency through events (NATS JetStream)
+✅ Schema = Future service boundary (extractable later)
+✅ Tenant isolation mandatory (`tenant_id` column in all business tables)
 
 ---
 
@@ -31,7 +32,7 @@ Rules:
 
                                |
 
-                  Microservice Data Ownership
+                 Schema-per-Module Ownership
 
 
                                |
@@ -39,74 +40,52 @@ Rules:
 
 ================================================================
 
-
- Identity Service
-
-        |
-
-        PostgreSQL
-
-        identity_db
+Single PostgreSQL 18 Cluster
 
 
+ Identity Module (schema: identity_)
 
- Agent Service
-
-        |
-
-        PostgreSQL
-
-        agent_db
+        → SeaORM entities
 
 
+ Customer Module (schema: customer_)  ← NEW
 
- RAG Service
-
-        |
-
-        PostgreSQL + pgvector
-
-        rag_db
+        → SeaORM entities
 
 
+ Agent Module (schema: agent_)
 
- Vision Service
-
-        |
-
-        PostgreSQL
-
-        vision_db
+        → SeaORM entities
 
 
+ AI Gateway Module (schema: ai_)
 
- Memory Service
-
-        |
-
-        PostgreSQL + Redis
-
-        memory_db
+        → SeaORM entities
 
 
+ RAG Module (schema: rag_) + pgvector
 
- Workflow Service
-
-        |
-
-        PostgreSQL
-
-        workflow_db
+        → SeaORM entities + vector columns
 
 
+ Vision Module (schema: vision_)
 
- Audit Service
+        → SeaORM entities
 
-        |
 
-        PostgreSQL + Elasticsearch
+ Memory Module (schema: memory_) + Redis
 
-        audit_db
+        → SeaORM entities + Redis keys
+
+
+ Workflow Module (schema: workflow_)
+
+        → SeaORM entities
+
+
+ Audit Module (schema: audit_) + Elasticsearch
+
+        → SeaORM entities (partitioned) + ES indices
 
 
 ================================================================
@@ -976,17 +955,17 @@ aeroxe-backups
 
 ---
 
-# 17. Database Event Synchronization
+# 17. Database Event Synchronization (Versioned)
 
 Example:
 
 Document Processing:
 
 ```text
-rag-service
+rag module
 
 
-DocumentProcessed Event
+aeroxe.v1.rag.document.processed
 
 
         |
@@ -1000,29 +979,29 @@ NATS JetStream
 
         |
 
-knowledge-graph-service
+agent module (via subscriber)
 
 
-Update Relationships
+Update Knowledge Available
 
 
 ```
 
 ---
 
-# 18. Repository Pattern
+# 18. Repository Pattern (SeaORM)
 
-DDD Repository Example:
+DDD Repository Example — **No raw SQL**:
 
 ```rust
-use sea_orm::{DatabaseConnection, EntityTrait, Set};
+use sea_orm::{DatabaseConnection, EntityTrait, Set, ColumnTrait, QueryFilter};
 use crate::domain::entities::agent;
 
 #[async_trait]
 pub trait AgentRepository: Send + Sync {
-    async fn save(&self, agent: agent::Model) -> Result<(), DbErr>;
-    async fn find_by_id(&self, id: i64) -> Result<Option<agent::Model>, DbErr>;
-    async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<agent::Model>, DbErr>;
+    async fn save(&self, agent: Agent) -> Result<AgentId, RepositoryError>;
+    async fn find_by_id(&self, id: i64) -> Result<Option<Agent>, RepositoryError>;
+    async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Agent>, RepositoryError>;
 }
 
 pub struct PostgresAgentRepository {
@@ -1031,20 +1010,35 @@ pub struct PostgresAgentRepository {
 
 #[async_trait]
 impl AgentRepository for PostgresAgentRepository {
-    async fn save(&self, agent: agent::Model) -> Result<(), DbErr> {
-        agent::Entity::insert(agent.into_active_model()).exec(&self.db).await?;
-        Ok(())
+    async fn save(&self, agent: Agent) -> Result<AgentId, RepositoryError> {
+        let active = agent::ActiveModel {
+            name: Set(agent.name),
+            agent_type: Set(agent.agent_type.to_string()),
+            model: Set(agent.model),
+            status: Set(agent.status.to_string()),
+            ..Default::default()
+        };
+        let result = active.insert(&self.db)
+            .await
+            .map_err(|e| RepositoryError::DatabaseError(e.to_string()))?;
+        Ok(AgentId(result.id))
     }
 
-    async fn find_by_id(&self, id: i64) -> Result<Option<agent::Model>, DbErr> {
-        agent::Entity::find_by_id(id).one(&self.db).await
+    async fn find_by_id(&self, id: i64) -> Result<Option<Agent>, RepositoryError> {
+        let model = agent::Entity::find_by_id(id)
+            .one(&self.db)
+            .await
+            .map_err(|e| RepositoryError::DatabaseError(e.to_string()))?;
+        Ok(model.map(Agent::from))
     }
 
-    async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<agent::Model>, DbErr> {
-        agent::Entity::find()
+    async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<Agent>, RepositoryError> {
+        let models = agent::Entity::find()
             .filter(agent::Column::TenantId.eq(tenant_id))
             .all(&self.db)
             .await
+            .map_err(|e| RepositoryError::DatabaseError(e.to_string()))?;
+        Ok(models.into_iter().map(Agent::from).collect())
     }
 }
 ```

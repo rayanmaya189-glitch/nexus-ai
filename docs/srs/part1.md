@@ -4,7 +4,7 @@ I will create the **complete final SRS** for:
 
 ## Enterprise Agentic AI Intelligence Platform
 
-### DDD + TDD + Microservices + gRPC + NATS JetStream + Ollama + Hybrid RAG
+### DDD + TDD + Modular Monolith + Rust Trait Interfaces + NATS JetStream + Ollama + Hybrid RAG + SeaORM
 
 **Version: 1.0 Final Architecture Specification**
 
@@ -15,23 +15,23 @@ The final SRS will contain:
 1. Executive Summary & Business Requirements
 2. System Scope & Architecture Overview
 3. DDD Bounded Context Design
-4. Complete Microservice Catalogue
+4. Complete Module Catalogue
 5. AI Model Architecture (Ollama)
 6. Agent Architecture
 7. RAG Architecture
 8. Real-Time Database Intelligence
 9. Vision AI Architecture
 10. Knowledge Graph Architecture
-11. gRPC Service Design
-12. NATS JetStream Event Architecture
-13. Database Design
+11. Rust Trait Interface Design (replaces gRPC internally)
+12. NATS JetStream Event Architecture (versioned)
+13. Database Design (Schema-per-Module, SeaORM)
 14. Security Architecture
 15. Multi-Tenant Architecture
-16. API Specifications
+16. API Specifications (versioned)
 17. TDD Strategy
 18. Testing Architecture
 19. DevOps Architecture
-20. Deployment Architecture
+20. Deployment Architecture (Single Binary)
 21. Monitoring & Observability
 22. Disaster Recovery
 23. Roadmap
@@ -48,20 +48,20 @@ The final SRS will contain:
 
 # Document Information
 
-| Item                    | Description                        |
-| ----------------------- | ---------------------------------- |
-| Product Name            | AeroXe Nexus AI                    |
-| Domain                  | aeroxenexus.com                    |
-| Product Category        | Enterprise Agentic AI Platform     |
-| Architecture            | DDD Microservices                  |
-| Development Methodology | TDD                                |
-| Internal Communication  | gRPC                               |
-| Event System            | NATS JetStream                     |
-| AI Runtime              | Ollama                             |
-| Deployment              | Private Infrastructure             |
-| Backend                 | Rust                               |
-| ORM                     | SeaORM                             |
-| Database                | PostgreSQL + pgvector + Apache AGE |
+| Item                    | Description                                     |
+| ----------------------- | ----------------------------------------------- |
+| Product Name            | AeroXe Nexus AI                                 |
+| Domain                  | aeroxenexus.com                                 |
+| Product Category        | Enterprise Agentic AI Platform                  |
+| Architecture            | **DDD Modular Monolith** (single binary)        |
+| Development Methodology | TDD                                             |
+| Internal Communication  | **Rust trait interfaces** (in-process, no gRPC) |
+| Event System            | **NATS JetStream** (versioned subjects)          |
+| AI Runtime              | Ollama                                          |
+| Deployment              | Private Infrastructure (single binary)          |
+| Backend                 | Rust (edition 2024)                             |
+| ORM                     | **SeaORM** (no raw SQL)                         |
+| Database                | **Shared PostgreSQL, Schema-per-Module** + pgvector + Apache AGE |
 
 ---
 
@@ -235,41 +235,43 @@ Production
 
 ---
 
-## 4.3 Microservice Architecture
+## 4.3 Modular Monolith Architecture
+
+All modules live in a **single Rust binary** under `src/modules/`. Each module is a bounded context — not a separate microservice.
 
 Each domain shall:
 
-* Own its database
-* Own business rules
-* Communicate through contracts
-* Deploy independently
+* Own its business rules
+* Own its database **schema** (not separate database)
+* Communicate through **Rust trait interfaces**
+* Deploy as part of a single binary (extractable to separate service later)
 
 ---
 
 ## 4.4 Communication Strategy
 
-Synchronous:
+Synchronous (in-process):
 
 ```
-gRPC
+Rust trait interfaces (< 1μs dispatch)
 ```
 
 Asynchronous:
 
 ```
-NATS JetStream
+NATS JetStream (versioned subjects: aeroxe.v1.*)
 ```
 
 External:
 
 ```
-REST
-WebSocket
+REST (/api/v1/*)
+WebSocket (/ws/v1/*)
 ```
 
 ---
 
-# 5. Complete System Architecture
+# 5. Complete System Architecture (Modular Monolith)
 
 ```
                          Users
@@ -277,17 +279,16 @@ WebSocket
 
                            |
 
-                    Nexus API Gateway
+                    gateway (axum HTTP/WS)
+
+                    src/modules/gateway/
 
 
                            |
 
-                 AI Agent Orchestrator
+                 Rust Trait Interfaces
 
-
-                           |
-
-                 NATS JetStream
+                 (in-process, < 1μs dispatch)
 
 
                            |
@@ -295,25 +296,21 @@ WebSocket
 ================================================
 
 
-                 AI Microservices
+                 AI Modules (src/modules/)
 
 
 ================================================
 
 
-Customer Agent
+identity     customer     ai-gateway
 
-ERP Agent
+agent        rag          vision
 
-Broadband Agent
+sql-agent    memory       workflow
 
-Developer Agent
+security     audit        notification
 
-Vision Agent
-
-Security Agent
-
-Analytics Agent
+model-registry  config    ecosystem
 
 
 ================================================
@@ -528,30 +525,38 @@ Responsibilities:
 
 ---
 
-# 7. Microservice Catalogue
+# 7. Module Catalogue (src/modules/)
 
-## 7.1 API Gateway Service
+## 7.1 Gateway Module
 
 Name:
 
 ```
-nexus-api-gateway
+gateway (src/modules/gateway/)
 ```
 
 Responsibilities:
 
-* Authentication
+* Authentication (JWT + API key)
 * Request routing
-* Rate limiting
+* Rate limiting (token bucket, Redis)
+* API versioning (`/api/v1/*`)
+* Request schema validation
 
 ---
 
-## 7.2 Identity Service
+## 7.2 Identity Module
 
 Name:
 
 ```
-identity-service
+identity (src/modules/identity/)
+```
+
+Schema:
+
+```
+identity_
 ```
 
 Responsibilities:
@@ -559,79 +564,137 @@ Responsibilities:
 * Users
 * Roles
 * Permissions
-* Tenant isolation
+* Multi-tenant isolation
+* JWT generation/validation
+* KYC management
 
 ---
 
-## 7.3 Agent Orchestrator Service
+## 7.3 Customer Module
 
 Name:
 
 ```
-agent-orchestrator-service
+customer (src/modules/customer/)  ← NEW
+```
+
+Schema:
+
+```
+customer_
 ```
 
 Responsibilities:
 
-* Agent execution
-* Planning
-* Tool selection
+* Customer lifecycle management
+* Profile management
+* Address management
+* Customer status (active, suspended, inactive, archived)
 
 ---
 
-## 7.4 RAG Service
+## 7.4 Agent Module
 
 Name:
 
 ```
-rag-service
+agent (src/modules/agent/)
+```
+
+Schema:
+
+```
+agent_
+```
+
+Responsibilities:
+
+* Agent lifecycle
+* Planning
+* Tool selection
+* Execution tracking
+
+---
+
+## 7.5 RAG Module
+
+Name:
+
+```
+rag (src/modules/rag/)
+```
+
+Schema:
+
+```
+rag_
 ```
 
 Responsibilities:
 
 * Document ingestion
-* Embeddings
-* Search
+* Embeddings (pgvector)
+* Semantic search
+* Document set management
 
 ---
 
-## 7.5 Vision Service
+## 7.6 Vision Module
 
 Name:
 
 ```
-vision-service
+vision (src/modules/vision/)
+```
+
+Schema:
+
+```
+vision_
 ```
 
 Responsibilities:
 
-* Image processing
+* Image analysis
 * OCR
-* Vision reasoning
+* Visual reasoning (Qwen3-VL)
 
 ---
 
-## 7.6 Memory Service
+## 7.7 Memory Module
 
 Name:
 
 ```
-memory-service
+memory (src/modules/memory/)
+```
+
+Schema:
+
+```
+memory_
 ```
 
 Responsibilities:
 
-* Conversation memory
-* User context
+* Short-term memory (Redis)
+* Long-term memory (pgvector)
+* Conversation context
 
 ---
 
-## 7.7 SQL Intelligence Service
+## 7.8 SQL Intelligence Module
 
 Name:
 
 ```
-sql-agent-service
+sql-agent (src/modules/sql-agent/)
+```
+
+Schema:
+
+```
+sql_
 ```
 
 Responsibilities:
@@ -642,59 +705,74 @@ Responsibilities:
 
 ---
 
-## 7.8 Workflow Service
+## 7.9 Workflow Module
 
 Name:
 
 ```
-workflow-service
+workflow (src/modules/workflow/)
+```
+
+Schema:
+
+```
+workflow_
 ```
 
 Responsibilities:
 
-* Automation
+* Business automation
 * Approvals
-* Tasks
+* Task management
 
 ---
 
-## 7.9 Security AI Service
+## 7.10 Security Module
 
 Name:
 
 ```
-security-ai-service
+security (src/modules/security/)
+```
+
+Schema:
+
+```
+security_
 ```
 
 Responsibilities:
 
 * Security analysis
-* Audit intelligence
+* Threat detection
+* Code review
 
 ---
 
-# 8. Service Communication
+# 8. Module Communication
 
-## gRPC
+## Synchronous (In-Process Trait Interfaces)
 
 Example:
 
 ```
-Agent Service
+agent module
 
         |
 
-        | gRPC
+        | trait method call (< 1μs)
 
         |
 
-RAG Service
+rag module
 
 ```
 
+No gRPC required — all modules are in the same binary and communicate through Rust trait interfaces.
+
 ---
 
-## NATS Events
+## NATS Events (Versioned)
 
 Example:
 
@@ -703,7 +781,7 @@ Document Uploaded
 
         |
 
-nexus.rag.document.created
+aeroxe.v1.rag.document.uploaded
 
         |
 
@@ -717,52 +795,59 @@ Vector Update
 
 ---
 
-# 9. NATS JetStream Design
+# 9. NATS JetStream Design (Versioned Subjects)
 
-Subjects:
+All NATS subjects include the API version prefix:
 
 ```
-nexus.ai.request
+aeroxe.v1.ai.request.created
 
-nexus.agent.event
+aeroxe.v1.agent.started
 
-nexus.rag.document
+aeroxe.v1.rag.document.uploaded
 
-nexus.vision.process
+aeroxe.v1.vision.analysis.completed
 
-nexus.workflow.event
+aeroxe.v1.workflow.started
 
-nexus.audit.event
+aeroxe.v1.audit.event.logged
+
+aeroxe.v1.customer.customer.created
 
 ```
 
 ---
 
-# 10. Database Architecture
+# 10. Database Architecture (Schema-per-Module)
 
-Each service owns database:
-
-```
-identity_db
-
-agent_db
-
-rag_db
-
-memory_db
-
-workflow_db
-
-audit_db
-
-vision_db
+All modules share a single PostgreSQL cluster. Each module owns a schema (namespace), not a separate database.
 
 ```
+Shared PostgreSQL Cluster
+
+├── Schema: identity_   → identity module
+├── Schema: customer_   → customer module  ← NEW
+├── Schema: ai_         → ai-gateway module
+├── Schema: agent_      → agent module
+├── Schema: rag_        → rag module
+├── Schema: vision_     → vision module
+├── Schema: sql_        → sql-agent module
+├── Schema: memory_     → memory module
+├── Schema: workflow_   → workflow module
+├── Schema: security_   → security module
+├── Schema: audit_      → audit module
+├── Schema: notif_      → notification module
+├── Schema: config_     → config module
+├── Schema: models_     → model-registry module
+└── Schema: eco_        → ecosystem module
+```
+
+All access through **SeaORM** — no raw SQL.
 
 Technology:
 
 ```
-PostgreSQL 18
+PostgreSQL 18 (single cluster)
 
 pgvector
 

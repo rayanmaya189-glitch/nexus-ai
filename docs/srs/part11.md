@@ -25,7 +25,7 @@ It connects business applications and provides:
 
 # 2. AeroXe Ecosystem Overview
 
-```text id="aeroxeeco01"
+```text
                          AeroXe Nexus AI
 
 
@@ -37,29 +37,21 @@ It connects business applications and provides:
 
                     Business Intelligence Layer
 
+                    (src/modules/*)
+
 
 ================================================================
 
 
-AeroXe Broadband
+identity       customer      ai-gateway
 
-AeroXe ERP
+agent          rag           vision
 
-AeroXe CRM
+sql-agent      memory        workflow
 
-AeroXe HRMS
+security       audit         notification
 
-AeroXe Billing
-
-AeroXe Pay
-
-AeroXe Exchange
-
-AeroXe Blockchain
-
-AeroXe Cibil
-
-AeroXe Solar
+ecosystem
 
 
 ================================================================
@@ -71,15 +63,15 @@ AeroXe Solar
 ================================================================
 
 
-gRPC
+REST API (/api/v1/*)
 
-REST API
+WebSocket (/ws/v1/*)
 
-WebSocket
+NATS Events (aeroxe.v1.*)
 
-NATS Events
+Database Connectors (SeaORM)
 
-Database Connectors
+Trait Interfaces (in-process)
 
 
 ================================================================
@@ -148,29 +140,31 @@ Responsibilities:
 
 ---
 
-# 5. Event-Driven Integration
+# 5. Event-Driven Integration (Versioned)
 
 Using:
 
 ```
-NATS JetStream
+NATS JetStream — versioned subjects (aeroxe.v1.*)
 ```
 
 Example:
 
 Customer Created:
 
-```json id="customercreated01"
+```json
 {
 "event":
 
-"customer.created",
+"aeroxe.v1.customer.customer.created",
 
+"api_version": "v1",
+
+"event_type": "CustomerCreated",
 
 "customer_id":
 
 "12345",
-
 
 "tenant_id":
 
@@ -184,7 +178,7 @@ Customer Created:
 
 Consumers:
 
-```text id="consumer01"
+```text
 
 AI Sales Agent
 

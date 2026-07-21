@@ -4,18 +4,17 @@
 
 # Part 7 — API Specification + Frontend Integration + Agent Workflow Design
 
-## REST + WebSocket + gRPC Gateway + AI Agent Communication
+## REST + WebSocket + Trait-Based Module Dispatch + AI Agent Communication
 
 ---
 
 # 1. API Architecture Overview
 
-AeroXe Nexus AI exposes APIs through a controlled gateway layer.
+AeroXe Nexus AI exposes APIs through a gateway module. Internal module communication uses Rust trait interfaces (not gRPC).
 
 Architecture:
 
 ```text
- id="9w8v3r"
                  Web / Mobile Apps
 
 
@@ -23,13 +22,15 @@ Architecture:
 
                        |
 
-                  HTTPS REST
+                  HTTPS REST (/api/v1/*)
 
                        |
 
                        |
 
-              Nexus API Gateway
+              gateway module
+
+              (axum HTTP/WS Server)
 
 
                        |
@@ -37,7 +38,7 @@ Architecture:
         =================================
 
 
-        REST              WebSocket
+        REST Handlers       WebSocket Handlers
 
 
          |                    |
@@ -46,10 +47,9 @@ Architecture:
          |                    |
 
 
-      gRPC Gateway        Streaming Gateway
+      Trait Method Calls    Streaming Relay
 
-
-         |                    |
+      (in-process)          (tokio channels)
 
 
         =================================
@@ -57,7 +57,7 @@ Architecture:
 
                        |
 
-              Internal Services
+              All Modules (src/modules/*)
 
 
                        |
@@ -65,7 +65,7 @@ Architecture:
         =================================
 
 
-        gRPC + NATS JetStream
+        Trait Interfaces + NATS JetStream
 
 
         =================================
@@ -81,12 +81,13 @@ Architecture:
 
 All APIs must support:
 
-* Versioning
+* Versioning (`/api/v1/*`)
 * Authentication
 * Tenant isolation
 * Rate limiting
 * Request tracing
 * Audit logging
+* Schema validation
 
 ---
 
@@ -1032,9 +1033,9 @@ TokenStreamViewer
 
 ---
 
-# 25. API Gateway Middleware
+# 25. Gateway Middleware Stack
 
-Every request passes:
+Every request passes through:
 
 ```
 Request ID
@@ -1042,7 +1043,12 @@ Request ID
 
  |
 
-Authentication
+API Version Check (/api/v{version}/)
+
+
+ |
+
+Authentication (JWT / API Key)
 
 
  |
@@ -1052,12 +1058,17 @@ Tenant Validation
 
  |
 
-Rate Limit
+Rate Limit (Token Bucket, Redis)
 
 
  |
 
-Authorization
+Request Schema Validation
+
+
+ |
+
+Authorization (RBAC + ABAC)
 
 
  |
@@ -1067,7 +1078,12 @@ Logging
 
  |
 
-Routing
+Versioned Router Dispatch
+
+
+ |
+
+Module Trait Method Call
 
 
 ```
@@ -1104,6 +1120,7 @@ Format:
 | API              | Target |
 | ---------------- | ------ |
 | Authentication   | <200ms |
+| Customer CRUD    | <100ms |
 | Chat First Token | <2s    |
 | RAG Search       | <500ms |
 | Agent Start      | <300ms |
@@ -1121,7 +1138,9 @@ Format:
                          |
 
 
-                 Nexus API Gateway
+                 gateway module (axum)
+
+                 src/modules/gateway/
 
 
                          |
@@ -1130,11 +1149,9 @@ Format:
 ================================================
 
 
- REST APIs
+ REST APIs (/api/v1/*)
 
- WebSocket Streaming
-
- gRPC Gateway
+ WebSocket Streaming (/ws/v1/*)
 
 
 ================================================
@@ -1146,19 +1163,21 @@ Format:
 ================================================
 
 
- Identity
+ identity (api/http/)
 
- Agent
+ customer (api/http/)  ← NEW
 
- RAG
+ agent (api/http/)
 
- Vision
+ rag (api/http/)
 
- SQL
+ vision (api/http/)
 
- Memory
+ sql-agent (api/http/)
 
- Workflow
+ memory (api/http/)
+
+ workflow (api/http/)
 
 
 ================================================
@@ -1178,9 +1197,10 @@ Format:
 
 Covered:
 
-✅ REST API Design
-✅ WebSocket Streaming
+✅ REST API Design (versioned)
+✅ WebSocket Streaming (versioned)
 ✅ Authentication APIs
+✅ **Customer APIs (NEW)**
 ✅ AI Chat API
 ✅ Agent APIs
 ✅ RAG APIs

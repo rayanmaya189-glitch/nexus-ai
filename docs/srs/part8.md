@@ -4,7 +4,7 @@
 
 # Part 8 — Complete TDD Strategy & Testing Architecture
 
-## Test Driven Development + AI Evaluation + Quality Engineering
+## Test Driven Development + Modular Monolith Testing + AI Evaluation
 
 ---
 
@@ -29,7 +29,7 @@ Development cycle:
               v
 
 
-        Write Test
+        Write Test (RED)
 
 
               |
@@ -38,7 +38,7 @@ Development cycle:
               v
 
 
-       Implement Code
+       Implement Code (GREEN)
 
 
               |
@@ -56,7 +56,16 @@ Development cycle:
               v
 
 
-       Integration Test
+       Integration Test (module tests with SeaORM)
+
+
+              |
+
+
+              v
+
+
+       Module Boundary Test (trait contract)
 
 
               |
@@ -187,42 +196,32 @@ fn agent_requires_permission()
 
 # 6. Testing Folder Structure
 
-Every microservice:
+Every module under `src/modules/<name>/`:
 
 ```text
-service-name/
+src/modules/<name>/
 
 
 ├── src/
 
+│   ├── domain/tests/          # Domain unit tests
+│   ├── application/commands/tests/  # Command handler tests
+│   └── api/http/tests/        # API endpoint tests
+
 
 ├── tests/
 
+│
+├── unit/                      # Cross-module unit tests
 
 │
-├── unit/
-
-
-│   ├── domain_test.rs
-
+├── integration/               # SeaORM + DB integration tests
 
 │
-├── integration/
-
-
-│   ├── database_test.rs
-
-
-│
-├── contract/
-
-
-│   ├── grpc_test.rs
-
+├── contract/                  # Module trait contract tests
 
 │
 ├── performance/
-
 
 │
 └── security/
@@ -232,32 +231,26 @@ service-name/
 
 ---
 
-# 7. Integration Testing
+# 7. Integration Testing (Modular Monolith)
 
 Purpose:
 
-Validate real components together.
+Validate real module implementations together.
+
+In a modular monolith, all modules are already in the same process — no container orchestration needed.
 
 Examples:
 
 ```
-Agent Service
-
+agent module
 +
-
-RAG Service
-
+rag module
 +
-
-PostgreSQL
-
+SeaORM + PostgreSQL
 +
-
-NATS
-
+NATS (test server)
 +
-
-Ollama
+Ollama (mock)
 
 ```
 
@@ -268,73 +261,64 @@ Ollama
 Technology:
 
 ```text
-Docker Compose Test Environment
+cargo test (single process)
 
 ```
 
-Contains:
+Supports:
 
 ```text
-PostgreSQL
+PostgreSQL (test container or local)
 
-Redis
+Redis (test container)
 
-NATS JetStream
+NATS JetStream (embedded test server)
 
-MinIO
-
-Ollama
-
-Elasticsearch
+Ollama (HTTP mock — wiremock)
 
 ```
+
+No Docker Compose required for unit/integration tests. All tests run with `cargo test`.
 
 ---
 
-# 9. gRPC Contract Testing
+# 9. Module Trait Contract Testing (Replaces gRPC Contract Tests)
 
-Problem:
+In a modular monolith, trait interfaces replace gRPC contracts.
 
-Service changes can break communication.
-
-Solution:
-
-## Proto Contract Testing
+## Trait Contract Testing with Mockall
 
 Example:
 
-Agent Service expects:
+Agent module expects:
 
-```protobuf
-rpc SearchKnowledge()
-
+```rust
+#[async_trait]
+pub trait RagService: Send + Sync {
+    async fn search(&self, query: SearchQuery) -> Result<SearchResults, RagError>;
+}
 ```
 
-RAG Service must always provide:
+Test:
 
-```protobuf
-rpc SearchKnowledge()
+```rust
+#[tokio::test]
+async fn test_agent_rag_contract() {
+    let mut mock_rag = MockRagService::new();
+    mock_rag.expect_search()
+        .returning(|_| Ok(SearchResults::default()));
 
-```
-
----
-
-Tools:
-
-```text
-Buf
-
-grpcurl
-
-Protocol Buffer Validation
-
+    let agent = AgentServiceImpl::new(Arc::new(mock_rag), /* ... */);
+    let result = agent.start_execution(valid_request()).await;
+    assert!(result.is_ok());
+}
 ```
 
 ---
 
-# 10. NATS Event Contract Testing
+# 10. NATS Event Contract Testing (Versioned Subjects)
 
-Every event has schema validation.
+Every event has versioned schema validation.
 
 Example:
 
@@ -342,11 +326,11 @@ Event:
 
 ```json
 {
-"type":
-"AgentCompleted",
+"type":"AgentCompleted",
 
-"version":
-"1.0",
+"version":"1.0",
+
+"api_version":"v1",
 
 "data":{}
 
@@ -359,19 +343,21 @@ Event:
 Validation:
 
 ```text
-Producer Test
+Publisher Test
 
 
        |
 
 
-Event Schema
+Event Schema (versioned)
+
+aeroxe.v1.agent.completed
 
 
        |
 
 
-Consumer Test
+Subscriber Test
 
 
 ```
@@ -1025,10 +1011,10 @@ A release is allowed only if:
 
 | Area             | Technology                  |
 | ---------------- | --------------------------- |
-| Rust Tests       | cargo test                  |
-| API Testing      | Postman/Newman              |
-| gRPC Testing     | grpcurl                     |
-| Contract Testing | Buf                         |
+| Rust Tests       | cargo test / cargo nextest  |
+| API Testing      | axum::test / reqwest        |
+| Module Contract  | mockall (trait mocking)     |
+| Contract Testing | mockall trait verification  |
 | Load Testing     | k6                          |
 | Security         | Trivy + Semgrep             |
 | Browser Testing  | Playwright                  |

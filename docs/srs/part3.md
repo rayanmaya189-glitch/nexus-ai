@@ -4,13 +4,13 @@
 
 # Part 3 — Communication Architecture Design
 
-## gRPC + Protocol Buffers + NATS JetStream Event Architecture
+## Rust Trait Interfaces (In-Process) + Versioned NATS JetStream Events + External gRPC (Optional)
 
 ---
 
 # 1. Communication Strategy Overview
 
-AeroXe Nexus AI follows a **hybrid communication architecture**.
+AeroXe Nexus AI follows a **hybrid communication architecture** optimized for modular monoliths.
 
 The communication model:
 
@@ -20,12 +20,12 @@ The communication model:
 
                            |
 
-                  REST / WebSocket / HTTPS
+                  REST / WebSocket / HTTPS (versioned: /api/v1/)
 
 
                            |
 
-                    API Gateway
+                    gateway Module
 
 
                            |
@@ -41,14 +41,25 @@ The communication model:
         Synchronous              Asynchronous
 
 
-            gRPC                  NATS JetStream
+    Rust Trait Interfaces     NATS JetStream (versioned)
+
+
+     (in-process,             (aeroxe.v1.module.event)
+      < 1μs dispatch)
 
 
              |                         |
 
-             |                         |
 
-     Service-to-Service        Event Driven Flow
+     Module-to-Module        Event Driven Flow
+
+
+================================================
+
+
+            External gRPC (optional, versioned service names)
+
+            tonic — for SDK / partner integrations only
 
 
 ```
@@ -69,26 +80,33 @@ Used by:
 Protocol:
 
 ```
-HTTPS REST
-WebSocket
-GraphQL (optional future)
+HTTPS REST (/api/v1/*)
+WebSocket (/ws/v1/*)
 ```
 
 ---
 
-## Internal Communication
+## Internal Synchronous Communication
 
-Used by:
+Modules communicate through **Rust trait interfaces** — no gRPC, no network.
 
-* Microservices
-* AI agents
-* Infrastructure services
-
-Protocol:
-
+```rust
+// Example: agent module calls rag module
+let docs = self.rag_service.search(SearchQuery {
+    query: request.task,
+    tenant_id: request.tenant_id,
+    limit: 5,
+}).await?;
 ```
-gRPC + Protobuf
-```
+
+Benefits:
+
+| Aspect | gRPC (Microservice) | Trait Interface (Modular Monolith) |
+|---|---|---|
+| Latency | 2-5ms | < 1μs (vtable dispatch) |
+| Serialization | Protobuf encode/decode | Zero — direct struct passing |
+| Type safety | Protobuf codegen | Rust compiler |
+| Testing | Need running services | Mockall mocks |
 
 ---
 
@@ -104,615 +122,330 @@ Used for:
 Protocol:
 
 ```
-NATS JetStream
+NATS JetStream (versioned subjects: aeroxe.v1.*)
 ```
 
 ---
 
-# 3. gRPC Architecture
+# 3. Trait Interface Architecture
 
-## Service Communication
+## Module Communication
 
 Example:
 
 ```text
-agent-orchestrator-service
+agent module
 
 
           |
 
-          | gRPC
+          | Rust trait method call
 
           |
 
-rag-service
+rag module
 
 
           |
 
-          | gRPC
+          | Rust trait method call
 
           |
 
-vector-search-service
+memory module
 
 ```
 
 ---
 
-# 4. gRPC Design Principles
+# 4. Trait Design Principles
 
-Every gRPC service must have:
+Every module exposes its public API as Rust traits:
 
-* Versioned protobuf contracts
-* Backward compatibility
+* Versioned trait methods (backward compatible)
 * Strong typing
-* Error standards
-* Authentication metadata
+* Error standards (`Result<T, E>`)
+* Authentication context in `RequestContext`
 
 Example:
 
-```
-grpc.metadata
-
-tenant-id
-user-id
-request-id
-authorization
+```rust
+pub trait IdentityService: Send + Sync {
+    async fn verify_token(&self, token: &str) -> Result<JWTClaims, IdentityError>;
+    async fn check_permission(&self, req: PermissionRequest) -> Result<bool, IdentityError>;
+}
 ```
 
 ---
 
-# 5. Proto Repository Structure
+# 5. Module API Trait Repository
 
-Recommended:
+All module traits live in each module's `api/mod.rs`:
 
 ```
-aeroxe-proto/
+src/modules/
 
-
-├── common/
-
-│
-├── identity/
-
-│
-├── agent/
-
-│
-├── rag/
-
-│
-├── vision/
-
-│
-├── workflow/
-
-│
-├── memory/
-
-│
-├── security/
-
-│
-└── audit/
+├── identity/api/mod.rs      → IdentityService trait
+├── customer/api/mod.rs      → CustomerService trait  ← NEW
+├── agent/api/mod.rs         → AgentService trait
+├── rag/api/mod.rs           → RagService trait
+├── vision/api/mod.rs        → VisionService trait
+├── memory/api/mod.rs        → MemoryService trait
+├── sql-agent/api/mod.rs     → SQLAgentService trait
+├── workflow/api/mod.rs      → WorkflowService trait
+├── security/api/mod.rs      → SecurityService trait
+├── audit/api/mod.rs         → AuditService trait
 
 ```
 
 ---
 
-# 6. Common Proto Definition
+# 6. Common Request Context
 
 File:
 
 ```
-common/common.proto
+src/modules/common/request_context.rs
 ```
 
-```protobuf
-syntax = "proto3";
-
-
-package aeroxe.common;
-
-
-message RequestContext {
-
- string request_id = 1;
-
- string tenant_id = 2;
-
- string user_id = 3;
-
- string trace_id = 4;
-
+```rust
+pub struct RequestContext {
+    pub request_id: String,
+    pub tenant_id: String,
+    pub user_id: String,
+    pub trace_id: String,
+    pub api_version: String,    // e.g., "v1"
 }
 
-
-message ErrorResponse {
-
- string code = 1;
-
- string message = 2;
-
- string details = 3;
-
+pub struct ErrorResponse {
+    pub code: String,
+    pub message: String,
+    pub request_id: String,
+    pub api_version: String,
+    pub timestamp: String,
 }
-
 ```
 
 ---
 
-# 7. Identity Service gRPC
+# 7. Identity Module API Trait
 
-Service:
-
-```
-identity-service
-```
-
-Proto:
+Module:
 
 ```
-identity.proto
+identity (src/modules/identity/)
 ```
 
-```protobuf
-syntax = "proto3";
+Trait:
 
-
-package aeroxe.identity;
-
-
-
-service IdentityService {
-
-
- rpc CreateUser(CreateUserRequest)
- returns(CreateUserResponse);
-
-
- rpc Authenticate(AuthRequest)
- returns(AuthResponse);
-
-
- rpc CheckPermission(PermissionRequest)
- returns(PermissionResponse);
-
-
+```rust
+#[async_trait]
+pub trait IdentityService: Send + Sync {
+    async fn authenticate(&self, req: AuthRequest) -> Result<AuthResponse, IdentityError>;
+    async fn verify_token(&self, token: &str) -> Result<JWTClaims, IdentityError>;
+    async fn check_permission(&self, req: PermissionRequest) -> Result<bool, IdentityError>;
+    async fn validate_tenant(&self, tenant_id: TenantId) -> Result<Tenant, IdentityError>;
+    async fn create_user(&self, req: CreateUserRequest) -> Result<User, IdentityError>;
+    async fn get_user(&self, id: UserId) -> Result<Option<User>, IdentityError>;
+    async fn assign_role(&self, req: AssignRoleRequest) -> Result<(), IdentityError>;
 }
-
-
-message CreateUserRequest {
-
-string tenant_id = 1;
-
-string email = 2;
-
-string password = 3;
-
-}
-
-
-message CreateUserResponse {
-
-string user_id = 1;
-
-}
-
 ```
 
 ---
 
-# 8. AI Gateway gRPC
+# 8. Customer Module API Trait (NEW)
 
-Service:
+Module:
 
 ```
-ai-gateway-service
+customer (src/modules/customer/)
 ```
 
-Purpose:
-
-Central AI request processing.
-
-```protobuf
-service AIGatewayService {
-
-
-rpc SubmitRequest(AIRequest)
-
-returns(AIResponse);
-
-
-
-rpc StreamResponse(AIRequest)
-
-returns(stream AIChunk);
-
-
+```rust
+#[async_trait]
+pub trait CustomerService: Send + Sync {
+    async fn create_customer(&self, req: CreateCustomerRequest) -> Result<Customer, CustomerError>;
+    async fn get_customer(&self, id: CustomerId, tenant_id: TenantId) -> Result<Option<Customer>, CustomerError>;
+    async fn suspend_customer(&self, id: CustomerId, tenant_id: TenantId, reason: String) -> Result<Customer, CustomerError>;
+    async fn activate_customer(&self, id: CustomerId, tenant_id: TenantId) -> Result<Customer, CustomerError>;
+    async fn search_customers(&self, query: CustomerSearchQuery) -> Result<Vec<Customer>, CustomerError>;
 }
-
-
-message AIRequest {
-
-
-string session_id = 1;
-
-string prompt = 2;
-
-string agent = 3;
-
-}
-
-
-message AIResponse {
-
-
-string response = 1;
-
-string model = 2;
-
-}
-
 ```
 
 ---
 
-# 9. Agent Orchestrator gRPC
+# 9. AI Gateway Module API Trait
 
-Service:
+Module:
 
 ```
-agent-orchestrator-service
+ai-gateway (src/modules/ai-gateway/)
 ```
 
-Purpose:
-
-Manage AI execution.
-
-```protobuf
-service AgentService {
-
-
-rpc StartExecution(StartAgentRequest)
-
-returns(AgentExecutionResponse);
-
-
-
-rpc GetExecutionStatus(StatusRequest)
-
-returns(StatusResponse);
-
-
+```rust
+#[async_trait]
+pub trait AIGatewayService: Send + Sync {
+    async fn submit_request(&self, req: AIRequest) -> Result<AIResponse, AIGatewayError>;
+    async fn stream_response(&self, req: AIRequest) -> Result<Receiver<AIChunk>, AIGatewayError>;
+    async fn cancel_request(&self, id: RequestId) -> Result<(), AIGatewayError>;
 }
-
-
-message StartAgentRequest {
-
-
-string task = 1;
-
-string agent_type = 2;
-
-string context = 3;
-
-
-}
-
 ```
 
 ---
 
-# 10. RAG Service gRPC
+# 10. Agent Module API Trait
 
-Service:
+Module:
 
 ```
-rag-service
+agent (src/modules/agent/)
 ```
 
-Purpose:
-
-Knowledge retrieval.
-
-```protobuf
-service RagService {
-
-
-rpc SearchKnowledge(SearchRequest)
-
-returns(SearchResponse);
-
-
-
-rpc UploadDocument(DocumentRequest)
-
-returns(DocumentResponse);
-
-
-
+```rust
+#[async_trait]
+pub trait AgentService: Send + Sync {
+    async fn start_execution(&self, req: StartAgentRequest) -> Result<ExecutionResponse, AgentError>;
+    async fn get_execution_status(&self, id: ExecutionId) -> Result<ExecutionStatus, AgentError>;
+    async fn stream_execution(&self, req: StreamRequest) -> Result<Receiver<ExecutionEvent>, AgentError>;
 }
-
-
-
-message SearchRequest {
-
-
-string query = 1;
-
-
-int32 limit = 2;
-
-
-}
-
-
-message SearchResponse {
-
-
-repeated Document documents = 1;
-
-
-}
-
 ```
 
 ---
 
-# 11. Vision Service gRPC
+# 11. RAG Module API Trait
 
-Service:
-
-```
-vision-service
-```
-
-Model:
+Module:
 
 ```
-Ollama Qwen3-VL:4B
+rag (src/modules/rag/)
 ```
 
-```protobuf
-service VisionService {
-
-
-rpc AnalyzeImage(ImageRequest)
-
-returns(ImageAnalysisResponse);
-
-
-
-rpc ExtractText(ImageRequest)
-
-returns(OCRResponse);
-
-
+```rust
+#[async_trait]
+pub trait RagService: Send + Sync {
+    async fn search(&self, query: SearchQuery) -> Result<SearchResults, RagError>;
+    async fn upload_document(&self, req: UploadRequest) -> Result<DocumentStatus, RagError>;
+    async fn get_document_status(&self, id: DocumentId) -> Result<Option<DocumentStatus>, RagError>;
 }
-
-
-message ImageRequest {
-
-
-bytes image = 1;
-
-string type = 2;
-
-
-}
-
-
-message ImageAnalysisResponse {
-
-
-string description = 1;
-
-
-float confidence = 2;
-
-
-}
-
 ```
 
 ---
 
-# 12. SQL Intelligence Service gRPC
+# 12. Vision Module API Trait
 
-Service:
+Module:
 
 ```
-sql-agent-service
+vision (src/modules/vision/)
 ```
 
-Purpose:
-
-Safe business data intelligence.
-
-```protobuf
-service SQLService {
-
-
-rpc GenerateQuery(QueryRequest)
-
-returns(SQLResponse);
-
-
-
-rpc ExecuteQuery(SQLRequest)
-
-returns(ResultResponse);
-
-
+```rust
+#[async_trait]
+pub trait VisionService: Send + Sync {
+    async fn analyze_image(&self, req: ImageRequest) -> Result<ImageAnalysisResponse, VisionError>;
+    async fn extract_text(&self, req: ImageRequest) -> Result<OCRResponse, VisionError>;
 }
-
-
-message QueryRequest {
-
-
-string question = 1;
-
-
-string database = 2;
-
-
-}
-
-
 ```
 
 ---
 
-# 13. Memory Service gRPC
+# 13. SQL Agent Module API Trait
 
-Service:
+Module:
 
 ```
-memory-service
+sql-agent (src/modules/sql-agent/)
 ```
 
-```protobuf
-service MemoryService {
-
-
-rpc StoreMemory(StoreMemoryRequest)
-
-returns(MemoryResponse);
-
-
-
-rpc SearchMemory(SearchMemoryRequest)
-
-returns(MemoryList);
-
-
+```rust
+#[async_trait]
+pub trait SQLAgentService: Send + Sync {
+    async fn generate_query(&self, req: QueryRequest) -> Result<SQLResponse, SQLError>;
+    async fn execute_query(&self, req: SQLRequest) -> Result<ResultResponse, SQLError>;
 }
-
-
-message StoreMemoryRequest {
-
-
-string user_id = 1;
-
-
-string content = 2;
-
-
-string type = 3;
-
-
-}
-
 ```
 
 ---
 
-# 14. Workflow Service gRPC
+# 14. Memory Module API Trait
 
-Service:
+Module:
 
 ```
-workflow-service
+memory (src/modules/memory/)
 ```
 
-```protobuf
-service WorkflowService {
-
-
-rpc StartWorkflow(StartWorkflowRequest)
-
-returns(WorkflowResponse);
-
-
-
-rpc GetWorkflowStatus(StatusRequest)
-
-returns(StatusResponse);
-
-
+```rust
+#[async_trait]
+pub trait MemoryService: Send + Sync {
+    async fn store(&self, req: StoreMemoryRequest) -> Result<(), MemoryError>;
+    async fn search(&self, req: SearchMemoryRequest) -> Result<Vec<MemoryItem>, MemoryError>;
+    async fn get_conversation_context(&self, session_id: SessionId) -> Result<Vec<Message>, MemoryError>;
 }
-
 ```
 
 ---
 
-# 15. Security AI Service gRPC
+# 15. Workflow Module API Trait
 
-Service:
-
-```
-security-ai-service
-```
-
-Model:
+Module:
 
 ```
-WhiteRabbitNeo 7B
+workflow (src/modules/workflow/)
 ```
 
-```protobuf
-service SecurityService {
-
-
-rpc AnalyzeSecurity(SecurityRequest)
-
-returns(SecurityReport);
-
-
+```rust
+#[async_trait]
+pub trait WorkflowService: Send + Sync {
+    async fn start_workflow(&self, req: StartWorkflowRequest) -> Result<WorkflowResponse, WorkflowError>;
+    async fn get_status(&self, id: WorkflowId) -> Result<WorkflowStatus, WorkflowError>;
+    async fn approve_step(&self, req: ApproveRequest) -> Result<(), WorkflowError>;
 }
-
-
-message SecurityRequest {
-
-
-string target = 1;
-
-
-string type = 2;
-
-
-}
-
 ```
 
 ---
 
-# 16. gRPC Error Standards
+# 16. External gRPC (Optional — for SDK/Partner Integrations)
 
-All services use:
+For external integrations (not internal module comms):
 
 ```protobuf
-enum ErrorCode {
+// proto/identity/v1/auth_service.proto
+package identity.v1;
 
-
-UNKNOWN = 0;
-
-
-INVALID_REQUEST = 1;
-
-
-UNAUTHORIZED = 2;
-
-
-FORBIDDEN = 3;
-
-
-NOT_FOUND = 4;
-
-
-TIMEOUT = 5;
-
-
-MODEL_ERROR = 6;
-
-
-DATABASE_ERROR = 7;
-
-
+service AuthService {
+    rpc Authenticate(AuthRequest) returns (AuthResponse);
+    rpc VerifyToken(VerifyTokenRequest) returns (JWTClaims);
 }
 
+// proto/customer/v1/customer_service.proto
+package customer.v1;
+
+service CustomerService {
+    rpc CreateCustomer(CreateCustomerRequest) returns (Customer);
+    rpc GetCustomer(GetCustomerRequest) returns (Customer);
+}
+```
+
+All gRPC packages include version (`v1`) in the namespace.
+
+---
+
+# 17. Error Standards
+
+All modules use Rust `Result<T, E>`:
+
+```rust
+pub enum CommonError {
+    Unknown,
+    InvalidRequest(String),
+    Unauthorized,
+    Forbidden,
+    NotFound(String),
+    Timeout,
+    ModelError(String),
+    DatabaseError(String),
+}
 ```
 
 ---

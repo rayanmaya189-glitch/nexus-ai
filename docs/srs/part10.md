@@ -62,17 +62,19 @@ Architecture:
 ================================================================
 
 
-                    Nexus API Gateway
+                    gateway module (axum HTTP/WS)
+
+                    /api/v1/*, /ws/v1/*
 
 
                          |
 
-                  REST + WebSocket
+                  Trait Interfaces (in-process)
 
 
                          |
 
-                    AI Services
+                    All Modules (src/modules/*)
 
 
 ================================================================
@@ -1026,9 +1028,7 @@ Web:
 | Chat First Token | <2s    |
 | WebSocket Delay  | <100ms |
 
----
-
-# 33. Frontend Security
+---# 33. Frontend Security
 
 Protection:
 
@@ -1083,6 +1083,12 @@ Knowledge Center
       |
 
 
+Customer Management  ← NEW
+
+
+      |
+
+
 Admin Portal
 
 
@@ -1099,6 +1105,7 @@ Admin Portal
 Android Kotlin
 
 
+
 iOS Swift
 
 
@@ -1112,11 +1119,9 @@ iOS Swift
 ================================================================
 
 
-REST
+REST (/api/v1/*)
 
-WebSocket
-
-gRPC Gateway
+WebSocket (/ws/v1/*)
 
 
 ================================================================

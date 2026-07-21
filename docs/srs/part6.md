@@ -4,19 +4,19 @@
 
 # Part 6 — DevOps, Deployment & Infrastructure Architecture
 
-## Docker + Kubernetes + GPU AI Runtime + CI/CD + Observability
+## Single Binary + Modular Monolith + GPU AI Runtime + CI/CD + Observability
 
 ---
 
 # 1. Infrastructure Architecture Overview
 
-AeroXe Nexus AI is designed for **private infrastructure first** deployment.
+AeroXe Nexus AI is designed for **single binary deployment** (modular monolith).
 
 Deployment goals:
 
+* **Single Rust binary** containing all modules
 * Run offline after model download
 * Support local GPU inference
-* Scale AI workloads independently
 * Maintain enterprise security
 * Enable future cloud/hybrid deployment
 
@@ -39,37 +39,28 @@ Deployment goals:
 
                                 |
 
-                     Nexus API Gateway
+                     gateway (axum HTTP/WS)
 
-
-                                |
-
-================================================================
-
-
-                         Kubernetes Cluster
+                     Single Binary: aeroxe-nexus
 
 
 ================================================================
 
 
- Identity Service
+                         Application Layer
 
- AI Gateway
+                         (all in one process)
 
- Agent Orchestrator
 
- RAG Service
+================================================================
 
- Vision Service
 
- SQL Agent
+ All Modules (src/modules/)
 
- Memory Service
-
- Workflow Service
-
- Audit Service
+ identity | customer | agent | rag | vision
+ sql-agent | memory | workflow | security
+ audit | notification | model-registry
+ config | ecosystem
 
 
 ================================================================
@@ -81,7 +72,7 @@ Deployment goals:
 ================================================================
 
 
- PostgreSQL Cluster
+ PostgreSQL Cluster 18 (Schema-per-Module)
 
  Redis Cluster
 
@@ -104,37 +95,40 @@ Deployment goals:
  Ollama GPU Nodes
 
 
- Mistral
-
-Qwen
-
-Llama
-
-Command-R
-
-Vision Models
+ LFM | Hermes3 | Qwen | Llama | Command-R | WhiteRabbitNeo
 
 
 ```
 
 ---
 
-# 3. Container Architecture
+# 3. Single Binary Architecture
 
-Every microservice runs as an independent container.
+The entire application compiles to a single Rust binary.
 
 Example:
 
 ```text
-agent-orchestrator-service
+aeroxe-nexus (single binary)
 
+├── All modules compiled in
+├── Single axum HTTP/WS server (port 8080)
+├── Shared PostgreSQL connection pool (SeaORM)
+├── Shared Redis connection
+├── Shared NATS connection
+├── Shared Ollama HTTP client
 
-Docker Container
+```
 
+Benefits:
 
-├── Application
-
-├── gRPC Server
+| Aspect | Microservices (N containers) | Modular Monolith (1 binary) |
+|---|---|---|
+| Deployment | Docker Compose / K8s | Single systemd service |
+| Startup | Minutes | < 1 second |
+| Debugging | Cross-container tracing | Single process |
+| Latency | 2-5ms (gRPC) | < 1μs (trait call) |
+| Resource usage | N runtimes | 1 runtime |
 
 ├── NATS Client
 

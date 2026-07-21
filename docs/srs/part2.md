@@ -4,23 +4,23 @@
 
 # Part 2 — Complete DDD Architecture Design
 
-## Domain-Driven Design (DDD) + Microservices + TDD
+## Domain-Driven Design (DDD) + Modular Monolith + SeaORM + TDD
 
 ---
 
 # 1. DDD Architecture Overview
 
-AeroXe Nexus AI is designed using **Domain-Driven Design principles**.
+AeroXe Nexus AI is designed using **Domain-Driven Design principles** as a **Modular Monolith**.
 
-The system is divided into independent **Bounded Contexts**.
+The system is divided into independent **Bounded Contexts** under `src/modules/`.
 
 Each bounded context:
 
 * Owns its business logic
-* Owns its database
-* Exposes contracts through gRPC
-* Publishes events through NATS JetStream
-* Has independent deployment lifecycle
+* Owns its database **schema** (shared PostgreSQL via SeaORM)
+* Exposes public API through **Rust trait interfaces** (in-process)
+* Publishes events through **NATS JetStream** (versioned subjects)
+* Deploys as part of a single binary (extractable later)
 
 ---
 
@@ -40,16 +40,16 @@ Each bounded context:
               ---------------------------------
 
 
-        Identity        AI Gateway       Agent Platform
+     identity    customer     ai-gateway    agent
 
 
-           |                |                 |
+        |           |             |           |
 
 
-           |                |                 |
+        |           |             |           |
 
 
-        Security       Request Mgmt     AI Execution
+    security    workflow      rag        vision
 
 
                                |
@@ -63,29 +63,32 @@ Each bounded context:
               ---------------------------------
 
 
-       RAG          Vision          SQL Intelligence
+    sql-agent    memory       audit        notification
 
 
-        |             |                   |
+        |          |             |              |
 
 
-        |             |                   |
+        |          |             |              |
 
 
-   Knowledge     Image AI          Business Data
+   Business     Context      Compliance    Alerts
 
-
-
-              ---------------------------------
-
-              Support Domains
+    Data        Memory
 
 
               ---------------------------------
 
+              Infrastructure Modules
 
-       Memory        Workflow        Audit
 
+              ---------------------------------
+
+
+   model-registry    config         ecosystem
+
+
+              (stateless gateway module)
 
 ```
 
@@ -95,57 +98,57 @@ Each bounded context:
 
 DDD classification:
 
-| Domain                | Type              |
-| --------------------- | ----------------- |
-| Agent Orchestration   | Core Domain       |
-| AI Gateway            | Core Domain       |
-| RAG Intelligence      | Core Domain       |
-| Vision Intelligence   | Core Domain       |
-| SQL Intelligence      | Core Domain       |
-| Security Intelligence | Core Domain       |
-| Identity              | Supporting Domain |
-| Memory                | Supporting Domain |
-| Audit                 | Supporting Domain |
-| Workflow              | Supporting Domain |
+| Domain                | Type              | Module Name | Schema Prefix |
+| --------------------- | ----------------- | ----------- | ------------- |
+| Agent Orchestration   | Core Domain       | `agent`     | `agent_`      |
+| AI Gateway            | Core Domain       | `ai-gateway`| `ai_`         |
+| RAG Intelligence      | Core Domain       | `rag`       | `rag_`        |
+| Vision Intelligence   | Core Domain       | `vision`    | `vision_`     |
+| SQL Intelligence      | Core Domain       | `sql-agent` | `sql_`        |
+| Security Intelligence | Core Domain       | `security`  | `security_`   |
+| Identity              | Supporting Domain | `identity`  | `identity_`   |
+| Customer              | Supporting Domain | `customer`  | `customer_`   |
+| Memory                | Supporting Domain | `memory`    | `memory_`     |
+| Audit                 | Supporting Domain | `audit`     | `audit_`      |
+| Workflow              | Supporting Domain | `workflow`  | `workflow_`   |
 
 ---
 
-# 4. Microservice Design Rules
+# 4. Module Design Rules
 
-Every microservice must follow:
+Every module under `src/modules/<name>/` must follow:
 
 ```
-service-name/
+src/modules/<name>/
 
+├── mod.rs                         # Public API trait + re-exports
 ├── domain/
-│
-│   ├── entities/
-│   ├── aggregates/
-│   ├── value_objects/
-│   ├── domain_events/
-│   ├── repositories/
-│
+│   ├── mod.rs
+│   ├── aggregates/                # Aggregate roots with invariants
+│   ├── entities/                  # Mutable domain objects (with IDs)
+│   ├── value_objects/             # Immutable validated types
+│   ├── events/                    # Domain event structs
+│   └── rules/                     # Business rules
 ├── application/
-│
-│   ├── commands/
-│   ├── queries/
-│   ├── handlers/
-│   ├── use_cases/
-│
+│   ├── mod.rs
+│   ├── commands/                  # CQRS command structs
+│   ├── queries/                   # CQRS query structs
+│   ├── handlers/                  # Command/query handlers
+│   └── services/                  # Application services
 ├── infrastructure/
-│
-│   ├── database/
-│   ├── grpc/
-│   ├── nats/
-│   ├── external/
-│
-├── interfaces/
-│
-│   ├── rest/
-│   ├── websocket/
-│   ├── grpc/
-│
-├── tests/
+│   ├── mod.rs
+│   ├── repository/                # SeaORM repositories
+│   ├── messaging/                 # NATS publishers/subscribers
+│   └── security/                  # JWT, hashing
+├── api/
+│   ├── mod.rs
+│   ├── http/                      # Axum HTTP handlers
+│   └── grpc/                      # gRPC services (optional)
+├── migrations/                    # SeaORM migration files
+└── tests/
+    ├── unit/
+    ├── integration/
+    └── contract/
 
 ```
 
@@ -153,10 +156,16 @@ service-name/
 
 # 5. Identity Bounded Context
 
-## Service
+## Module
 
 ```
-identity-service
+identity (src/modules/identity/)
+```
+
+Schema:
+
+```
+identity_
 ```
 
 Purpose:
@@ -177,6 +186,8 @@ User
  +-- Roles
  |
  +-- Permissions
+ |
+ +-- Sessions
 ```
 
 ---
@@ -203,6 +214,16 @@ Name
 Permissions
 ```
 
+## Session
+
+```
+SessionId
+UserId
+Token
+RefreshToken
+Expiry
+```
+
 ---
 
 # Value Objects
@@ -214,22 +235,24 @@ TenantId
 
 EmailAddress
 
+PasswordHash (bcrypt)
+
 Permission
 
 ```
 
 ---
 
-# Domain Events
+# Domain Events (Versioned NATS Subjects)
 
 ```
-UserCreated
+aeroxe.v1.identity.user.created
 
-UserUpdated
+aeroxe.v1.identity.user.updated
 
-RoleAssigned
+aeroxe.v1.identity.role.assigned
 
-PermissionChanged
+aeroxe.v1.identity.permission.changed
 
 ```
 
@@ -261,10 +284,16 @@ GetPermissionsQuery
 
 # 6. AI Gateway Bounded Context
 
-Service:
+Module:
 
 ```
-ai-gateway-service
+ai-gateway (src/modules/ai-gateway/)
+```
+
+Schema:
+
+```
+ai_
 ```
 
 Purpose:
@@ -351,10 +380,16 @@ CancelAIRequestCommand
 
 # 7. Agent Orchestration Context
 
-Service:
+Module:
 
 ```
-agent-orchestrator-service
+agent (src/modules/agent/)
+```
+
+Schema:
+
+```
+agent_
 ```
 
 Core domain.
@@ -443,16 +478,16 @@ ExecutionId
 
 ---
 
-# Domain Events
+# Domain Events (Versioned NATS Subjects)
 
 ```
-AgentStarted
+aeroxe.v1.agent.started
 
-AgentCompleted
+aeroxe.v1.agent.completed
 
-AgentFailed
+aeroxe.v1.agent.failed
 
-ToolExecuted
+aeroxe.v1.agent.tool.executed
 
 ```
 
@@ -536,10 +571,16 @@ Llama
 
 # 8. RAG Knowledge Context
 
-Service:
+Module:
 
 ```
-rag-service
+rag (src/modules/rag/)
+```
+
+Schema:
+
+```
+rag_
 ```
 
 Purpose:
@@ -614,16 +655,16 @@ DocumentType
 
 ---
 
-# Domain Events
+# Domain Events (Versioned NATS Subjects)
 
 ```
-DocumentUploaded
+aeroxe.v1.rag.document.uploaded
 
-DocumentProcessed
+aeroxe.v1.rag.document.processed
 
-EmbeddingCreated
+aeroxe.v1.rag.embedding.created
 
-KnowledgeUpdated
+aeroxe.v1.rag.knowledge.updated
 
 ```
 
@@ -681,10 +722,16 @@ Answer
 
 # 9. Vision Intelligence Context
 
-Service:
+Module:
 
 ```
-vision-service
+vision (src/modules/vision/)
+```
+
+Schema:
+
+```
+vision_
 ```
 
 Model:
@@ -773,10 +820,16 @@ DetectObjectCommand
 
 # 10. SQL Intelligence Context
 
-Service:
+Module:
 
 ```
-sql-agent-service
+sql-agent (src/modules/sql-agent/)
+```
+
+Schema:
+
+```
+sql_
 ```
 
 Purpose:
@@ -886,10 +939,16 @@ TRUNCATE
 
 # 11. Memory Context
 
-Service:
+Module:
 
 ```
-memory-service
+memory (src/modules/memory/)
+```
+
+Schema:
+
+```
+memory_
 ```
 
 Purpose:
@@ -946,10 +1005,16 @@ MemoryExpired
 
 # 12. Workflow Context
 
-Service:
+Module:
 
 ```
-workflow-service
+workflow (src/modules/workflow/)
+```
+
+Schema:
+
+```
+workflow_
 ```
 
 Purpose:
@@ -993,10 +1058,16 @@ WorkflowFinished
 
 # 13. Security Intelligence Context
 
-Service:
+Module:
 
 ```
-security-ai-service
+security (src/modules/security/)
+```
+
+Schema:
+
+```
+security_
 ```
 
 Model:
@@ -1039,42 +1110,48 @@ ReportGenerated
 
 # 14. Audit Context
 
-Service:
+Module:
 
 ```
-audit-service
+audit (src/modules/audit/)
+```
+
+Schema:
+
+```
+audit_
 ```
 
 Purpose:
 
 Complete AI activity tracking.
 
-Events:
+Events (Versioned NATS Subjects):
 
 ```
-AIRequestLogged
+aeroxe.v1.audit.ai.request
 
-DataAccessLogged
+aeroxe.v1.audit.data.access
 
-ToolExecutionLogged
+aeroxe.v1.audit.tool.execution
 
-SecurityEventLogged
+aeroxe.v1.audit.security.event
 
 ```
 
 ---
 
-# 15. Domain Event Architecture
+# 15. Domain Event Architecture (Versioned)
 
-All domains communicate using events.
+All modules communicate using versioned NATS JetStream events.
 
 Example:
 
 ```
-rag-service
+rag module
 
 
-DocumentProcessed
+aeroxe.v1.rag.document.processed
 
 
         |
@@ -1088,7 +1165,7 @@ NATS JetStream
 
         |
 
-agent-orchestrator
+agent module
 
 
 Update Knowledge Available
@@ -1098,66 +1175,101 @@ Update Knowledge Available
 
 ---
 
-# 16. Final DDD Service Map
+# 16. Customer Bounded Context (NEW)
+
+Module:
 
 ```
-AeroXe Nexus AI
+customer (src/modules/customer/)
+```
 
+Schema:
 
-Core Domain
+```
+customer_
+```
 
-├── ai-gateway-service
+Purpose:
 
-├── agent-orchestrator-service
+Manage customers, profiles, addresses, lifecycle.
 
-├── rag-service
+## Aggregate
 
-├── vision-service
+```
+Customer
+ |
+ +-- Profile (name, email, phone)
+ |
+ +-- Status (active, suspended, inactive, archived)
+ |
+ +-- Addresses (billing, shipping, physical)
+ |
+ +-- Metadata (tags, custom_fields, notes)
+```
 
-├── sql-agent-service
+## Domain Events (Versioned NATS Subjects)
 
-├── security-ai-service
+```
+aeroxe.v1.customer.customer.created
 
+aeroxe.v1.customer.customer.activated
 
-Supporting Domain
+aeroxe.v1.customer.customer.suspended
 
-├── identity-service
-
-├── memory-service
-
-├── workflow-service
-
-├── audit-service
-
-
-Infrastructure
-
-├── model-registry-service
-
-├── notification-service
-
-├── configuration-service
+aeroxe.v1.customer.customer.updated
 
 ```
 
 ---
 
-# 17. TDD Requirements
+# 17. Final DDD Module Map
 
-Every service must contain:
+```
+AeroXe Nexus AI — src/modules/
+
+
+Core Domain
+
+├── ai-gateway     (schema: ai_)
+├── agent          (schema: agent_)
+├── rag            (schema: rag_)
+├── vision         (schema: vision_)
+├── sql-agent      (schema: sql_)
+├── security       (schema: security_)
+
+
+Supporting Domain
+
+├── identity       (schema: identity_)
+├── customer       (schema: customer_)  ← NEW
+├── memory         (schema: memory_)
+├── workflow       (schema: workflow_)
+├── audit          (schema: audit_)
+
+
+Infrastructure
+
+├── gateway        (stateless, Redis)
+├── model-registry (schema: models_)
+├── notification   (schema: notif_)
+├── config         (schema: config_)
+├── ecosystem      (schema: eco_)
+
+```
+
+---
+
+# 18. TDD Requirements
+
+Every module must contain:
 
 ```
 tests/
 
-
-├── unit/
-
-├── integration/
-
-├── contract/
-
+├── unit/                  # Domain unit tests
+├── integration/           # SeaORM + DB integration tests
+├── contract/              # Module boundary trait contract tests
 ├── performance/
-
 └── security/
 
 ```
