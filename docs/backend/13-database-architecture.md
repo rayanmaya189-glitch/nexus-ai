@@ -148,6 +148,18 @@ PostgreSQL 18 Cluster — All access via SeaORM entities
 │
 └── Schema: outbound_
     └── Module: outbound (Campaigns, callbacks)
+
+├── Schema: outbox_
+│   └── Pattern: Transactional Outbox (reliable event delivery)
+│
+├── Schema: distributed_locks_
+│   └── Pattern: Distributed Locking (Redlock)
+│
+├── Schema: distributed_cache_
+│   └── Pattern: Distributed Caching (multi-tier)
+│
+└── Schema: ledger_
+    └── Pattern: Double Entry Ledger (financial transactions)
 ```
 
 ---

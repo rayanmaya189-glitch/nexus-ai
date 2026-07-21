@@ -40,7 +40,7 @@ AeroXe Nexus AI follows a **hybrid communication architecture** optimized for mo
 | External (Web/Mobile) | HTTPS REST | `/api/v{version}/` | Client API |
 | Real-time Chat | WebSocket | `/ws/v{version}/` | Token streaming |
 | **Internal Synchronous** | **Rust trait methods** | N/A (compile-time) | Module-to-module (in-process) |
-| Internal Asynchronous | NATS JetStream | `aeroxe.v{version}.module.event` | Events, background jobs |
+| **Internal Asynchronous** | **NATS JetStream (via Outbox Pattern)** | `aeroxe.v{version}.module.event` | Events, background jobs |
 | AI Runtime | Ollama HTTP API | N/A | Model inference |
 | External gRPC (optional) | tonic | `package.module.v{version}.Service` | SDK / partner integrations |
 

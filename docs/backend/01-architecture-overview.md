@@ -176,6 +176,10 @@ Every module enforces:
 | **Schema-per-BoundedContext** | Logical database isolation without physical separation — enables future extraction to microservices |
 | **Trait-based module interfaces** | Modules communicate through Rust traits — type-safe, testable, mockable |
 | **NATS for async events only** | Background jobs, cross-module notifications, audit logging |
+| **Transactional Outbox Pattern** | Events stored in PostgreSQL within same transaction as business data — guarantees no event loss |
+| **Distributed Locking (Redlock)** | Redis-based locks prevent concurrent processing of same resource across instances |
+| **Distributed Caching** | Multi-tier caching (L1 in-process + L2 Redis) with invalidation via NATS |
+| **Double Entry Ledger** | Financial transactions with balanced debits/credits for audit trail and compliance |
 | **API versioning in URL** | `/api/v1/` prefix — clear, cacheable, easy to route |
 | **NATS subject versioning** | `aeroxe.v1.module.event` — prevents event format conflicts |
 | **gRPC service versioning** | `package.v1.ServiceName` — supports multiple API versions |
@@ -416,5 +420,9 @@ Every migration is versioned and reversible via SeaORM's migration system.
 | Audit | Every sensitive action logged via `audit` module |
 | Secrets | Environment variables + Hashicorp Vault |
 | No Raw SQL | All DB access through SeaORM entities and models |
+| **Transactional Outbox** | **Events guaranteed via outbox table in PostgreSQL** |
+| **Distributed Locking** | **Redis Redlock for multi-instance coordination** |
+| **Distributed Caching** | **L1 in-process + L2 Redis with NATS invalidation** |
+| **Double Entry Ledger** | **Financial transactions with balanced debits/credits** |
 | Backup | Daily full + WAL archiving |
 | DR | RPO < 15min, RTO < 2hr |

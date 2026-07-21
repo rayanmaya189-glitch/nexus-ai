@@ -343,6 +343,11 @@ aeroxe-nexus-ai/
 ├── nexus-analytics/                # Analytics module crate              ← NEW
 ├── nexus-webhook/                  # Webhook module crate                ← NEW
 ├── nexus-outbound/                 # Outbound campaign module crate      ← NEW
+├── nexus-infrastructure/           # Infrastructure patterns crate        ← NEW
+│   ├── outbox/                     # Transactional Outbox
+│   ├── locking/                    # Distributed Locking
+│   ├── caching/                    # Distributed Caching
+│   └── ledger/                     # Double Entry Ledger
 ├── proto/                          # Optional external gRPC protos
 ├── infrastructure/
 │   ├── kubernetes/
