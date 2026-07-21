@@ -20,7 +20,9 @@ The communication model:
 
                            |
 
-                  REST / WebSocket / HTTPS (versioned: /api/v1/)
+               REST Protobuf / WebSocket / HTTPS (versioned: /api/v1/)
+
+               **POST only — No GET — No path variables — No query strings**
 
 
                            |
@@ -80,9 +82,21 @@ Used by:
 Protocol:
 
 ```
-HTTPS REST (/api/v1/*)
+HTTPS REST Protobuf (/api/v1/*) — POST only, no GET, no path variables, no query strings
 WebSocket (/ws/v1/*)
 ```
+
+### REST Protobuf Standards
+
+| Rule | Description |
+|---|---|
+| HTTP Method | **POST only** (no GET, no PUT, no DELETE, no PATCH) |
+| Path Variables | **NOT ALLOWED** — resource IDs in request body |
+| Query Strings | **NOT ALLOWED** — all parameters in request body |
+| Request Format | Protobuf (JSON-serialized) |
+| Response Format | Protobuf (JSON-serialized) |
+| Business Status | Every response includes `status` field |
+| Pagination | In request body: `limit` (default 10) + `offset` |
 
 ---
 
@@ -227,6 +241,25 @@ pub struct RequestContext {
     pub user_id: String,
     pub trace_id: String,
     pub api_version: String,    // e.g., "v1"
+}
+
+pub struct RequestEnvelope {
+    pub operation: String,      // e.g., "GetCustomer", "ListCustomers"
+    pub request_id: String,
+    pub tenant_id: i64,
+    pub user_id: i64,
+    pub data: Vec<u8>,          // Serialized operation-specific request
+}
+
+pub struct ResponseEnvelope {
+    pub status: String,         // e.g., "SUCCESS", "CREATED", "UPDATED"
+    pub operation: String,
+    pub request_id: String,
+    pub data: Vec<u8>,          // Serialized operation-specific response
+    pub summary: Option<Summary>,
+    pub pagination: Option<Pagination>,
+    pub error: Option<ErrorInfo>,
+    pub meta: ResponseMeta,
 }
 
 pub struct ErrorResponse {
@@ -787,15 +820,11 @@ WebSocket
 
  |
 
-AI Gateway
+AI Gateway (trait call to agent module)
 
  |
 
-gRPC Stream
-
- |
-
-Ollama
+Ollama HTTP Streaming API
 
 
 Token Streaming
@@ -811,9 +840,15 @@ User Interface
 
 # 25. Security Requirements
 
-gRPC:
+REST Protobuf:
 
 * TLS encryption
+* JWT authentication
+* API key authentication
+* Rate limiting
+* Request validation
+
+NATS:
 * Service authentication
 * Metadata validation
 
@@ -829,13 +864,359 @@ NATS:
 
 | Layer           | Technology         |
 | --------------- | ------------------ |
-| Mobile/Web API  | REST               |
+| Mobile/Web API  | REST Protobuf (POST only) |
 | Real-time Chat  | WebSocket          |
-| Internal RPC    | gRPC               |
-| Contract        | Protocol Buffers   |
+| Internal RPC    | Rust Trait Interfaces (in-process) |
+| Contract        | Protobuf (JSON-serialized) |
 | Event Bus       | NATS JetStream     |
 | AI Runtime API  | Ollama API         |
-| Database Access | Repository Pattern |
+| Database Access | Repository Pattern (SeaORM) |
+
+---
+
+# 27. REST Protobuf API Definitions (NEW Modules)
+
+All operations use POST with Protobuf request/response bodies.
+
+## 27.1 Telephony Module API
+
+```protobuf
+// Telephony Operations
+message InitiateOutboundCallRequest {
+  string callee_number = 1;
+  string agent_id = 2;
+  map<string, string> context = 3;
+}
+
+message GetCallRequest {
+  string call_id = 1;
+}
+
+message ListCallsRequest {
+  int32 limit = 1;
+  int32 offset = 2;
+  string status = 3;
+}
+
+message HoldCallRequest {
+  string call_id = 1;
+}
+
+message TransferCallRequest {
+  string call_id = 1;
+  string target_agent_id = 2;
+  string target_phone = 3;
+  string transfer_type = 4;  // blind | attended
+  string reason = 5;
+}
+
+message EndCallRequest {
+  string call_id = 1;
+  string reason = 2;
+}
+
+message VerifyPinRequest {
+  string call_id = 1;
+  string pin = 2;
+}
+
+message VerifyVoiceRequest {
+  string call_id = 1;
+  bytes voice_sample = 2;
+}
+
+message ListVoicemailsRequest {
+  int32 limit = 1;
+  int32 offset = 2;
+}
+
+message CreateIVRFlowRequest {
+  string name = 1;
+  repeated IVRNode nodes = 2;
+}
+
+message MonitorCallRequest {
+  string call_id = 1;
+  string action = 2;  // listen | whisper | barge_in
+}
+```
+
+## 27.2 Conversation Module API
+
+```protobuf
+// Conversation Operations
+message CreateConversationRequest {
+  string channel = 1;  // chat | voice | hybrid
+  int64 customer_id = 2;
+  string agent_id = 3;
+  string initial_message = 4;
+}
+
+message GetConversationRequest {
+  string conversation_id = 1;
+}
+
+message ListConversationsRequest {
+  int32 limit = 1;
+  int32 offset = 2;
+  string state = 3;
+}
+
+message AddMessageRequest {
+  string conversation_id = 1;
+  string role = 2;  // user | assistant | system | tool
+  string content = 3;
+}
+
+message GetMessagesRequest {
+  string conversation_id = 1;
+  int32 limit = 2;
+  int32 offset = 3;
+}
+
+message EndConversationRequest {
+  string conversation_id = 1;
+  string outcome = 2;  // resolved | escalated | abandoned
+  int32 satisfaction_score = 3;
+  string summary = 4;
+}
+```
+
+## 27.3 STT Module API
+
+```protobuf
+// STT Operations
+message StartSTTSessionRequest {
+  string call_id = 1;
+  string language = 2;
+  string model = 3;
+  int32 sample_rate = 4;
+  bool enable_punctuation = 5;
+  bool enable_speaker_labels = 6;
+  bool redact_pii = 7;
+}
+
+message SendAudioChunkRequest {
+  string session_id = 1;
+  bytes data = 2;
+  bool is_final = 3;
+  uint64 timestamp = 4;
+}
+
+message EndSTTSessionRequest {
+  string session_id = 1;
+}
+
+message TranscribeAudioRequest {
+  bytes audio = 1;
+  string language = 2;
+  string model = 3;
+}
+```
+
+## 27.4 TTS Module API
+
+```protobuf
+// TTS Operations
+message SynthesizeSpeechRequest {
+  string text = 1;
+  string voice_id = 2;
+  float speed = 3;
+  float pitch = 4;
+  float volume = 5;
+  string emotion = 6;
+}
+
+message SynthesizeSSMLRequest {
+  string ssml = 1;
+  string voice_id = 2;
+}
+
+message ListVoicesRequest {
+  int32 limit = 1;
+  int32 offset = 2;
+  string language = 3;
+}
+
+message CloneVoiceRequest {
+  string name = 1;
+  string source_speaker = 2;
+  bytes reference_audio = 3;
+  bool consent_recorded = 4;
+}
+```
+
+## 27.5 Analytics Module API
+
+```protobuf
+// Analytics Operations
+message GetDashboardRequest {
+  string start_date = 1;
+  string end_date = 2;
+  string granularity = 3;  // minute | hour | day | week | month
+}
+
+message GetConversationMetricsRequest {
+  string start_date = 1;
+  string end_date = 2;
+}
+
+message GetCallMetricsRequest {
+  string start_date = 1;
+  string end_date = 2;
+}
+
+message ListAgentMetricsRequest {
+  int32 limit = 1;
+  int32 offset = 2;
+  string start_date = 3;
+  string end_date = 4;
+}
+
+message GetAgentPerformanceRequest {
+  string agent_id = 1;
+  string start_date = 2;
+  string end_date = 3;
+}
+
+message GetCostBreakdownRequest {
+  string start_date = 1;
+  string end_date = 2;
+}
+```
+
+## 27.6 Webhook Module API
+
+```protobuf
+// Webhook Operations
+message CreateWebhookRequest {
+  string name = 1;
+  string url = 2;
+  string secret = 3;
+  repeated string event_types = 4;
+  repeated string allowed_ips = 5;
+}
+
+message GetWebhookRequest {
+  string webhook_id = 1;
+}
+
+message ListWebhooksRequest {
+  int32 limit = 1;
+  int32 offset = 2;
+}
+
+message UpdateWebhookRequest {
+  string webhook_id = 1;
+  string name = 2;
+  string url = 3;
+  repeated string event_types = 4;
+  repeated string allowed_ips = 5;
+}
+
+message DeleteWebhookRequest {
+  string webhook_id = 1;
+}
+
+message TestWebhookRequest {
+  string webhook_id = 1;
+}
+
+message ListDeliveriesRequest {
+  string webhook_id = 1;
+  int32 limit = 2;
+  int32 offset = 3;
+}
+```
+
+## 27.7 Outbound Module API
+
+```protobuf
+// Outbound Operations
+message CreateCampaignRequest {
+  string name = 1;
+  string description = 2;
+  string campaign_type = 3;  // voice | chat | email | sms
+  string agent_id = 4;
+  string script = 5;
+  int32 rate_limit = 6;
+}
+
+message GetCampaignRequest {
+  string campaign_id = 1;
+}
+
+message ListCampaignsRequest {
+  int32 limit = 1;
+  int32 offset = 2;
+}
+
+message StartCampaignRequest {
+  string campaign_id = 1;
+}
+
+message ScheduleCallbackRequest {
+  int64 customer_id = 1;
+  string phone_number = 2;
+  string agent_id = 3;
+  string scheduled_at = 4;
+  string reason = 5;
+}
+
+message AddDNCRequest {
+  string phone_number = 1;
+  string reason = 2;
+}
+
+message ListDNCRequest {
+  int32 limit = 1;
+  int32 offset = 2;
+}
+```
+
+## 27.8 Billing Module API
+
+```protobuf
+// Billing Operations
+message ListPlansRequest {
+  // No parameters needed
+}
+
+message CreateSubscriptionRequest {
+  string plan_id = 1;
+  string payment_method_id = 2;
+}
+
+message GetSubscriptionRequest {
+  string subscription_id = 1;
+}
+
+message UpdateSubscriptionRequest {
+  string subscription_id = 1;
+  string plan_id = 2;
+}
+
+message GetUsageRequest {
+  string start_date = 1;
+  string end_date = 2;
+  string service = 3;  // llm | stt | tts | telephony | storage
+}
+
+message ListInvoicesRequest {
+  int32 limit = 1;
+  int32 offset = 2;
+  string status = 3;
+}
+
+message GetInvoiceRequest {
+  string invoice_id = 1;
+}
+
+message PayInvoiceRequest {
+  string invoice_id = 1;
+  string payment_method_id = 2;
+}
+```
 
 ---
 
@@ -843,9 +1224,12 @@ NATS:
 
 The AeroXe Nexus AI communication foundation is now defined:
 
-✅ gRPC Service Contracts
-✅ Protobuf Structure
-✅ NATS JetStream Event Architecture
+✅ REST Protobuf API (POST only, no GET, no path variables, no query strings)
+✅ Protobuf Request/Response Envelopes
+✅ Business Status Codes
+✅ Pagination via Request Body
+✅ Rust Trait Interfaces (in-process, no gRPC)
+✅ NATS JetStream Event Architecture (Outbox Pattern)
 ✅ Event Naming Standards
 ✅ Streaming Design
 ✅ Security Rules

@@ -336,36 +336,60 @@ pub async fn log_middleware(req: Request, next: Next) -> Response { ... }
 | `ws://host/ws/v1/telephony/{call_id}` | Audio streaming for voice calls |
 | `ws://host/ws/v1/telephony/monitor/{call_id}` | Live call monitoring |
 
-### 8.3 REST API Method Standards
+### 8.3 REST API Method Standards (REST Protobuf)
 
 | Method | Usage | Allowed |
 |---|---|---|
-| `GET` | Read resource(s) | Yes |
-| `POST` | Create / Execute action | Yes |
-| `PATCH` | Partial update | Yes |
-| `DELETE` | Remove resource | Yes |
+| `GET` | Read resource(s) | **NOT ALLOWED** |
+| `POST` | All operations | **REQUIRED** |
 | `PUT` | Full replace | **NOT ALLOWED** |
+| `PATCH` | Partial update | **NOT ALLOWED** |
+| `DELETE` | Remove resource | **NOT ALLOWED** |
 
-### 8.4 Pagination Standards
+**ALL operations use POST.** Resource IDs, parameters, and filters go in the request body.
 
-All list endpoints MUST support server-side pagination:
+### 8.4 Request/Response Format (Protobuf)
 
+**Request Envelope:**
+```json
+{
+  "operation": "GetCustomer",
+  "request_id": "uuid",
+  "tenant_id": 1,
+  "user_id": 123,
+  "data": {"customer_id": 456}
+}
 ```
-GET /api/v1/resource?limit=10&offset=0
+
+**Response Envelope:**
+```json
+{
+  "status": "SUCCESS",
+  "operation": "GetCustomer",
+  "request_id": "uuid",
+  "data": {"id": 456, "name": "Acme Corp"},
+  "meta": {"timestamp": "2026-07-21T12:00:00Z"}
+}
 ```
 
-| Parameter | Default | Max |
-|---|---|---|
-| `limit` | 10 | 100 |
-| `offset` | 0 | — |
+**List Response Envelope:**
+```json
+{
+  "status": "SUCCESS",
+  "operation": "ListCustomers",
+  "request_id": "uuid",
+  "data": [...],
+  "summary": {"total_items": 1234, "active_items": 980},
+  "pagination": {"total": 1234, "limit": 10, "offset": 0, "has_more": true},
+  "meta": {"timestamp": "2026-07-21T12:00:00Z"}
+}
+```
 
-### 8.5 HTTP Status Code Standards
+### 8.5 HTTP Status Codes
 
 | Code | Usage |
 |---|---|
-| `200` | Successful GET, PATCH |
-| `201` | Successful POST (created) |
-| `204` | Successful DELETE (no body) |
+| `200` | Successful operation |
 | `400` | Bad request / validation error |
 | `401` | Unauthorized (missing/invalid JWT) |
 | `403` | Forbidden (insufficient permissions) |
@@ -376,17 +400,19 @@ GET /api/v1/resource?limit=10&offset=0
 | `500` | Internal server error |
 | `503` | Service unavailable |
 
-### 8.3 Route Registration (axum Router Example)
+**Note:** HTTP status is always 200 for successful operations. Business status (`SUCCESS`, `CREATED`, `UPDATED`, `DELETED`) is in the response body.
+
+### 8.6 Route Registration (axum Router Example)
 
 ```rust
 // src/modules/gateway/api_versioning/router.rs
 pub fn build_v1_routes(state: AppState) -> Router {
     Router::new()
-        // Auth routes (identity module)
+        // Auth routes - ALL POST
         .route("/auth/login", post(handlers::auth::v1_login))
         .route("/auth/register", post(handlers::auth::v1_register))
         .route("/auth/refresh", post(handlers::auth::v1_refresh))
-        .route("/auth/me", get(handlers::auth::v1_me))
+        .route("/auth/me", post(handlers::auth::v1_me))
         // Customer routes (customer module)
         .route("/customers", post(handlers::customer::v1_create))
         .route("/customers/{id}", get(handlers::customer::v1_get))

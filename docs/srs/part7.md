@@ -81,6 +81,10 @@ Architecture:
 
 All APIs must support:
 
+* **REST Protobuf** — Request/response in Protobuf format (JSON-serialized)
+* **POST only** — No GET, no PUT, no DELETE, no PATCH
+* **No path variables** — Resource IDs in request body
+* **No query strings** — All parameters in request body
 * Versioning (`/api/v1/*`)
 * Authentication
 * Tenant isolation
@@ -88,6 +92,8 @@ All APIs must support:
 * Request tracing
 * Audit logging
 * Schema validation
+* Business status codes in responses
+* Pagination via request body (limit + offset)
 
 ---
 
@@ -102,13 +108,13 @@ Standard:
 Example:
 
 ```
-GET /api/v1/agents
+POST /api/v1/agents/list
 ```
 
 Future:
 
 ```
-/api/v2/agents
+POST /api/v2/agents/list
 ```
 
 ---

@@ -50,24 +50,24 @@ Microservices:
 
 ## 3. SDK Feature Matrix
 
-| Feature | REST API | WebSocket | gRPC | Go | Java | Python | Rust | Node.js | Elixir |
-|---|---|---|---|---|---|---|---|---|---|
-| Authentication | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Token Refresh | ✓ | - | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| AI Chat | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Streaming Chat | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Agent Execution | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| RAG Document Upload | ✓ | - | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Knowledge Search | ✓ | - | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Vision Analysis | ✓ | - | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| OCR | ✓ | - | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| SQL Intelligence | ✓ | - | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Memory Store/Search | ✓ | - | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Workflow Start/Status | ✓ | - | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Model List | ✓ | - | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| WebSocket Events | - | ✓ | - | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Retry Logic | - | - | - | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Rate Limit Handling | - | - | - | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Feature | REST Protobuf | WebSocket | Go | Java | Python | Rust | Node.js | Elixir |
+|---|---|---|---|---|---|---|---|---|
+| Authentication | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Token Refresh | ✓ | - | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| AI Chat | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Streaming Chat | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Agent Execution | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| RAG Document Upload | ✓ | - | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Knowledge Search | ✓ | - | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Vision Analysis | ✓ | - | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| OCR | ✓ | - | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| SQL Intelligence | ✓ | - | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Memory Store/Search | ✓ | - | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Workflow Start/Status | ✓ | - | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Model List | ✓ | - | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| WebSocket Events | - | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Retry Logic | - | - | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
+| Rate Limit Handling | - | - | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 
 ---
 
@@ -259,15 +259,32 @@ wss://api.aeroxenexus.com/ws/chat/{conversation_id}
 
 ## 10. Pagination
 
-### Offset-Based Pagination
+### REST Protobuf Pagination
+
+All list operations use POST with pagination in the request body:
 
 ```http
-GET /api/v1/agents?limit=10&offset=0
+POST /api/v1/agents/list
+Content-Type: application/json
+
+{
+  "operation": "ListAgents",
+  "request_id": "uuid",
+  "tenant_id": 1,
+  "user_id": 123,
+  "data": {
+    "limit": 10,
+    "offset": 0
+  }
+}
 ```
 
 **Response:**
 ```json
 {
+  "status": "SUCCESS",
+  "operation": "ListAgents",
+  "request_id": "uuid",
   "data": [...],
   "pagination": {
     "total": 150,
@@ -281,15 +298,19 @@ GET /api/v1/agents?limit=10&offset=0
 ### Cursor-Based Pagination (for streaming)
 
 ```http
-GET /api/v1/memory/search?q=customer&limit=10&cursor=abc123
-```
+POST /api/v1/memory/search
+Content-Type: application/json
 
-**Response:**
-```json
 {
-  "data": [...],
-  "cursor": "next_cursor_value",
-  "has_more": true
+  "operation": "SearchMemory",
+  "request_id": "uuid",
+  "tenant_id": 1,
+  "user_id": 123,
+  "data": {
+    "query": "customer",
+    "limit": 10,
+    "cursor": "abc123"
+  }
 }
 ```
 
@@ -329,25 +350,25 @@ X-Rate-Limit-Reset: 1700000000
 | Method | Endpoint | Description |
 |---|---|---|
 | POST | `/api/v1/ai/chat` | Send chat message |
-| WS | `/ws/chat/{conversation_id}` | Streaming chat |
+| WS | `/ws/chat` | Streaming chat |
 
 ### Agents
 
 | Method | Endpoint | Description |
 |---|---|---|
 | POST | `/api/v1/agents/execute` | Execute agent task |
-| GET | `/api/v1/agents/execution/{id}` | Get execution status |
-| GET | `/api/v1/agents` | List available agents |
-| GET | `/api/v1/agents/{id}` | Get agent details |
+| POST | `/api/v1/agents/get-execution` | Get execution status |
+| POST | `/api/v1/agents/list` | List available agents |
+| POST | `/api/v1/agents/get` | Get agent details |
 
 ### RAG / Knowledge
 
 | Method | Endpoint | Description |
 |---|---|---|
-| POST | `/api/v1/rag/documents` | Upload document |
-| GET | `/api/v1/rag/documents/{id}/status` | Get processing status |
-| GET | `/api/v1/rag/documents` | List documents |
-| DELETE | `/api/v1/rag/documents/{id}` | Delete document |
+| POST | `/api/v1/rag/upload-document` | Upload document |
+| POST | `/api/v1/rag/get-document-status` | Get processing status |
+| POST | `/api/v1/rag/list-documents` | List documents |
+| POST | `/api/v1/rag/delete-document` | Delete document |
 | POST | `/api/v1/rag/search` | Search knowledge base |
 
 ### Vision
@@ -362,40 +383,40 @@ X-Rate-Limit-Reset: 1700000000
 | Method | Endpoint | Description |
 |---|---|---|
 | POST | `/api/v1/sql/query` | Natural language SQL query |
-| GET | `/api/v1/sql/databases` | List available databases |
+| POST | `/api/v1/sql/list-databases` | List available databases |
 
 ### Memory
 
 | Method | Endpoint | Description |
 |---|---|---|
-| POST | `/api/v1/memory` | Store memory |
-| GET | `/api/v1/memory/search` | Search memory |
-| DELETE | `/api/v1/memory/{id}` | Delete memory |
+| POST | `/api/v1/memory/store` | Store memory |
+| POST | `/api/v1/memory/search` | Search memory |
+| POST | `/api/v1/memory/delete` | Delete memory |
 
 ### Workflow
 
 | Method | Endpoint | Description |
 |---|---|---|
 | POST | `/api/v1/workflows/start` | Start workflow |
-| GET | `/api/v1/workflows/{id}` | Get workflow status |
-| GET | `/api/v1/workflows` | List workflows |
+| POST | `/api/v1/workflows/get` | Get workflow status |
+| POST | `/api/v1/workflows/list` | List workflows |
 
 ### Models
 
 | Method | Endpoint | Description |
 |---|---|---|
-| GET | `/api/v1/models` | List available models |
+| POST | `/api/v1/models/list` | List available models |
 
 ### Admin
 
 | Method | Endpoint | Description |
 |---|---|---|
-| GET | `/api/v1/admin/users` | List users |
-| POST | `/api/v1/admin/users` | Create user |
-| PUT | `/api/v1/admin/users/{id}` | Update user |
-| DELETE | `/api/v1/admin/users/{id}` | Delete user |
-| GET | `/api/v1/admin/tenants` | List tenants |
-| POST | `/api/v1/admin/tenants` | Create tenant |
+| POST | `/api/v1/admin/list-users` | List users |
+| POST | `/api/v1/admin/create-user` | Create user |
+| POST | `/api/v1/admin/update-user` | Update user |
+| POST | `/api/v1/admin/delete-user` | Delete user |
+| POST | `/api/v1/admin/list-tenants` | List tenants |
+| POST | `/api/v1/admin/create-tenant` | Create tenant |
 
 ---
 
