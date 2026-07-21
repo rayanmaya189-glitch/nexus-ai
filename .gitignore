@@ -2,24 +2,6 @@
 backend/rust/target/
 backend/rust/Cargo.lock
 
-# Go
-backend/go/vendor/
-backend/go/*.exe
-backend/go/*.exe~
-backend/go/*.dll
-backend/go/*.so
-backend/go/*.dylib
-backend/go/ai-gateway
-backend/go/audit-service
-backend/go/workflow-service
-backend/go/model-registry
-backend/go/notification-service
-backend/go/configuration-service
-backend/go/ecosystem-service
-backend/go/sql-agent-service
-backend/go/identity-service
-backend/go/api-gateway
-
 # IDE
 .idea/
 .vscode/

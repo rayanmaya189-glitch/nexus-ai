@@ -17,27 +17,27 @@ spec:
     spec:
       containers:
         - name: vision-service
-          image: nexus-go/vision-service:latest
+          image: nexus-rust/vision-service:latest
           ports:
-            - containerPort: 8092
+            - containerPort: 8102
           env:
-            - name: PORT
-              value: "8092"
+            - name: DATABASE_URL
+              value: "postgres://nexus:nexus_secret_2026@postgres:5432/nexus_main"
             - name: OLLAMA_BASE_URL
               value: "http://ollama:11434"
           readinessProbe:
             httpGet:
               path: /health
-              port: 8092
+              port: 8102
             initialDelaySeconds: 5
             periodSeconds: 10
           resources:
             requests:
-              memory: "64Mi"
-              cpu: "50m"
+              memory: "128Mi"
+              cpu: "100m"
             limits:
-              memory: "256Mi"
-              cpu: "500m"
+              memory: "512Mi"
+              cpu: "1000m"
 ---
 apiVersion: v1
 kind: Service
@@ -48,6 +48,6 @@ spec:
   selector:
     app: vision-service
   ports:
-    - port: 8092
-      targetPort: 8092
+    - port: 8102
+      targetPort: 8102
   type: ClusterIP

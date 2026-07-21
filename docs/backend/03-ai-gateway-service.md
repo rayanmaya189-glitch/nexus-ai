@@ -11,7 +11,7 @@
 | Service Name | `ai-gateway-service` |
 | Bounded Context | AI Gateway |
 | Domain Type | Core Domain |
-| Language | Go |
+| Language | Rust |
 | Database | `gateway_db` (PostgreSQL) |
 | gRPC Port | 50051 |
 | REST Port | 8080 |

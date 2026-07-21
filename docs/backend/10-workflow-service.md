@@ -11,7 +11,7 @@
 | Service Name | `workflow-service` |
 | Bounded Context | Workflow |
 | Domain Type | Supporting Domain |
-| Language | Go |
+| Language | Rust |
 | Database | `workflow_db` (PostgreSQL) |
 | gRPC Port | 50058 |
 

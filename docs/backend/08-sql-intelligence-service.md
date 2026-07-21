@@ -11,7 +11,7 @@
 | Service Name | `sql-agent-service` |
 | Bounded Context | SQL Intelligence |
 | Domain Type | Core Domain |
-| Language | Go |
+| Language | Rust |
 | AI Model | `qwen2.5-coder:3b` (Ollama) |
 | gRPC Port | 50056 |
 
@@ -348,7 +348,7 @@ POST /api/v1/agents/:agent_id/sql-connections/tables
 | Operation | Target |
 |---|---|
 | All SQL queries | Read Replica (never primary) |
-| Connection pooling | EntORM pool (max 10 connections per tenant) |
+| Connection pooling | SeaORM pool (max 10 connections per tenant) |
 | Query timeout | 30 seconds |
 | Row limit | 10,000 rows |
 

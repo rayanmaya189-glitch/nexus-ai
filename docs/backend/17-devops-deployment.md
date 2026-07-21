@@ -144,7 +144,6 @@ GitLab CI
     v
 [Stage 1] Code Quality
     |  cargo fmt / clippy (Rust)
-    |  go vet / golangci-lint (Go)
     |
     v
 [Stage 2] Testing

@@ -11,10 +11,10 @@
 | Product | AeroXe Nexus AI |
 | Domain | aeroxenexus.com |
 | Category | Enterprise Agentic AI Platform |
-| Backend Languages | Rust + Go |
+| Backend Language | Rust |
 | AI Runtime | Ollama (local GPU inference) |
 | Communication | gRPC + Protocol Buffers + NATS JetStream |
-| External API | REST + WebSocket + gRPC Gateway |
+| External API | REST + WebSocket |
 | Deployment | Private Infrastructure First |
 
 ---
@@ -96,25 +96,24 @@ Each service:
 
 ## 4. Backend Technology Stack
 
-### 4.1 Languages
+### 4.1 Language
 
 | Language | Usage | Rationale |
 |---|---|---|
-| Rust | Core AI services, performance-critical paths | Memory safety, zero-cost abstractions, async runtime (Tokio) |
-| Go | Infrastructure services, API gateway, integration services | Concurrency model, fast compilation, ecosystem |
+| Rust | All backend services | Memory safety, zero-cost abstractions, async runtime (Tokio), performance |
 
 ### 4.2 Core Libraries
 
-| Component | Rust | Go |
-|---|---|---|
-| gRPC | tonic | kratos |
-| NATS | async-nats | nats.go |
-| Database | SeaORM | EntORM |
-| Vector | pgvector (SeaORM) | pgvector (EntORM) |
-| Serialization | serde + serde_json | encoding/json |
-| Async Runtime | Tokio | goroutines |
-| HTTP | axum / actix-web | hertz |
-| WebSocket | tokio-tungstenite | coder/websocket |
+| Component | Rust |
+|---|---|
+| gRPC | tonic |
+| NATS | async-nats |
+| Database | SeaORM + SQLx |
+| Vector | pgvector (SeaORM) |
+| Serialization | serde + serde_json |
+| Async Runtime | Tokio |
+| HTTP | axum |
+| WebSocket | tokio-tungstenite |
 
 ### 4.3 Infrastructure
 
@@ -139,32 +138,28 @@ Each service:
 
 ### 5.1 Core Domain Services
 
-| Service | Language | Purpose |
-|---|---|---|
-| `ai-gateway-service` | Go | Central AI request processing, routing, rate limiting |
-| `agent-orchestrator-service` | Rust | Agent lifecycle, planning, tool execution |
-| `rag-service` | Rust | Document ingestion, embeddings, hybrid search |
-| `vision-service` | Rust | Image processing, OCR, visual reasoning |
-| `sql-agent-service` | Go | Natural language SQL generation and execution |
-| `security-ai-service` | Rust | Security analysis, vulnerability detection |
+| Service | Purpose |
+|---|---|
+| `agent-orchestrator` | Agent lifecycle, planning, tool execution |
+| `rag-service` | Document ingestion, embeddings, hybrid search |
+| `vision-service` | Image processing, OCR, visual reasoning |
+| `security-ai` | Security analysis, vulnerability detection |
+| `memory-service` | Short-term and long-term AI memory |
 
-### 5.2 Supporting Domain Services
+### 5.2 Infrastructure
 
-| Service | Language | Purpose |
-|---|---|---|
-| `identity-service` | Go | Users, roles, permissions, tenant management |
-| `memory-service` | Rust | Short-term and long-term AI memory |
-| `workflow-service` | Go | Business automation, approvals, task management |
-| `audit-service` | Go | Compliance tracking, activity logging |
-
-### 5.3 Infrastructure Services
-
-| Service | Language | Purpose |
-|---|---|---|
-| `model-registry-service` | Go | Ollama model management, routing |
-| `notification-service` | Go | Push, email, SMS, WhatsApp notifications |
-| `configuration-service` | Go | Feature flags, dynamic configuration |
-| `ecosystem-integration-service` | Go | AeroXe product connectors |
+| Component | Technology |
+|---|---|
+| Container Runtime | Docker |
+| Orchestration | Kubernetes |
+| CI/CD | GitHub Actions |
+| Monitoring | OpenTelemetry + Prometheus + Grafana |
+| Object Storage | MinIO |
+| Search | Elasticsearch |
+| Cache | Redis |
+| Graph | Apache AGE (PostgreSQL extension) |
+| Vector Search | pgvector (PostgreSQL extension) |
+| Primary Database | PostgreSQL 18 |
 
 ---
 

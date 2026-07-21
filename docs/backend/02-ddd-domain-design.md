@@ -15,23 +15,23 @@ AeroXe Nexus AI is designed using Domain-Driven Design principles. The system is
 | Domain | Type | Service | Language |
 |---|---|---|---|
 | Agent Orchestration | Core Domain | `agent-orchestrator-service` | Rust |
-| AI Gateway | Core Domain | `ai-gateway-service` | Go |
+| AI Gateway | Core Domain | `ai-gateway-service` | Rust |
 | RAG Intelligence | Core Domain | `rag-service` | Rust |
 | Vision Intelligence | Core Domain | `vision-service` | Rust |
-| SQL Intelligence | Core Domain | `sql-agent-service` | Go |
+| SQL Intelligence | Core Domain | `sql-agent-service` | Rust |
 | Security Intelligence | Core Domain | `security-ai-service` | Rust |
-| Identity | Supporting Domain | `identity-service` | Go |
+| Identity | Supporting Domain | `identity-service` | Rust |
 | Memory | Supporting Domain | `memory-service` | Rust |
-| Audit | Supporting Domain | `audit-service` | Go |
-| Workflow | Supporting Domain | `workflow-service` | Go |
+| Audit | Supporting Domain | `audit-service` | Rust |
+| Workflow | Supporting Domain | `workflow-service` | Rust |
 
 ### Infrastructure Services
 
 | Service | Language |
 |---|---|
-| `model-registry-service` | Go |
-| `notification-service` | Go |
-| `configuration-service` | Go |
+| `model-registry-service` | Rust |
+| `notification-service` | Rust |
+| `configuration-service` | Rust |
 
 ---
 

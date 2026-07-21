@@ -11,8 +11,8 @@
 | Service Name | `nexus-api-gateway` |
 | Bounded Context | API Gateway |
 | Domain Type | Supporting Domain |
-| Language | Go |
-| Framework | Hertz + Kratos |
+| Language | Rust |
+| Framework | Axum + Tonic |
 | Database | None (stateless) |
 | Cache | Redis (rate limiting, session) |
 | gRPC Port | 50050 |
@@ -50,7 +50,7 @@ The API Gateway is the **single external entry point** for all client traffic in
                                |
                     +----------+----------+
                     |   Nexus API Gateway  |
-                    |   (Hertz + Kratos)   |
+                    |    (Axum + Tonic)    |
                     +----------+----------+
                                |
               +----------------+----------------+
@@ -58,7 +58,7 @@ The API Gateway is the **single external entry point** for all client traffic in
          REST Routes     WebSocket Gateway    gRPC Gateway
               |                |                |
               v                v                v
-        Internal gRPC Services (via Kratos)
+        Internal gRPC Services (via Tonic)
 ```
 
 ---
@@ -184,11 +184,11 @@ Algorithm: **Token Bucket** (Redis-backed)
 
 ### 6.3 gRPC-Gateway Translation
 
-REST requests are translated to internal gRPC calls via Kratos:
+REST requests are translated to internal gRPC calls via tonic-grpc:
 
 ```
 HTTP POST /api/v1/auth/login
-  → Kratos gRPC-Gateway
+  → tonic-grpc-Gateway
     → identity-service.Login() gRPC call
       → HTTP JSON response
 ```
@@ -310,7 +310,7 @@ GET /health
 
 | Method | Description |
 |---|---|
-| gRPC | Kratos built-in load balancing (round-robin) |
+| gRPC | Tonic built-in load balancing (round-robin) |
 | Health-aware | Unhealthy instances removed from pool |
 
 ---

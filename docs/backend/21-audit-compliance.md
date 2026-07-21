@@ -151,7 +151,7 @@ Application Layer → Audit Event → NATS JetStream → Audit Service → Elast
 
 | Property     | Value                              |
 | ------------ | ---------------------------------- |
-| Language     | Go                                 |
+| Language     | Rust                               |
 | Port         | 50060 (gRPC), 8060 (REST)         |
 | Database     | PostgreSQL + Elasticsearch         |
 | Storage      | Hot (30d) → Warm (90d) → Cold (1y)|

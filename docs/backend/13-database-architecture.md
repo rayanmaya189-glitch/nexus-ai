@@ -816,7 +816,7 @@ pub trait AgentRepository: Send + Sync {
 
 ## 16. Migration Strategy
 
-### Tool: EntORM Migrate (Go) / SeaORM Migrate (Rust)
+### Tool: SeaORM Migrate (Rust)
 
 ```
 migrations/

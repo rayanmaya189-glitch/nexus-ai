@@ -11,7 +11,7 @@
 | Service Name | `identity-service` |
 | Bounded Context | Identity |
 | Domain Type | Supporting Domain |
-| Language | Go |
+| Language | Rust |
 | Database | `identity_db` (PostgreSQL) |
 | gRPC Port | 50054 |
 

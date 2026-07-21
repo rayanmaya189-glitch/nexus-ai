@@ -28,7 +28,7 @@ Client Applications
     |
     | HTTPS / WebSocket / gRPC
     v
-Nexus API Gateway (Hertz + Kratos)
+Nexus API Gateway (Axum + Tonic)
     |
     | Internal gRPC + NATS JetStream
     v

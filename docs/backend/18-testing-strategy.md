@@ -425,7 +425,6 @@ Developer Push → Unit Tests → Integration Tests → Security Scan → AI Eva
 | Area             | Technology                  |
 | ---------------- | --------------------------- |
 | Rust Tests       | cargo test                  |
-| Go Tests         | go test                     |
 | API Testing      | Postman/Newman              |
 | gRPC Testing     | grpcurl                     |
 | Contract Testing | Buf                         |

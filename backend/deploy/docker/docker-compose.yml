@@ -73,286 +73,11 @@ services:
     volumes:
       - ollama_data:/root/.ollama
 
-  # ── Go Services ─────────────────────────────────────────────────
-  api-gateway:
-    build:
-      context: ../go
-      dockerfile: deploy/docker/Dockerfile.service
-      args:
-        SERVICE: api-gateway
-    container_name: nexus-api-gateway
-    ports:
-      - "8000:8000"
-    environment:
-      PORT: "8000"
-      JWT_SECRET: nexus-jwt-secret-2026
-      IDENTITY_SERVICE_URL: http://identity-service:8081
-      AI_GATEWAY_URL: http://ai-gateway:8082
-      WORKFLOW_SERVICE_URL: http://workflow-service:8084
-      AUDIT_SERVICE_URL: http://audit-service:8085
-      MODEL_REGISTRY_URL: http://model-registry:8086
-      NOTIFICATION_SERVICE_URL: http://notification-service:8087
-      CONFIGURATION_SERVICE_URL: http://configuration-service:8088
-      ECOSYSTEM_SERVICE_URL: http://ecosystem-service:8089
-      SQL_AGENT_SERVICE_URL: http://sql-agent-service:8090
-      MEMORY_SERVICE_URL: http://memory-service:8091
-      VISION_SERVICE_URL: http://vision-service:8092
-      RAG_SERVICE_URL: http://rag-service:8093
-      SECURITY_SERVICE_URL: http://security-service:8094
-    depends_on:
-      - identity-service
-      - ai-gateway
-
-  identity-service:
-    build:
-      context: ../go
-      dockerfile: deploy/docker/Dockerfile.service
-      args:
-        SERVICE: identity-service
-    container_name: nexus-identity-service
-    ports:
-      - "8081:8081"
-    environment:
-      PORT: "8081"
-      DB_HOST: postgres
-      DB_PORT: "5432"
-      DB_USER: nexus
-      DB_PASSWORD: nexus_secret_2026
-      DB_NAME: nexus_main
-      DB_SSLMODE: disable
-      JWT_SECRET: nexus-jwt-secret-2026
-    depends_on:
-      postgres:
-        condition: service_healthy
-
-  ai-gateway:
-    build:
-      context: ../go
-      dockerfile: deploy/docker/Dockerfile.service
-      args:
-        SERVICE: ai-gateway
-    container_name: nexus-ai-gateway
-    ports:
-      - "8082:8082"
-    environment:
-      PORT: "8082"
-      OLLAMA_BASE_URL: http://ollama:11434
-    depends_on:
-      - ollama
-
-  workflow-service:
-    build:
-      context: ../go
-      dockerfile: deploy/docker/Dockerfile.service
-      args:
-        SERVICE: workflow-service
-    container_name: nexus-workflow-service
-    ports:
-      - "8084:8084"
-    environment:
-      PORT: "8084"
-      DB_HOST: postgres
-      DB_PORT: "5432"
-      DB_USER: nexus
-      DB_PASSWORD: nexus_secret_2026
-      DB_NAME: nexus_main
-      DB_SSLMODE: disable
-    depends_on:
-      postgres:
-        condition: service_healthy
-
-  audit-service:
-    build:
-      context: ../go
-      dockerfile: deploy/docker/Dockerfile.service
-      args:
-        SERVICE: audit-service
-    container_name: nexus-audit-service
-    ports:
-      - "8085:8085"
-    environment:
-      PORT: "8085"
-      DB_HOST: postgres
-      DB_PORT: "5432"
-      DB_USER: nexus
-      DB_PASSWORD: nexus_secret_2026
-      DB_NAME: nexus_main
-      DB_SSLMODE: disable
-    depends_on:
-      postgres:
-        condition: service_healthy
-
-  model-registry:
-    build:
-      context: ../go
-      dockerfile: deploy/docker/Dockerfile.service
-      args:
-        SERVICE: model-registry
-    container_name: nexus-model-registry
-    ports:
-      - "8086:8086"
-    environment:
-      PORT: "8086"
-      DB_HOST: postgres
-      DB_PORT: "5432"
-      DB_USER: nexus
-      DB_PASSWORD: nexus_secret_2026
-      DB_NAME: nexus_main
-      DB_SSLMODE: disable
-    depends_on:
-      postgres:
-        condition: service_healthy
-
-  notification-service:
-    build:
-      context: ../go
-      dockerfile: deploy/docker/Dockerfile.service
-      args:
-        SERVICE: notification-service
-    container_name: nexus-notification-service
-    ports:
-      - "8087:8087"
-    environment:
-      PORT: "8087"
-      DB_HOST: postgres
-      DB_PORT: "5432"
-      DB_USER: nexus
-      DB_PASSWORD: nexus_secret_2026
-      DB_NAME: nexus_main
-      DB_SSLMODE: disable
-    depends_on:
-      postgres:
-        condition: service_healthy
-
-  configuration-service:
-    build:
-      context: ../go
-      dockerfile: deploy/docker/Dockerfile.service
-      args:
-        SERVICE: configuration-service
-    container_name: nexus-configuration-service
-    ports:
-      - "8088:8088"
-    environment:
-      PORT: "8088"
-      DB_HOST: postgres
-      DB_PORT: "5432"
-      DB_USER: nexus
-      DB_PASSWORD: nexus_secret_2026
-      DB_NAME: nexus_main
-      DB_SSLMODE: disable
-    depends_on:
-      postgres:
-        condition: service_healthy
-
-  ecosystem-service:
-    build:
-      context: ../go
-      dockerfile: deploy/docker/Dockerfile.service
-      args:
-        SERVICE: ecosystem-service
-    container_name: nexus-ecosystem-service
-    ports:
-      - "8089:8089"
-    environment:
-      PORT: "8089"
-      DB_HOST: postgres
-      DB_PORT: "5432"
-      DB_USER: nexus
-      DB_PASSWORD: nexus_secret_2026
-      DB_NAME: nexus_main
-      DB_SSLMODE: disable
-    depends_on:
-      postgres:
-        condition: service_healthy
-
-  sql-agent-service:
-    build:
-      context: ../go
-      dockerfile: deploy/docker/Dockerfile.service
-      args:
-        SERVICE: sql-agent-service
-    container_name: nexus-sql-agent-service
-    ports:
-      - "8090:8090"
-    environment:
-      PORT: "8090"
-      OLLAMA_BASE_URL: http://ollama:11434
-    depends_on:
-      - ollama
-
-  memory-service:
-    build:
-      context: ../go
-      dockerfile: deploy/docker/Dockerfile.service
-      args:
-        SERVICE: memory-service
-    container_name: nexus-memory-service
-    ports:
-      - "8091:8091"
-    environment:
-      PORT: "8091"
-      DB_HOST: postgres
-      DB_PORT: "5432"
-      DB_USER: nexus
-      DB_PASSWORD: nexus_secret_2026
-      DB_NAME: nexus_main
-      DB_SSLMODE: disable
-    depends_on:
-      postgres:
-        condition: service_healthy
-
-  vision-service:
-    build:
-      context: ../go
-      dockerfile: deploy/docker/Dockerfile.service
-      args:
-        SERVICE: vision-service
-    container_name: nexus-vision-service
-    ports:
-      - "8092:8092"
-    environment:
-      PORT: "8092"
-      OLLAMA_BASE_URL: http://ollama:11434
-    depends_on:
-      - ollama
-
-  rag-service:
-    build:
-      context: ../go
-      dockerfile: deploy/docker/Dockerfile.service
-      args:
-        SERVICE: rag-service
-    container_name: nexus-rag-service
-    ports:
-      - "8093:8093"
-    environment:
-      PORT: "8093"
-      DB_HOST: postgres
-      DB_PORT: "5432"
-      DB_USER: nexus
-      DB_PASSWORD: nexus_secret_2026
-      DB_NAME: nexus_main
-      DB_SSLMODE: disable
-    depends_on:
-      postgres:
-        condition: service_healthy
-
-  security-service:
-    build:
-      context: ../go
-      dockerfile: deploy/docker/Dockerfile.service
-      args:
-        SERVICE: security-service
-    container_name: nexus-security-service
-    ports:
-      - "8094:8094"
-    environment:
-      PORT: "8094"
-
   # ── Rust Services ───────────────────────────────────────────────
   agent-orchestrator:
-    image: nexus-rust/agent-orchestrator:latest
+    build:
+      context: ../rust
+      dockerfile: services/agent-orchestrator/Dockerfile
     container_name: nexus-agent-orchestrator
     ports:
       - "8100:8100"
@@ -362,48 +87,67 @@ services:
       NATS_URL: nats://nats:4222
       OLLAMA_BASE_URL: http://ollama:11434
     depends_on:
-      - postgres
-      - redis
-      - nats
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      nats:
+        condition: service_started
+      ollama:
+        condition: service_started
 
-  rag-service-rs:
-    image: nexus-rust/rag-service:latest
-    container_name: nexus-rag-service-rs
+  rag-service:
+    build:
+      context: ../rust
+      dockerfile: services/rag-service/Dockerfile
+    container_name: nexus-rag-service
     ports:
       - "8101:8101"
     environment:
       DATABASE_URL: postgres://nexus:nexus_secret_2026@postgres:5432/nexus_main
       REDIS_URL: redis://redis:6379
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
-  vision-service-rs:
-    image: nexus-rust/vision-service:latest
-    container_name: nexus-vision-service-rs
+  vision-service:
+    build:
+      context: ../rust
+      dockerfile: services/vision-service/Dockerfile
+    container_name: nexus-vision-service
     ports:
       - "8102:8102"
     environment:
       DATABASE_URL: postgres://nexus:nexus_secret_2026@postgres:5432/nexus_main
       OLLAMA_BASE_URL: http://ollama:11434
     depends_on:
-      - postgres
-      - ollama
+      postgres:
+        condition: service_healthy
+      ollama:
+        condition: service_started
 
-  memory-service-rs:
-    image: nexus-rust/memory-service:latest
-    container_name: nexus-memory-service-rs
+  memory-service:
+    build:
+      context: ../rust
+      dockerfile: services/memory-service/Dockerfile
+    container_name: nexus-memory-service
     ports:
       - "8103:8103"
     environment:
       DATABASE_URL: postgres://nexus:nexus_secret_2026@postgres:5432/nexus_main
       REDIS_URL: redis://redis:6379
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
 
   security-ai:
-    image: nexus-rust/security-ai:latest
+    build:
+      context: ../rust
+      dockerfile: services/security-ai/Dockerfile
     container_name: nexus-security-ai
     ports:
       - "8104:8104"
@@ -411,8 +155,10 @@ services:
       DATABASE_URL: postgres://nexus:nexus_secret_2026@postgres:5432/nexus_main
       OLLAMA_BASE_URL: http://ollama:11434
     depends_on:
-      - postgres
-      - ollama
+      postgres:
+        condition: service_healthy
+      ollama:
+        condition: service_started
 
 volumes:
   postgres_data:

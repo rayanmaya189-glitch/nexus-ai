@@ -17,40 +17,27 @@ spec:
     spec:
       containers:
         - name: rag-service
-          image: nexus-go/rag-service:latest
+          image: nexus-rust/rag-service:latest
           ports:
-            - containerPort: 8093
+            - containerPort: 8101
           env:
-            - name: PORT
-              value: "8093"
-            - name: DB_HOST
-              value: "postgres"
-            - name: DB_PORT
-              value: "5432"
-            - name: DB_USER
-              value: "nexus"
-            - name: DB_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: nexus-secrets
-                  key: db-password
-            - name: DB_NAME
-              value: "nexus_main"
-            - name: DB_SSLMODE
-              value: "disable"
+            - name: DATABASE_URL
+              value: "postgres://nexus:nexus_secret_2026@postgres:5432/nexus_main"
+            - name: REDIS_URL
+              value: "redis://redis:6379"
           readinessProbe:
             httpGet:
               path: /health
-              port: 8093
+              port: 8101
             initialDelaySeconds: 5
             periodSeconds: 10
           resources:
             requests:
-              memory: "64Mi"
-              cpu: "50m"
+              memory: "128Mi"
+              cpu: "100m"
             limits:
-              memory: "256Mi"
-              cpu: "500m"
+              memory: "512Mi"
+              cpu: "1000m"
 ---
 apiVersion: v1
 kind: Service
@@ -61,6 +48,6 @@ spec:
   selector:
     app: rag-service
   ports:
-    - port: 8093
-      targetPort: 8093
+    - port: 8101
+      targetPort: 8101
   type: ClusterIP
