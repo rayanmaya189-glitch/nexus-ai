@@ -1,6 +1,8 @@
 # 19 — AeroXe Ecosystem Business Integration
 
-## AI-Powered Enterprise Operating System Integration
+## AI-Powered Enterprise Operating System Integration (Modular Monolith)
+
+> **Modular Monolith Context:** Integration is handled by the `nexus-ecosystem` module within the `aeroxe-nexus` binary. It communicates with AeroXe products via their published APIs and internal modules via trait interfaces. See [Communication Architecture](12-communication-architecture.md).
 
 ---
 
@@ -8,7 +10,7 @@
 
 AeroXe Nexus AI is the intelligence layer for the complete **AeroXe Ecosystem**.
 
-It connects business applications and provides:
+It connects business applications within the `aeroxe-nexus` modular monolith and provides:
 
 - AI automation
 - Real-time business intelligence
@@ -22,8 +24,12 @@ It connects business applications and provides:
 ## 2. AeroXe Ecosystem Overview
 
 ```
-                        AeroXe Nexus AI
-                              |
++-------------------------------+
+|     aeroxe-nexus (Monolith)    |
+|  nexus-agent | nexus-rag |    |
+|  nexus-workflow | nexus-eco.. |
++-------------------------------+
+         |  (REST / gRPC / NATS)
 ================================================================
                     Business Intelligence Layer
 ================================================================
@@ -31,10 +37,6 @@ It connects business applications and provides:
   AeroXe HRMS         AeroXe Billing   AeroXe Pay
   AeroXe Exchange     AeroXe Blockchain AeroXe Cibil
   AeroXe Solar
-================================================================
-                    Data & Integration Layer
-================================================================
-  gRPC    REST API    WebSocket    NATS Events    Database Connectors
 ================================================================
 ```
 
@@ -45,26 +47,26 @@ It connects business applications and provides:
 AeroXe Nexus AI does not directly modify business databases.
 
 ```
-Business Service → API / gRPC → Integration Service → AI Agent → Decision / Automation
+Business Service → API / NATS → nexus-ecosystem module → nexus-agent / nexus-workflow (trait calls) → Decision / Automation
 ```
 
 ---
 
-## 4. Integration Gateway Service
+## 4. Ecosystem Module
 
 ### Service
 
 ```
-ecosystem-integration-service
+nexus-ecosystem  (Cargo workspace crate)
 ```
 
 ### Responsibilities
 
-- Connect AeroXe products
+- Connect AeroXe products (via trait interfaces + NATS events)
 - Normalize data
-- Manage permissions
-- Trigger AI workflows
-- Publish business events
+- Manage permissions (via `nexus-identity` trait)
+- Trigger AI workflows (via `nexus-workflow` trait)
+- Publish business events (via NATS)
 
 ---
 
@@ -433,37 +435,39 @@ Users can install:
 
 ---
 
-## 21. API Integration Standard
+## 21. Integration Standards
 
-Every AeroXe product exposes:
-
-| Protocol | Standard        |
-| -------- | --------------- |
-| REST     | `/api/v1`       |
-| gRPC     | `service ProductService` |
-| Events   | `product.created`, `product.updated`, `product.deleted` |
+| Protocol | Standard | Usage |
+|---|---|---|
+| Internal (Module) | Rust trait methods | Module-to-module within monolith |
+| Event (Async) | NATS JetStream `aeroxe.*` | Background processing |
+| External API | REST `/api/v1/*` | Client applications (via `nexus-gateway`) |
+| External gRPC (opt.) | `tonic` service | Partner SDK integrations |
 
 ---
 
 ## 22. Final Ecosystem Architecture
 
 ```
-                        AeroXe Nexus AI
-                                |
-================================================================
-                          AI Agents
-================================================================
-  Sales AI    Support AI    Finance AI    ERP AI
-  Network AI  Security AI   Developer AI  HR AI
-================================================================
-                                |
++-------------------------------+
+|     aeroxe-nexus (Monolith)    |
+|                               |
+| +--------+ +------+ +------+ |
+| |nexus-  | |nexus-| |nexus-| |
+| |agent   | |rag   | |vision| |
+| +--------+ +------+ +------+ |
+|          |                    |
+| +--------+ +------+ +------+ |
+| |nexus-  | |nexus-| |nexus-| |
+| |workflow| |eco   | |security| |
+| +--------+ +------+ +------+ |
++-------------------------------+
 ================================================================
                       AeroXe Products
 ================================================================
   Broadband   ERP   CRM   Billing   Pay
   Exchange   Blockchain   Cibil   Solar
 ================================================================
-                                |
 ================================================================
                      Infrastructure
 ================================================================

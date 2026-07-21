@@ -1,25 +1,28 @@
-# AeroXe Nexus AI — Workflow Service
+# AeroXe Nexus AI — Workflow Module
 
 ## Business Automation, Approvals & Task Management
 
+> **Modular Monolith Module:** This document describes the `nexus-workflow` crate — a module within the single `aeroxe-nexus` binary. It communicates with other modules via Rust trait interfaces (see [Communication Architecture](12-communication-architecture.md)).
+
 ---
 
-## 1. Service Identity
+## 1. Module Identity
 
 | Attribute | Value |
 |---|---|
-| Service Name | `workflow-service` |
+| Module Name | `nexus-workflow` |
+| Crate | `nexus-workflow` (workspace member) |
 | Bounded Context | Workflow |
 | Domain Type | Supporting Domain |
 | Language | Rust |
-| Database | `workflow_db` (PostgreSQL) |
-| gRPC Port | 50058 |
+| Schema | `workflow_` (in shared PostgreSQL) |
+| Dependencies | `nexus-agent` (AI task execution), `nexus-notification` (notifications) |
 
 ---
 
 ## 2. Purpose
 
-The Workflow Service provides business process automation capabilities:
+The Workflow module provides business process automation capabilities within the `aeroxe-nexus` monolith:
 
 - Define and execute automated workflows
 - Manage approval chains
@@ -76,41 +79,42 @@ WorkflowInstance (Aggregate Root)
 
 ---
 
-## 4. gRPC Contract
+## 4. Public API Trait
 
-```protobuf
-syntax = "proto3";
-package aeroxe.workflow;
-
-service WorkflowService {
-  rpc StartWorkflow(StartWorkflowRequest) returns (WorkflowResponse);
-  rpc GetWorkflowStatus(StatusRequest) returns (WorkflowStatusResponse);
-  rpc ApproveStep(ApproveRequest) returns (ApproveResponse);
-  rpc CancelWorkflow(CancelRequest) returns (CancelResponse);
-  rpc ListWorkflows(ListRequest) returns (WorkflowList);
+```rust
+// nexus-workflow/src/interfaces/api.rs
+#[async_trait]
+pub trait WorkflowService: Send + Sync {
+    async fn start_workflow(&self, req: StartWorkflowRequest) -> Result<WorkflowResponse, WorkflowError>;
+    async fn get_status(&self, id: WorkflowId) -> Result<WorkflowStatus, WorkflowError>;
+    async fn approve_step(&self, req: ApproveRequest) -> Result<(), WorkflowError>;
+    async fn cancel_workflow(&self, id: WorkflowId) -> Result<(), WorkflowError>;
+    async fn list_workflows(&self, req: ListRequest) -> Result<Vec<WorkflowSummary>, WorkflowError>;
 }
 
-message StartWorkflowRequest {
-  string workflow_name = 1;
-  string tenant_id = 2;
-  string user_id = 3;
-  map<string, string> context = 4;
+pub struct StartWorkflowRequest {
+    pub workflow_name: String,
+    pub tenant_id: TenantId,
+    pub user_id: UserId,
+    pub context: HashMap<String, String>,
 }
 
-message WorkflowResponse {
-  string workflow_id = 1;
-  string status = 2;
-  string message = 3;
+pub struct WorkflowResponse {
+    pub workflow_id: WorkflowId,
+    pub status: WorkflowStatus,
+    pub message: String,
 }
 
-message ApproveRequest {
-  string instance_id = 1;
-  string step_id = 2;
-  string approver_id = 3;
-  bool approved = 4;
-  string comment = 5;
+pub struct ApproveRequest {
+    pub instance_id: WorkflowId,
+    pub step_id: StepId,
+    pub approver_id: UserId,
+    pub approved: bool,
+    pub comment: Option<String>,
 }
 ```
+
+> **Note:** `WorkflowService` is consumed by `nexus-gateway` (HTTP handlers) and interacts with `nexus-agent` for AI task steps via trait dispatch.
 
 ---
 
@@ -210,7 +214,7 @@ Publish
 ### workflows
 
 ```sql
-CREATE TABLE workflows (
+CREATE TABLE workflow.definitions (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     tenant_id BIGINT NOT NULL,
     name VARCHAR(100) NOT NULL,
@@ -226,9 +230,9 @@ CREATE TABLE workflows (
 ### workflow_instances
 
 ```sql
-CREATE TABLE workflow_instances (
+CREATE TABLE workflow.instances (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    workflow_id BIGINT NOT NULL REFERENCES workflows(id),
+    workflow_id BIGINT NOT NULL REFERENCES workflow.definitions(id),
     tenant_id BIGINT NOT NULL,
     initiated_by BIGINT NOT NULL,
     status VARCHAR(50) NOT NULL DEFAULT 'running',
@@ -242,9 +246,9 @@ CREATE TABLE workflow_instances (
 ### workflow_steps
 
 ```sql
-CREATE TABLE workflow_steps (
+CREATE TABLE workflow.steps (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    instance_id BIGINT NOT NULL REFERENCES workflow_instances(id) ON DELETE CASCADE,
+    instance_id BIGINT NOT NULL REFERENCES workflow.instances(id) ON DELETE CASCADE,
     step_number INT NOT NULL,
     step_type VARCHAR(50) NOT NULL,
     name VARCHAR(100),
@@ -261,9 +265,9 @@ CREATE TABLE workflow_steps (
 ### workflow_approvals
 
 ```sql
-CREATE TABLE workflow_approvals (
+CREATE TABLE workflow.approvals (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    step_id BIGINT NOT NULL REFERENCES workflow_steps(id) ON DELETE CASCADE,
+    step_id BIGINT NOT NULL REFERENCES workflow.steps(id) ON DELETE CASCADE,
     approver_id BIGINT NOT NULL,
     status VARCHAR(50) NOT NULL DEFAULT 'pending',
     comment TEXT,

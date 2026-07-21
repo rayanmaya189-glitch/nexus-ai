@@ -1,25 +1,28 @@
-# AeroXe Nexus AI — Identity & Authentication Service
+# AeroXe Nexus AI — Identity & Authentication Module
 
 ## IAM, JWT, RBAC, ABAC, Multi-Tenant User Management
 
+> **Modular Monolith Module:** This document describes the `nexus-identity` crate — a module within the single `aeroxe-nexus` binary. It communicates with other modules via Rust trait interfaces (see [Communication Architecture](12-communication-architecture.md)).
+
 ---
 
-## 1. Service Identity
+## 1. Module Identity
 
 | Attribute | Value |
 |---|---|
-| Service Name | `identity-service` |
+| Module Name | `nexus-identity` |
+| Crate | `nexus-identity` (workspace member) |
 | Bounded Context | Identity |
 | Domain Type | Supporting Domain |
 | Language | Rust |
-| Database | `identity_db` (PostgreSQL) |
-| gRPC Port | 50054 |
+| Schema | `identity_` (in shared PostgreSQL) |
+| Dependencies | Redis (sessions, rate limiting) |
 
 ---
 
 ## 2. Purpose
 
-The Identity Service is the foundation of platform security. It manages:
+The Identity module is the foundation of platform security. It manages:
 
 - User registration and authentication
 - JWT token generation and validation
@@ -253,52 +256,43 @@ tenant_c_database
 
 ---
 
-## 7. gRPC Contract
+## 7. Public API Trait
 
-```protobuf
-syntax = "proto3";
-package aeroxe.identity;
-
-service IdentityService {
-  rpc CreateUser(CreateUserRequest) returns (CreateUserResponse);
-  rpc Authenticate(AuthRequest) returns (AuthResponse);
-  rpc CheckPermission(PermissionRequest) returns (PermissionResponse);
-  rpc GetUser(GetUserRequest) returns (GetUserResponse);
-  rpc AssignRole(AssignRoleRequest) returns (AssignRoleResponse);
+```rust
+// nexus-identity/src/interfaces/api.rs
+#[async_trait]
+pub trait IdentityService: Send + Sync {
+    async fn authenticate(&self, req: AuthRequest) -> Result<AuthResponse, IdentityError>;
+    async fn verify_token(&self, token: &str) -> Result<JWTClaims, IdentityError>;
+    async fn check_permission(&self, req: PermissionRequest) -> Result<bool, IdentityError>;
+    async fn validate_tenant(&self, tenant_id: TenantId) -> Result<Tenant, IdentityError>;
+    async fn create_user(&self, req: CreateUserRequest) -> Result<User, IdentityError>;
+    async fn get_user(&self, id: UserId) -> Result<Option<User>, IdentityError>;
+    async fn assign_role(&self, req: AssignRoleRequest) -> Result<(), IdentityError>;
 }
 
-message CreateUserRequest {
-  string tenant_id = 1;
-  string email = 2;
-  string password = 3;
-  repeated string roles = 4;
+pub struct AuthRequest {
+    pub email: String,
+    pub password: String,
+    pub tenant_id: TenantId,
 }
 
-message AuthRequest {
-  string email = 1;
-  string password = 2;
-  string tenant_id = 3;
+pub struct AuthResponse {
+    pub access_token: String,
+    pub refresh_token: String,
+    pub expires_in: i64,
+    pub user: User,
 }
 
-message AuthResponse {
-  string access_token = 1;
-  string refresh_token = 2;
-  int64 expires_in = 3;
-  User user = 4;
-}
-
-message PermissionRequest {
-  string user_id = 1;
-  string resource = 2;
-  string action = 3;
-  string tenant_id = 4;
-}
-
-message PermissionResponse {
-  bool allowed = 1;
-  string reason = 2;
+pub struct PermissionRequest {
+    pub user_id: UserId,
+    pub resource: String,
+    pub action: String,
+    pub tenant_id: TenantId,
 }
 ```
+
+> **Note:** `IdentityService` is consumed by `nexus-gateway` middleware (auth, tenant validation) and all other modules (permission checks) — all via in-process trait dispatch.
 
 ---
 
@@ -307,7 +301,7 @@ message PermissionResponse {
 ### users
 
 ```sql
-CREATE TABLE users (
+CREATE TABLE identity.users (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     tenant_id BIGINT NOT NULL,
     email VARCHAR(255) UNIQUE NOT NULL,
@@ -325,7 +319,7 @@ CREATE TABLE users (
 ### roles
 
 ```sql
-CREATE TABLE roles (
+CREATE TABLE identity.roles (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     tenant_id BIGINT,
     name VARCHAR(100) NOT NULL,
@@ -338,7 +332,7 @@ CREATE TABLE roles (
 ### permissions
 
 ```sql
-CREATE TABLE permissions (
+CREATE TABLE identity.permissions (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     name VARCHAR(100) UNIQUE NOT NULL,
     resource VARCHAR(100) NOT NULL,
@@ -350,11 +344,10 @@ CREATE TABLE permissions (
 ### user_roles
 
 ```sql
-CREATE TABLE user_roles (
-    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    role_id BIGINT NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+CREATE TABLE identity.user_roles (
+    user_id BIGINT NOT NULL REFERENCES identity.users(id) ON DELETE CASCADE,
+    role_id BIGINT NOT NULL REFERENCES identity.roles(id) ON DELETE CASCADE,
     assigned_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    assigned_by BIGINT,
     PRIMARY KEY(user_id, role_id)
 );
 ```
@@ -362,9 +355,9 @@ CREATE TABLE user_roles (
 ### role_permissions
 
 ```sql
-CREATE TABLE role_permissions (
-    role_id BIGINT NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
-    permission_id BIGINT NOT NULL REFERENCES permissions(id) ON DELETE CASCADE,
+CREATE TABLE identity.role_permissions (
+    role_id BIGINT NOT NULL REFERENCES identity.roles(id) ON DELETE CASCADE,
+    permission_id BIGINT NOT NULL REFERENCES identity.permissions(id) ON DELETE CASCADE,
     PRIMARY KEY(role_id, permission_id)
 );
 ```
@@ -372,16 +365,13 @@ CREATE TABLE role_permissions (
 ### tenants
 
 ```sql
-CREATE TABLE tenants (
+CREATE TABLE identity.tenants (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     slug VARCHAR(100) UNIQUE NOT NULL,
     plan VARCHAR(50) NOT NULL DEFAULT 'free',
     status VARCHAR(50) NOT NULL DEFAULT 'pending_kyc',
     kyc_status VARCHAR(50) NOT NULL DEFAULT 'pending',
-    kyc_submitted_at TIMESTAMP,
-    kyc_reviewed_at TIMESTAMP,
-    kyc_reviewed_by BIGINT,
     settings JSONB,
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
@@ -390,35 +380,31 @@ CREATE TABLE tenants (
 ### kyc_documents
 
 ```sql
-CREATE TABLE kyc_documents (
+CREATE TABLE identity.kyc_documents (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    tenant_id BIGINT NOT NULL REFERENCES tenants(id),
+    tenant_id BIGINT NOT NULL REFERENCES identity.tenants(id),
     document_type VARCHAR(100) NOT NULL,
     filename TEXT NOT NULL,
     storage_path TEXT NOT NULL,
     status VARCHAR(50) NOT NULL DEFAULT 'uploaded',
-    reviewed_at TIMESTAMP,
-    reviewed_by BIGINT,
-    rejection_reason TEXT,
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_kyc_tenant ON kyc_documents(tenant_id);
+CREATE INDEX idx_kyc_tenant ON identity.kyc_documents(tenant_id);
 ```
 
 ### api_keys
 
 ```sql
-CREATE TABLE api_keys (
+CREATE TABLE identity.api_keys (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     tenant_id BIGINT NOT NULL,
-    user_id BIGINT NOT NULL REFERENCES users(id),
+    user_id BIGINT NOT NULL REFERENCES identity.users(id),
     name VARCHAR(100) NOT NULL,
     key_hash TEXT NOT NULL,
     key_prefix VARCHAR(10) NOT NULL,
     scopes TEXT[],
     expires_at TIMESTAMP,
-    last_used_at TIMESTAMP,
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 ```
@@ -509,6 +495,8 @@ POST /api/v1/auth/change-password
 ---
 
 ## 12. Observability
+
+> **Note:** As a module within the monolith, identity metrics are collected via shared OpenTelemetry tracing spans in the binary, not via a separate metrics endpoint.
 
 | Metric | Description |
 |---|---|

@@ -1,27 +1,29 @@
-# AeroXe Nexus AI — Vision Intelligence Service
+# AeroXe Nexus AI — Vision Intelligence Module
 
 ## Image Processing, OCR, Visual Reasoning & Device Analysis
 
+> **Modular Monolith Module:** This document describes the `nexus-vision` crate — a module within the single `aeroxe-nexus` binary. It communicates with other modules via Rust trait interfaces (see [Communication Architecture](12-communication-architecture.md)).
+
 ---
 
-## 1. Service Identity
+## 1. Module Identity
 
 | Attribute | Value |
 |---|---|
-| Service Name | `vision-service` |
+| Module Name | `nexus-vision` |
+| Crate | `nexus-vision` (workspace member) |
 | Bounded Context | Vision Intelligence |
 | Domain Type | Core Domain |
 | Language | Rust |
-| Database | `vision_db` (PostgreSQL) |
+| Schema | `vision_` (in shared PostgreSQL) |
 | AI Model | `qwen3-vl:4b` (Ollama) |
-| gRPC Port | 50055 |
-| Object Storage | MinIO (`aeroxe-images` bucket) |
+| Dependencies | MinIO (image storage), Ollama (inference) |
 
 ---
 
 ## 2. Purpose
 
-The Vision Service provides AI-powered image understanding capabilities:
+The Vision module provides AI-powered image understanding capabilities within the `aeroxe-nexus` monolith:
 
 - Image analysis and description
 - Optical Character Recognition (OCR)
@@ -71,53 +73,35 @@ VisionAnalysis (Aggregate Root)
 
 ---
 
-## 4. gRPC Contract
+## 4. Public API Trait
 
-```protobuf
-syntax = "proto3";
-package aeroxe.vision;
-
-service VisionService {
-  rpc AnalyzeImage(ImageRequest) returns (ImageAnalysisResponse);
-  rpc ExtractText(ImageRequest) returns (OCRResponse);
-  rpc TroubleshootDevice(DeviceImageRequest) returns (TroubleshootResponse);
-  rpc BatchAnalyze(BatchImageRequest) returns (BatchAnalysisResponse);
+```rust
+// nexus-vision/src/interfaces/api.rs
+#[async_trait]
+pub trait VisionService: Send + Sync {
+    async fn analyze_image(&self, req: ImageRequest) -> Result<ImageAnalysisResponse, VisionError>;
+    async fn extract_text(&self, req: ImageRequest) -> Result<OCRResponse, VisionError>;
+    async fn troubleshoot_device(&self, req: DeviceImageRequest) -> Result<TroubleshootResponse, VisionError>;
+    async fn batch_analyze(&self, reqs: Vec<ImageRequest>) -> Result<Vec<ImageAnalysisResponse>, VisionError>;
 }
 
-message ImageRequest {
-  bytes image = 1;
-  string type = 2;
-  string task = 3;
-  string tenant_id = 4;
+pub struct ImageRequest {
+    pub image: Vec<u8>,
+    pub image_type: String,
+    pub task: String,
+    pub tenant_id: TenantId,
 }
 
-message ImageAnalysisResponse {
-  string description = 1;
-  float confidence = 2;
-  repeated DetectedObject objects = 3;
-  map<string, string> metadata = 4;
-}
-
-message OCRResponse {
-  string text = 1;
-  float confidence = 2;
-  string language = 3;
-  repeated TextRegion regions = 4;
-}
-
-message DeviceImageRequest {
-  bytes image = 1;
-  string device_type = 2;
-  string tenant_id = 3;
-}
-
-message TroubleshootResponse {
-  string diagnosis = 1;
-  float confidence = 2;
-  repeated string recommendations = 3;
-  string severity = 4;
+pub struct ImageAnalysisResponse {
+    pub description: String,
+    pub confidence: f32,
+    pub objects: Vec<DetectedObject>,
+    pub metadata: HashMap<String, String>,
+    pub latency_ms: f64,
 }
 ```
+
+> **Note:** `VisionService` is consumed by `nexus-agent` during multi-step agent execution — all via in-process trait dispatch, no network overhead.
 
 ---
 
@@ -243,7 +227,7 @@ Image Upload
 ### images
 
 ```sql
-CREATE TABLE images (
+CREATE TABLE vision.images (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     tenant_id BIGINT NOT NULL,
     user_id BIGINT NOT NULL,
@@ -259,9 +243,9 @@ CREATE TABLE images (
 ### vision_analysis
 
 ```sql
-CREATE TABLE vision_analysis (
+CREATE TABLE vision.analysis (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    image_id BIGINT NOT NULL REFERENCES images(id) ON DELETE CASCADE,
+    image_id BIGINT NOT NULL REFERENCES vision.images(id) ON DELETE CASCADE,
     tenant_id BIGINT NOT NULL,
     model VARCHAR(100) NOT NULL DEFAULT 'qwen3-vl:4b',
     analysis_type VARCHAR(50) NOT NULL,
@@ -277,9 +261,9 @@ CREATE TABLE vision_analysis (
 ### ocr_results
 
 ```sql
-CREATE TABLE ocr_results (
+CREATE TABLE vision.ocr_results (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    image_id BIGINT NOT NULL REFERENCES images(id) ON DELETE CASCADE,
+    image_id BIGINT NOT NULL REFERENCES vision.images(id) ON DELETE CASCADE,
     text TEXT NOT NULL,
     language VARCHAR(10) DEFAULT 'en',
     confidence FLOAT,

@@ -1,25 +1,28 @@
-# AeroXe Nexus AI — Agent Orchestrator Service
+# AeroXe Nexus AI — Agent Orchestrator Module
 
 ## AI Agent Lifecycle, Planning, Tool Execution & Orchestration
 
+> **Modular Monolith Module:** This document describes the `nexus-agent` crate — a module within the single `aeroxe-nexus` binary. It communicates with other modules via Rust trait interfaces (see [Communication Architecture](12-communication-architecture.md)).
+
 ---
 
-## 1. Service Identity
+## 1. Module Identity
 
 | Attribute | Value |
 |---|---|
-| Service Name | `agent-orchestrator-service` |
+| Module Name | `nexus-agent` |
+| Crate | `nexus-agent` (workspace member) |
 | Bounded Context | Agent Orchestration |
 | Domain Type | Core Domain |
 | Language | Rust |
-| Database | `agent_db` (PostgreSQL) |
-| gRPC Port | 50052 |
+| Schema | `agent_` (in shared PostgreSQL) |
+| Dependencies | `nexus-rag` (RagService trait), `nexus-memory` (MemoryService trait) + Ollama |
 
 ---
 
 ## 2. Purpose
 
-The Agent Orchestrator is the brain of the AI platform. It manages:
+The Agent Orchestrator module is the brain of the AI platform. It manages:
 
 - Agent lifecycle (creation, execution, completion, failure)
 - Task planning and decomposition
@@ -75,41 +78,36 @@ AgentExecution (Aggregate Root)
 
 ---
 
-## 4. gRPC Contract
+## 4. Public API Trait
 
-```protobuf
-syntax = "proto3";
-package aeroxe.agent;
-
-service AgentService {
-  rpc StartExecution(StartAgentRequest) returns (AgentExecutionResponse);
-  rpc GetExecutionStatus(StatusRequest) returns (StatusResponse);
-  rpc StreamExecution(StreamRequest) returns (stream ExecutionEvent);
-  rpc CancelExecution(CancelRequest) returns (CancelResponse);
+```rust
+// nexus-agent/src/interfaces/api.rs
+#[async_trait]
+pub trait AgentService: Send + Sync {
+    async fn start_execution(&self, req: StartAgentRequest) -> Result<ExecutionResponse, AgentError>;
+    async fn get_execution_status(&self, id: ExecutionId) -> Result<ExecutionStatus, AgentError>;
+    async fn stream_execution(&self, req: StreamRequest) -> Result<Receiver<ExecutionEvent>, AgentError>;
+    async fn cancel_execution(&self, id: ExecutionId) -> Result<(), AgentError>;
 }
 
-message StartAgentRequest {
-  string task = 1;
-  string agent_type = 2;
-  string context = 3;
-  map<string, string> metadata = 4;
-  string tenant_id = 5;
-  string user_id = 6;
+pub struct StartAgentRequest {
+    pub task: String,
+    pub agent_type: AgentType,
+    pub context: String,
+    pub metadata: HashMap<String, String>,
+    pub tenant_id: TenantId,
+    pub user_id: UserId,
 }
 
-message AgentExecutionResponse {
-  string execution_id = 1;
-  string status = 2;
-  string agent_type = 3;
-}
-
-message ExecutionEvent {
-  string event_type = 1; // "thinking", "tool_call", "tool_result", "token", "completed"
-  string content = 2;
-  string step = 3;
-  bool is_final = 4;
+pub struct ExecutionEvent {
+    pub event_type: EventType, // Thinking, ToolCall, ToolResult, Token, Completed
+    pub content: String,
+    pub step: u32,
+    pub is_final: bool,
 }
 ```
+
+> **Note:** AgentService is consumed by `nexus-ai-gateway` and `nexus-gateway` via trait dispatch — no network overhead.
 
 ---
 
@@ -287,7 +285,7 @@ Permission Engine (RBAC + ABAC check)
 Rate Limiter (Per-tool limits)
     |
     v
-Tool Execution (gRPC to target service)
+Tool Execution (trait method call to module)
     |
     v
 Result returned to Agent
@@ -348,12 +346,13 @@ Step 2 (after all complete):
 
 ---
 
-## 9. Database Schema (agent_db)
+## 9. Database Schema (agent_ schema)
 
 ### agents
 
 ```sql
-CREATE TABLE agents (
+-- Schema: agent_
+CREATE TABLE agent.agents (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     type VARCHAR(100) NOT NULL,
@@ -368,11 +367,11 @@ CREATE TABLE agents (
 ### agent_executions
 
 ```sql
-CREATE TABLE agent_executions (
+CREATE TABLE agent.executions (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     tenant_id BIGINT NOT NULL,
     user_id BIGINT NOT NULL,
-    agent_id BIGINT NOT NULL REFERENCES agents(id),
+    agent_id BIGINT NOT NULL REFERENCES agent.agents(id),
     task TEXT NOT NULL,
     status VARCHAR(50) NOT NULL DEFAULT 'pending',
     plan JSONB,
@@ -387,9 +386,9 @@ CREATE TABLE agent_executions (
 ### agent_steps
 
 ```sql
-CREATE TABLE agent_steps (
+CREATE TABLE agent.steps (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    execution_id BIGINT NOT NULL REFERENCES agent_executions(id),
+    execution_id BIGINT NOT NULL REFERENCES agent.executions(id),
     step_number INT NOT NULL,
     agent_type VARCHAR(100),
     action TEXT NOT NULL,
@@ -405,10 +404,10 @@ CREATE TABLE agent_steps (
 ### agent_document_sets
 
 ```sql
-CREATE TABLE agent_document_sets (
+CREATE TABLE agent.document_sets (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    agent_id BIGINT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
-    document_set_id BIGINT NOT NULL REFERENCES document_sets(id) ON DELETE CASCADE,
+    agent_id BIGINT NOT NULL REFERENCES agent.agents(id) ON DELETE CASCADE,
+    document_set_id BIGINT NOT NULL,  -- references rag.document_sets
     tenant_id BIGINT NOT NULL,
     permission_level VARCHAR(50) NOT NULL DEFAULT 'read',
     bound_by BIGINT NOT NULL,
@@ -416,56 +415,46 @@ CREATE TABLE agent_document_sets (
     UNIQUE(agent_id, document_set_id)
 );
 
-CREATE INDEX idx_agent_docsets_agent ON agent_document_sets(agent_id);
-CREATE INDEX idx_agent_docsets_tenant ON agent_document_sets(tenant_id);
+CREATE INDEX idx_agent_docsets_agent ON agent.document_sets(agent_id);
+CREATE INDEX idx_agent_docsets_tenant ON agent.document_sets(tenant_id);
 ```
 
 ### agent_databases
 
 ```sql
-CREATE TABLE agent_databases (
+CREATE TABLE agent.databases (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    agent_id BIGINT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+    agent_id BIGINT NOT NULL REFERENCES agent.agents(id) ON DELETE CASCADE,
     tenant_id BIGINT NOT NULL,
     connection_name VARCHAR(100) NOT NULL,
     host VARCHAR(255) NOT NULL,
     port INT NOT NULL DEFAULT 5432,
     database_name VARCHAR(100) NOT NULL,
-    username VARCHAR(100) NOT NULL,
     password_encrypted TEXT NOT NULL,
     ssl_mode VARCHAR(20) NOT NULL DEFAULT 'require',
     status VARCHAR(50) NOT NULL DEFAULT 'pending',
-    last_tested_at TIMESTAMP,
-    last_test_result VARCHAR(50),
-    server_version VARCHAR(50),
-    discovered_tables_count INT DEFAULT 0,
-    created_by BIGINT NOT NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
     UNIQUE(agent_id, database_name)
 );
 
-CREATE INDEX idx_agent_dbs_agent ON agent_databases(agent_id);
-CREATE INDEX idx_agent_dbs_tenant ON agent_databases(tenant_id);
+CREATE INDEX idx_agent_dbs_agent ON agent.databases(agent_id);
+CREATE INDEX idx_agent_dbs_tenant ON agent.databases(tenant_id);
 ```
 
 ### agent_database_tables
 
 ```sql
-CREATE TABLE agent_database_tables (
+CREATE TABLE agent.database_tables (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    agent_database_id BIGINT NOT NULL REFERENCES agent_databases(id) ON DELETE CASCADE,
-    agent_id BIGINT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
+    agent_database_id BIGINT NOT NULL REFERENCES agent.databases(id) ON DELETE CASCADE,
+    agent_id BIGINT NOT NULL REFERENCES agent.agents(id) ON DELETE CASCADE,
     table_name VARCHAR(255) NOT NULL,
     columns JSONB NOT NULL,
     primary_key JSONB,
-    row_count_estimate INT,
-    bound_at TIMESTAMP NOT NULL DEFAULT NOW(),
     UNIQUE(agent_database_id, table_name)
 );
 
-CREATE INDEX idx_agent_dbtables_agent ON agent_database_tables(agent_id);
-CREATE INDEX idx_agent_dbtables_db ON agent_database_tables(agent_database_id);
+CREATE INDEX idx_agent_dbtables_agent ON agent.database_tables(agent_id);
+CREATE INDEX idx_agent_dbtables_db ON agent.database_tables(agent_database_id);
 ```
 
 ---

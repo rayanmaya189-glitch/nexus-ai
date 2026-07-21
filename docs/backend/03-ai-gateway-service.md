@@ -1,34 +1,36 @@
-# AeroXe Nexus AI — AI Gateway Service
+# AeroXe Nexus AI — AI Gateway Module
 
 ## Central AI Request Processing, Routing & Management
 
+> **Modular Monolith Module:** This document describes the `nexus-ai-gateway` crate — a module within the single `aeroxe-nexus` binary. It communicates with other modules via Rust trait interfaces (see [Communication Architecture](12-communication-architecture.md)), not gRPC.
+
 ---
 
-## 1. Service Identity
+## 1. Module Identity
 
 | Attribute | Value |
 |---|---|
-| Service Name | `ai-gateway-service` |
+| Module Name | `nexus-ai-gateway` |
+| Crate | `nexus-ai-gateway` (workspace member) |
 | Bounded Context | AI Gateway |
 | Domain Type | Core Domain |
 | Language | Rust |
-| Database | `gateway_db` (PostgreSQL) |
-| gRPC Port | 50051 |
-| REST Port | 8080 |
+| Schema | `ai_` (in shared PostgreSQL) |
+| Ports | Internal trait dispatch (no gRPC port — optional: 50051 for external gRPC) |
 
 ---
 
 ## 2. Purpose
 
-The AI Gateway is the single entry point for all AI requests in the AeroXe Nexus AI platform. It handles:
+The AI Gateway module is the entry point for all AI requests within the AeroXe Nexus AI monolith. It handles:
 
-- Request reception and validation
-- Authentication and authorization enforcement
-- Rate limiting per tenant
-- Request routing to appropriate AI agents
-- Response aggregation and streaming
-- Session management
-- Audit logging
+- Request reception and validation (from `nexus-gateway` via trait call)
+- Authentication and authorization enforcement (delegates to `nexus-identity` trait)
+- Rate limiting enforcement
+- Request routing to appropriate AI agents (`nexus-agent` trait)
+- Response aggregation and streaming (via tokio channels)
+- Session management (Redis + PostgreSQL)
+- Audit event publishing (NATS)
 
 ---
 
@@ -73,39 +75,42 @@ AIRequest (Aggregate Root)
 
 ---
 
-## 4. gRPC Contract
+## 4. Public API Trait (Replaces gRPC)
 
-```protobuf
-syntax = "proto3";
-package aeroxe.ai_gateway;
-
-service AIGatewayService {
-  rpc SubmitRequest(AIRequest) returns (AIResponse);
-  rpc StreamResponse(AIRequest) returns (stream AIChunk);
-  rpc GetSessionStatus(SessionRequest) returns (SessionStatus);
-  rpc CancelRequest(CancelRequest) returns (CancelResponse);
+```rust
+// nexus-ai-gateway/src/interfaces/api.rs
+#[async_trait]
+pub trait AIGatewayService: Send + Sync {
+    async fn submit_request(&self, req: AIRequest) -> Result<AIResponse, AIGatewayError>;
+    async fn stream_response(&self, req: AIRequest) -> Result<Receiver<AIChunk>, AIGatewayError>;
+    async fn get_session_status(&self, id: SessionId) -> Result<SessionStatus, AIGatewayError>;
+    async fn cancel_request(&self, id: RequestId) -> Result<(), AIGatewayError>;
 }
 
-message AIRequest {
-  string session_id = 1;
-  string prompt = 2;
-  string agent = 3;
-  map<string, string> metadata = 4;
+pub struct AIRequest {
+    pub session_id: SessionId,
+    pub prompt: Prompt,
+    pub agent: AgentType,
+    pub metadata: HashMap<String, String>,
+    pub tenant_id: TenantId,
+    pub user_id: UserId,
 }
 
-message AIResponse {
-  string response = 1;
-  string model = 2;
-  string execution_id = 3;
-  float latency_ms = 4;
+pub struct AIResponse {
+    pub response: String,
+    pub model: String,
+    pub execution_id: ExecutionId,
+    pub latency_ms: f64,
 }
 
-message AIChunk {
-  string token = 1;
-  bool is_final = 2;
-  string chunk_type = 3; // "token", "tool_call", "thinking", "completed"
+pub struct AIChunk {
+    pub token: String,
+    pub is_final: bool,
+    pub chunk_type: ChunkType, // Token, ToolCall, Thinking, Completed
 }
 ```
+
+> **Note:** The optional external gRPC contract is defined in `proto/ai_gateway.proto` for partner/SDK integrations. It wraps the same trait methods via tonic-grpc.
 
 ---
 
@@ -272,7 +277,7 @@ AI Response
 ### 7.4 Filter Implementation
 
 ```rust
-// Rust implementation in api-gateway-service
+// Rust implementation in nexus-ai-gateway::domain
 use aho_corasick::AhoCorasick;
 
 struct SensitiveWordFilter {
@@ -505,7 +510,9 @@ CREATE TABLE ai_requests (
 
 ---
 
-## 12. NATS Events
+## 12. NATS Events (Async Communication)
+
+> **Note:** Unlike the old microservice architecture, module-to-module calls use trait interfaces, not NATS. NATS is used only for async event publishing that other modules may consume for background processing.
 
 ### Published
 
@@ -526,18 +533,16 @@ CREATE TABLE ai_requests (
 
 ## 13. Error Handling
 
-### gRPC Error Codes
+### Error Types
 
-| Code | Name | HTTP Equivalent |
-|---|---|---|
-| 0 | UNKNOWN | 500 |
-| 1 | INVALID_REQUEST | 400 |
-| 2 | UNAUTHORIZED | 401 |
-| 3 | FORBIDDEN | 403 |
-| 4 | NOT_FOUND | 404 |
-| 5 | TIMEOUT | 408 |
-| 6 | MODEL_ERROR | 502 |
-| 7 | DATABASE_ERROR | 503 |
+| Code | Description |
+|---|---|
+| `AIGatewayError::Unknown` | Unexpected error |
+| `AIGatewayError::InvalidRequest` | Malformed input |
+| `AIGatewayError::ModelError` | Ollama inference failed |
+| `AIGatewayError::Timeout` | Processing exceeded deadline |
+| `AIGatewayError::RateLimited` | Rate limit exceeded |
+| `AIGatewayError::FilterBlocked` | Content filter triggered |
 
 ### Standard Error Response
 

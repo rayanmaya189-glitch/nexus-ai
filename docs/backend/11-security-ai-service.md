@@ -1,25 +1,28 @@
-# AeroXe Nexus AI — Security AI Service
+# AeroXe Nexus AI — Security AI Module
 
 ## AI-Powered Security Analysis, Vulnerability Detection & Threat Intelligence
 
+> **Modular Monolith Module:** This document describes the `nexus-security-ai` crate — a module within the single `aeroxe-nexus` binary. It communicates with other modules via Rust trait interfaces (see [Communication Architecture](12-communication-architecture.md)).
+
 ---
 
-## 1. Service Identity
+## 1. Module Identity
 
 | Attribute | Value |
 |---|---|
-| Service Name | `security-ai-service` |
+| Module Name | `nexus-security-ai` |
+| Crate | `nexus-security-ai` (workspace member) |
 | Bounded Context | Security Intelligence |
 | Domain Type | Core Domain |
 | Language | Rust |
 | AI Model | `whiterabbitneo:7b` (Ollama) |
-| gRPC Port | 50059 |
+| Dependencies | Ollama (inference), Elasticsearch (event storage) |
 
 ---
 
 ## 2. Purpose
 
-The Security AI Service provides AI-powered security intelligence:
+The Security AI module provides AI-powered security intelligence within the `aeroxe-nexus` monolith:
 
 - Code security review and vulnerability detection
 - Threat analysis and risk assessment
@@ -69,51 +72,44 @@ SecurityAnalysis (Aggregate Root)
 
 ---
 
-## 4. gRPC Contract
+## 4. Public API Trait
 
-```protobuf
-syntax = "proto3";
-package aeroxe.security;
-
-service SecurityService {
-  rpc AnalyzeSecurity(SecurityRequest) returns (SecurityReport);
-  rpc ReviewCode(CodeReviewRequest) returns (CodeReviewResponse);
-  rpc ScanInfrastructure(ScanRequest) returns (ScanResponse);
+```rust
+// nexus-security-ai/src/interfaces/api.rs
+#[async_trait]
+pub trait SecurityService: Send + Sync {
+    async fn analyze_security(&self, req: SecurityRequest) -> Result<SecurityReport, SecurityError>;
+    async fn review_code(&self, req: CodeReviewRequest) -> Result<CodeReviewResponse, SecurityError>;
+    async fn scan_infrastructure(&self, req: ScanRequest) -> Result<ScanResponse, SecurityError>;
 }
 
-message SecurityRequest {
-  string target = 1;
-  string type = 2; // "code", "infrastructure", "dependency"
-  string tenant_id = 3;
+pub struct SecurityRequest {
+    pub target: String,
+    pub scan_type: ScanType, // Code, Infrastructure, Dependency
+    pub tenant_id: TenantId,
 }
 
-message SecurityReport {
-  float risk_score = 1;
-  repeated Finding findings = 2;
-  repeated Recommendation recommendations = 3;
-  string summary = 4;
+pub struct SecurityReport {
+    pub risk_score: f32,
+    pub findings: Vec<Finding>,
+    pub recommendations: Vec<Recommendation>,
+    pub summary: String,
 }
 
-message Finding {
-  string severity = 1;
-  string category = 2;
-  string description = 3;
-  string location = 4;
-  string recommendation = 5;
+pub struct CodeReviewRequest {
+    pub code: String,
+    pub language: String,
+    pub context: Option<String>,
 }
 
-message CodeReviewRequest {
-  string code = 1;
-  string language = 2;
-  string context = 3;
-}
-
-message CodeReviewResponse {
-  repeated Finding issues = 1;
-  string secure_alternative = 2;
-  float risk_score = 3;
+pub struct CodeReviewResponse {
+    pub issues: Vec<Finding>,
+    pub secure_alternative: String,
+    pub risk_score: f32,
 }
 ```
+
+> **Note:** `SecurityService` is consumed by `nexus-ai-gateway` (prompt injection scanning) and `nexus-gateway` (API security checks) — all via in-process trait dispatch.
 
 ---
 

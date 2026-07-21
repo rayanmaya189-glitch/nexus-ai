@@ -1,25 +1,28 @@
-# AeroXe Nexus AI — SQL Intelligence Service
+# AeroXe Nexus AI — SQL Intelligence Module
 
 ## Natural Language SQL Generation, Safe Query Execution & Business Analytics
 
+> **Modular Monolith Module:** This document describes the `nexus-sql-agent` crate — a module within the single `aeroxe-nexus` binary. It communicates with other modules via Rust trait interfaces (see [Communication Architecture](12-communication-architecture.md)).
+
 ---
 
-## 1. Service Identity
+## 1. Module Identity
 
 | Attribute | Value |
 |---|---|
-| Service Name | `sql-agent-service` |
+| Module Name | `nexus-sql-agent` |
+| Crate | `nexus-sql-agent` (workspace member) |
 | Bounded Context | SQL Intelligence |
 | Domain Type | Core Domain |
 | Language | Rust |
 | AI Model | `qwen2.5-coder:3b` (Ollama) |
-| gRPC Port | 50056 |
+| Dependencies | Ollama (SQL generation), client DB connections (read-only) |
 
 ---
 
 ## 2. Purpose
 
-The SQL Intelligence Service enables natural language business intelligence. Users ask questions in plain English, and the service generates safe, validated SQL queries against business databases, returning results with explanations.
+The SQL Intelligence module enables natural language business intelligence within the `aeroxe-nexus` monolith. Users ask questions in plain English, and the module generates safe, validated SQL queries against business databases, returning results with explanations.
 
 ---
 
@@ -53,46 +56,47 @@ QueryExecution (Aggregate Root)
 
 ---
 
-## 4. gRPC Contract
+## 4. Public API Trait
 
-```protobuf
-syntax = "proto3";
-package aeroxe.sql;
-
-service SQLService {
-  rpc GenerateQuery(QueryRequest) returns (SQLResponse);
-  rpc ExecuteQuery(SQLRequest) returns (ResultResponse);
-  rpc ExplainQuery(ExplainRequest) returns (ExplainResponse);
-  rpc StreamQuery(SQLRequest) returns (stream ResultChunk);
+```rust
+// nexus-sql-agent/src/interfaces/api.rs
+#[async_trait]
+pub trait SQLAgentService: Send + Sync {
+    async fn generate_query(&self, req: QueryRequest) -> Result<SQLResponse, SQLError>;
+    async fn execute_query(&self, req: SQLRequest) -> Result<ResultResponse, SQLError>;
+    async fn explain_query(&self, req: ExplainRequest) -> Result<ExplainResponse, SQLError>;
+    async fn stream_query(&self, req: SQLRequest) -> Result<Receiver<ResultChunk>, SQLError>;
 }
 
-message QueryRequest {
-  string question = 1;
-  string database = 2;
-  string tenant_id = 3;
-  string user_id = 4;
+pub struct QueryRequest {
+    pub question: String,
+    pub database: String,
+    pub tenant_id: TenantId,
+    pub user_id: UserId,
 }
 
-message SQLResponse {
-  string sql = 1;
-  string explanation = 2;
-  bool is_safe = 3;
-  repeated string warnings = 4;
+pub struct SQLResponse {
+    pub sql: String,
+    pub explanation: String,
+    pub is_safe: bool,
+    pub warnings: Vec<String>,
 }
 
-message SQLRequest {
-  string sql = 1;
-  string database = 2;
-  string tenant_id = 3;
+pub struct SQLRequest {
+    pub sql: String,
+    pub database: String,
+    pub tenant_id: TenantId,
 }
 
-message ResultResponse {
-  repeated ColumnInfo columns = 1;
-  repeated Row rows = 2;
-  int32 row_count = 3;
-  float execution_time_ms = 4;
+pub struct ResultResponse {
+    pub columns: Vec<ColumnInfo>,
+    pub rows: Vec<Row>,
+    pub row_count: u32,
+    pub execution_time_ms: f64,
 }
 ```
+
+> **Note:** `SQLAgentService` is consumed by `nexus-agent` during multi-agent execution flows — all via in-process trait dispatch.
 
 ---
 

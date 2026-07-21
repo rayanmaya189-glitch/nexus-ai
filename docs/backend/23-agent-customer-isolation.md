@@ -2,6 +2,8 @@
 
 ## Customer Data Isolation + Cross-Platform Boundaries + Sensitive Info Protection
 
+> **Modular Monolith Context:** Customer isolation is enforced at multiple layers within the `aeroxe-nexus` binary. The `nexus-identity` module handles auth, `nexus-agent` enforces scope, and `nexus-audit` logs all access. All cross-module isolation checks use trait interfaces, not network calls. See [Security Architecture](14-security-architecture.md).
+
 ---
 
 ## 1. Overview

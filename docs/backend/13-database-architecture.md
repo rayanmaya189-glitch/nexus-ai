@@ -1,64 +1,106 @@
 # AeroXe Nexus AI — Database Architecture
 
-## PostgreSQL, pgvector, Apache AGE, Redis, Elasticsearch & MinIO
+## Shared PostgreSQL with Schema-per-Module + pgvector + Redis + MinIO
 
 ---
 
 ## 1. Architecture Principles
 
-AeroXe Nexus AI follows Database-per-Microservice architecture:
+AeroXe Nexus AI uses a **shared PostgreSQL cluster with schema-per-module** architecture. This provides the **isolation benefits of microservices** with the **operational simplicity of a monolith**.
 
 | Rule | Description |
 |---|---|
-| Service Ownership | Each microservice owns its database |
-| No Cross-DB Access | Services communicate through gRPC/NATS only |
-| Event Synchronization | Data consistency through domain events |
-| Read Model Optimization | Read models can be optimized separately |
-| Tenant Isolation | Mandatory `tenant_id` in all business tables |
+| **Schema-per-BoundedContext** | Each module owns a PostgreSQL schema (namespace) |
+| **No Cross-Schema Access via SQL** | Modules access other module's data only through Rust trait methods |
+| **Schema = Future Service Boundary** | Any schema can be extracted to a standalone database service |
+| **Shared Cluster** | Single PostgreSQL cluster for all modules (replication + failover) |
+| **Mandatory tenant_id** | All business tables include `tenant_id` for multi-tenancy |
 
----
+### Why Schema-per-Module (Not Database-per-Service)
 
-## 2. Storage Technology Selection
-
-| Requirement | Technology | Purpose |
+| Aspect | Microservice DB-per-Service | Modular Monolith Schema-per-Module |
 |---|---|---|
-| Transaction Data | PostgreSQL 18 | Primary relational database |
-| Vector Search | pgvector | Semantic search embeddings |
-| Knowledge Graph | Apache AGE | Entity relationships |
-| Cache | Redis | Short-term memory, sessions, rate limiting |
-| Full Text Search | Elasticsearch | Document search, logs, audit |
-| File Storage | MinIO | Documents, images, model files |
-| Event Storage | NATS JetStream | Event streaming persistence |
+| Transactions | Distributed (2PC / Saga) | Standard ACID (same connection) |
+| Schema changes | N separate migrations | Ordered migrations with module prefix |
+| Query across contexts | gRPC/NATS joins | Trait method calls + in-process |
+| Backup | N separate backups | Single pg_dump |
+| Future extraction | N/A | Move schema to new cluster |
+| Operational cost | High (N databases) | Low (1 database cluster) |
 
 ---
 
-## 3. Database-per-Service Map
+## 2. Storage Technology Map
+
+| Requirement | Technology | Module Users |
+|---|---|---|
+| Transactional Data | **PostgreSQL 18** | All modules |
+| Vector Search | pgvector (extension) | nexus-rag, nexus-memory |
+| Knowledge Graph | Apache AGE (extension) | nexus-rag |
+| Cache / Short-Term Memory | **Redis** | nexus-gateway, nexus-memory, nexus-identity |
+| Full-Text Search | **Elasticsearch** | nexus-rag, nexus-audit |
+| File Storage | **MinIO** | nexus-rag, nexus-vision |
+| Event Streaming | **NATS JetStream** | All modules (async only) |
+
+---
+
+## 3. Schema-per-Module Map
 
 ```
-AeroXe Nexus AI
-    |
-    ===================================================
-
-    identity-service     -> identity_db    (PostgreSQL)
-    ai-gateway-service   -> gateway_db     (PostgreSQL)
-    agent-orchestrator   -> agent_db       (PostgreSQL)
-    rag-service          -> rag_db         (PostgreSQL + pgvector)
-    vision-service       -> vision_db      (PostgreSQL)
-    memory-service       -> memory_db      (PostgreSQL + pgvector) + Redis
-    workflow-service     -> workflow_db    (PostgreSQL)
-    audit-service        -> audit_db       (PostgreSQL + Elasticsearch)
-
-    ===================================================
+PostgreSQL 18 Cluster
+│
+├── Schema: identity_
+│   └── Module: nexus-identity
+│
+├── Schema: ai_
+│   └── Module: nexus-ai-gateway
+│
+├── Schema: agent_
+│   └── Module: nexus-agent
+│
+├── Schema: rag_
+│   └── Module: nexus-rag
+│
+├── Schema: vision_
+│   └── Module: nexus-vision
+│
+├── Schema: sql_
+│   └── Module: nexus-sql-agent
+│
+├── Schema: memory_
+│   └── Module: nexus-memory
+│
+├── Schema: workflow_
+│   └── Module: nexus-workflow
+│
+├── Schema: security_
+│   └── Module: nexus-security-ai
+│
+├── Schema: audit_
+│   └── Module: nexus-audit
+│
+├── Schema: notif_
+│   └── Module: nexus-notification
+│
+├── Schema: config_
+│   └── Module: nexus-config
+│
+├── Schema: models_
+│   └── Module: nexus-model-registry
+│
+└── Schema: eco_
+    └── Module: nexus-ecosystem
 ```
 
 ---
 
-## 4. Identity Database (identity_db)
+## 4. Identity Schema (identity_)
 
-### users
+Module: `nexus-identity`
 
 ```sql
-CREATE TABLE users (
+CREATE SCHEMA IF NOT EXISTS identity;
+
+CREATE TABLE identity.users (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     tenant_id BIGINT NOT NULL,
     email VARCHAR(255) UNIQUE NOT NULL,
@@ -66,95 +108,79 @@ CREATE TABLE users (
     display_name VARCHAR(255),
     status VARCHAR(50) NOT NULL DEFAULT 'active',
     mfa_enabled BOOLEAN DEFAULT FALSE,
+    mfa_secret TEXT,
     last_login_at TIMESTAMP,
     created_at TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_users_tenant ON users(tenant_id);
-CREATE INDEX idx_users_email ON users(email);
-```
-
-### roles
-
-```sql
-CREATE TABLE roles (
+CREATE TABLE identity.roles (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     tenant_id BIGINT,
     name VARCHAR(100) NOT NULL,
     description TEXT,
-    is_system BOOLEAN DEFAULT FALSE,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    is_system BOOLEAN DEFAULT FALSE
 );
-```
 
-### permissions
-
-```sql
-CREATE TABLE permissions (
+CREATE TABLE identity.permissions (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     name VARCHAR(100) UNIQUE NOT NULL,
     resource VARCHAR(100) NOT NULL,
     action VARCHAR(50) NOT NULL
 );
-```
 
-### user_roles
-
-```sql
-CREATE TABLE user_roles (
-    user_id BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    role_id BIGINT NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
-    assigned_at TIMESTAMP NOT NULL DEFAULT NOW(),
+CREATE TABLE identity.user_roles (
+    user_id BIGINT NOT NULL REFERENCES identity.users(id) ON DELETE CASCADE,
+    role_id BIGINT NOT NULL REFERENCES identity.roles(id) ON DELETE CASCADE,
     PRIMARY KEY(user_id, role_id)
 );
-```
 
-### tenants
+CREATE TABLE identity.role_permissions (
+    role_id BIGINT NOT NULL REFERENCES identity.roles(id) ON DELETE CASCADE,
+    permission_id BIGINT NOT NULL REFERENCES identity.permissions(id) ON DELETE CASCADE,
+    PRIMARY KEY(role_id, permission_id)
+);
 
-```sql
-CREATE TABLE tenants (
+CREATE TABLE identity.tenants (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
     slug VARCHAR(100) UNIQUE NOT NULL,
     plan VARCHAR(50) NOT NULL DEFAULT 'free',
     status VARCHAR(50) NOT NULL DEFAULT 'pending_kyc',
     kyc_status VARCHAR(50) NOT NULL DEFAULT 'pending',
-    kyc_submitted_at TIMESTAMP,
-    kyc_reviewed_at TIMESTAMP,
-    kyc_reviewed_by BIGINT,
-    settings JSONB,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    settings JSONB
 );
-```
 
-### kyc_documents
-
-```sql
-CREATE TABLE kyc_documents (
+CREATE TABLE identity.kyc_documents (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    tenant_id BIGINT NOT NULL REFERENCES tenants(id),
+    tenant_id BIGINT NOT NULL REFERENCES identity.tenants(id),
     document_type VARCHAR(100) NOT NULL,
     filename TEXT NOT NULL,
     storage_path TEXT NOT NULL,
-    status VARCHAR(50) NOT NULL DEFAULT 'uploaded',
-    reviewed_at TIMESTAMP,
-    reviewed_by BIGINT,
-    rejection_reason TEXT,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    status VARCHAR(50) NOT NULL DEFAULT 'uploaded'
 );
 
-CREATE INDEX idx_kyc_tenant ON kyc_documents(tenant_id);
+CREATE TABLE identity.api_keys (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    tenant_id BIGINT NOT NULL,
+    user_id BIGINT NOT NULL,
+    key_hash TEXT NOT NULL,
+    key_prefix VARCHAR(10) NOT NULL,
+    scopes TEXT[],
+    expires_at TIMESTAMP
+);
 ```
 
 ---
 
-## 5. Gateway Database (gateway_db)
+## 5. AI Gateway Schema (ai_)
 
-### ai_sessions
+Module: `nexus-ai-gateway`
 
 ```sql
-CREATE TABLE ai_sessions (
+CREATE SCHEMA IF NOT EXISTS ai;
+
+CREATE TABLE ai.sessions (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     tenant_id BIGINT NOT NULL,
     user_id BIGINT NOT NULL,
@@ -162,95 +188,111 @@ CREATE TABLE ai_sessions (
     status VARCHAR(50) NOT NULL DEFAULT 'active',
     metadata JSONB
 );
-```
 
-### ai_requests
-
-```sql
-CREATE TABLE ai_requests (
+CREATE TABLE ai.requests (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    session_id BIGINT NOT NULL REFERENCES ai_sessions(id),
+    session_id BIGINT NOT NULL REFERENCES ai.sessions(id),
     tenant_id BIGINT NOT NULL,
     prompt TEXT NOT NULL,
     model VARCHAR(100),
     agent VARCHAR(100),
     status VARCHAR(50) NOT NULL DEFAULT 'pending',
     latency_ms FLOAT,
-    tokens_used INT,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    completed_at TIMESTAMP
+    tokens_used INT
 );
-
-CREATE INDEX idx_requests_session ON ai_requests(session_id);
-CREATE INDEX idx_requests_tenant ON ai_requests(tenant_id, created_at DESC);
 ```
 
 ---
 
-## 6. Agent Database (agent_db)
+## 6. Agent Schema (agent_)
 
-### agents
+Module: `nexus-agent`
 
 ```sql
-CREATE TABLE agents (
+CREATE SCHEMA IF NOT EXISTS agent;
+
+CREATE TABLE agent.agents (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     type VARCHAR(100) NOT NULL,
     model VARCHAR(100) NOT NULL,
     system_prompt TEXT,
     capabilities JSONB,
-    status VARCHAR(50) NOT NULL DEFAULT 'active',
-    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    status VARCHAR(50) NOT NULL DEFAULT 'active'
 );
-```
 
-### agent_executions
-
-```sql
-CREATE TABLE agent_executions (
+CREATE TABLE agent.executions (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     tenant_id BIGINT NOT NULL,
     user_id BIGINT NOT NULL,
-    agent_id BIGINT NOT NULL REFERENCES agents(id),
+    agent_id BIGINT NOT NULL REFERENCES agent.agents(id),
     task TEXT NOT NULL,
     status VARCHAR(50) NOT NULL DEFAULT 'pending',
     plan JSONB,
     result JSONB,
     tokens_used INT,
-    latency_ms FLOAT,
-    started_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    completed_at TIMESTAMP
+    latency_ms FLOAT
 );
 
-CREATE INDEX idx_executions_tenant ON agent_executions(tenant_id, started_at DESC);
-```
-
-### agent_steps
-
-```sql
-CREATE TABLE agent_steps (
+CREATE TABLE agent.steps (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    execution_id BIGINT NOT NULL REFERENCES agent_executions(id) ON DELETE CASCADE,
+    execution_id BIGINT NOT NULL REFERENCES agent.executions(id) ON DELETE CASCADE,
     step_number INT NOT NULL,
     agent_type VARCHAR(100),
     action TEXT NOT NULL,
     tool_name VARCHAR(100),
     tool_params JSONB,
     result JSONB,
+    status VARCHAR(50) NOT NULL DEFAULT 'pending'
+);
+
+CREATE TABLE agent.document_sets (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    agent_id BIGINT NOT NULL REFERENCES agent.agents(id) ON DELETE CASCADE,
+    document_set_id BIGINT NOT NULL,  -- references rag.document_sets
+    tenant_id BIGINT NOT NULL,
+    permission_level VARCHAR(50) NOT NULL DEFAULT 'read',
+    UNIQUE(agent_id, document_set_id)
+);
+
+CREATE TABLE agent.databases (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    agent_id BIGINT NOT NULL REFERENCES agent.agents(id) ON DELETE CASCADE,
+    tenant_id BIGINT NOT NULL,
+    connection_name VARCHAR(100) NOT NULL,
+    host VARCHAR(255) NOT NULL,
+    port INT NOT NULL DEFAULT 5432,
+    database_name VARCHAR(100) NOT NULL,
+    password_encrypted TEXT NOT NULL,
+    ssl_mode VARCHAR(20) NOT NULL DEFAULT 'require',
     status VARCHAR(50) NOT NULL DEFAULT 'pending',
-    started_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    completed_at TIMESTAMP
+    UNIQUE(agent_id, database_name)
+);
+
+CREATE TABLE agent.database_tables (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    agent_database_id BIGINT NOT NULL REFERENCES agent.databases(id) ON DELETE CASCADE,
+    agent_id BIGINT NOT NULL REFERENCES agent.agents(id) ON DELETE CASCADE,
+    table_name VARCHAR(255) NOT NULL,
+    columns JSONB NOT NULL,
+    primary_key JSONB,
+    UNIQUE(agent_database_id, table_name)
 );
 ```
 
 ---
 
-## 7. RAG Database (rag_db) — pgvector
+## 7. RAG Schema (rag_) — pgvector
 
-### documents
+Module: `nexus-rag`
 
 ```sql
-CREATE TABLE documents (
+CREATE SCHEMA IF NOT EXISTS rag;
+
+-- Enable pgvector extension for schema
+CREATE EXTENSION IF NOT EXISTS vector;
+
+CREATE TABLE rag.documents (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     tenant_id BIGINT NOT NULL,
     filename TEXT NOT NULL,
@@ -258,203 +300,89 @@ CREATE TABLE documents (
     status VARCHAR(50) NOT NULL DEFAULT 'uploaded',
     size_bytes BIGINT,
     storage_path TEXT,
-    chunk_count INT DEFAULT 0,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    processed_at TIMESTAMP
+    chunk_count INT DEFAULT 0
 );
 
-CREATE INDEX idx_documents_tenant ON documents(tenant_id, status);
-```
-
-### document_chunks
-
-```sql
-CREATE TABLE document_chunks (
+CREATE TABLE rag.chunks (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    document_id BIGINT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+    document_id BIGINT NOT NULL REFERENCES rag.documents(id) ON DELETE CASCADE,
     content TEXT NOT NULL,
     chunk_index INT NOT NULL,
     token_count INT,
     embedding vector(768),
-    metadata JSONB,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    metadata JSONB
 );
 
-CREATE INDEX idx_chunks_document ON document_chunks(document_id);
-CREATE INDEX idx_chunks_embedding ON document_chunks
+CREATE INDEX idx_rag_chunks_embedding ON rag.chunks
 USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
-```
 
-### document_metadata
-
-```sql
-CREATE TABLE document_metadata (
-    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    document_id BIGINT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
-    metadata JSONB NOT NULL
-);
-```
-
-### document_sets
-
-```sql
-CREATE TABLE document_sets (
+CREATE TABLE rag.document_sets (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     tenant_id BIGINT NOT NULL,
     name VARCHAR(255) NOT NULL,
     description TEXT,
     tags JSONB,
     status VARCHAR(50) NOT NULL DEFAULT 'draft',
-    document_count INT DEFAULT 0,
-    total_chunks INT DEFAULT 0,
-    created_by BIGINT NOT NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+    document_count INT DEFAULT 0
 );
 
-CREATE INDEX idx_docsets_tenant ON document_sets(tenant_id, status);
-```
-
-### document_set_documents
-
-```sql
-CREATE TABLE document_set_documents (
-    document_set_id BIGINT NOT NULL REFERENCES document_sets(id) ON DELETE CASCADE,
-    document_id BIGINT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
-    added_at TIMESTAMP NOT NULL DEFAULT NOW(),
+CREATE TABLE rag.document_set_documents (
+    document_set_id BIGINT NOT NULL REFERENCES rag.document_sets(id) ON DELETE CASCADE,
+    document_id BIGINT NOT NULL REFERENCES rag.documents(id) ON DELETE CASCADE,
     PRIMARY KEY(document_set_id, document_id)
 );
-
-CREATE INDEX idx_dsdocs_document ON document_set_documents(document_id);
-```
-
-### agent_document_sets
-
-```sql
-CREATE TABLE agent_document_sets (
-    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    agent_id BIGINT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
-    document_set_id BIGINT NOT NULL REFERENCES document_sets(id) ON DELETE CASCADE,
-    tenant_id BIGINT NOT NULL,
-    permission_level VARCHAR(50) NOT NULL DEFAULT 'read',
-    bound_by BIGINT NOT NULL,
-    bound_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    UNIQUE(agent_id, document_set_id)
-);
-
-CREATE INDEX idx_agent_docsets_agent ON agent_document_sets(agent_id);
-CREATE INDEX idx_agent_docsets_set ON agent_document_sets(document_set_id);
-CREATE INDEX idx_agent_docsets_tenant ON agent_document_sets(tenant_id);
-```
-
-### agent_databases
-
-```sql
-CREATE TABLE agent_databases (
-    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    agent_id BIGINT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
-    tenant_id BIGINT NOT NULL,
-    connection_name VARCHAR(100) NOT NULL,
-    host VARCHAR(255) NOT NULL,
-    port INT NOT NULL DEFAULT 5432,
-    database_name VARCHAR(100) NOT NULL,
-    username VARCHAR(100) NOT NULL,
-    password_encrypted TEXT NOT NULL,
-    ssl_mode VARCHAR(20) NOT NULL DEFAULT 'require',
-    status VARCHAR(50) NOT NULL DEFAULT 'pending',
-    last_tested_at TIMESTAMP,
-    last_test_result VARCHAR(50),
-    server_version VARCHAR(50),
-    discovered_tables_count INT DEFAULT 0,
-    created_by BIGINT NOT NULL,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    UNIQUE(agent_id, database_name)
-);
-
-CREATE INDEX idx_agent_dbs_agent ON agent_databases(agent_id);
-CREATE INDEX idx_agent_dbs_tenant ON agent_databases(tenant_id);
-```
-
-### agent_database_tables
-
-```sql
-CREATE TABLE agent_database_tables (
-    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    agent_database_id BIGINT NOT NULL REFERENCES agent_databases(id) ON DELETE CASCADE,
-    agent_id BIGINT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
-    table_name VARCHAR(255) NOT NULL,
-    columns JSONB NOT NULL,
-    primary_key JSONB,
-    row_count_estimate INT,
-    bound_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    UNIQUE(agent_database_id, table_name)
-);
-
-CREATE INDEX idx_agent_dbtables_agent ON agent_database_tables(agent_id);
-CREATE INDEX idx_agent_dbtables_db ON agent_database_tables(agent_database_id);
 ```
 
 ---
 
-## 8. Vision Database (vision_db)
+## 8. Vision Schema (vision_)
 
-### images
+Module: `nexus-vision`
 
 ```sql
-CREATE TABLE images (
+CREATE SCHEMA IF NOT EXISTS vision;
+
+CREATE TABLE vision.images (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     tenant_id BIGINT NOT NULL,
     user_id BIGINT NOT NULL,
     storage_path TEXT NOT NULL,
     file_type VARCHAR(50) NOT NULL,
     file_size_bytes BIGINT,
-    width INT,
-    height INT,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    width INT, height INT
 );
-```
 
-### vision_analysis
-
-```sql
-CREATE TABLE vision_analysis (
+CREATE TABLE vision.analysis (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    image_id BIGINT NOT NULL REFERENCES images(id) ON DELETE CASCADE,
+    image_id BIGINT NOT NULL REFERENCES vision.images(id) ON DELETE CASCADE,
     tenant_id BIGINT NOT NULL,
     model VARCHAR(100) NOT NULL DEFAULT 'qwen3-vl:4b',
     analysis_type VARCHAR(50) NOT NULL,
     description TEXT,
     confidence FLOAT,
     detected_objects JSONB,
-    metadata JSONB,
-    latency_ms FLOAT,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    latency_ms FLOAT
 );
-```
 
-### ocr_results
-
-```sql
-CREATE TABLE ocr_results (
+CREATE TABLE vision.ocr_results (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    image_id BIGINT NOT NULL REFERENCES images(id) ON DELETE CASCADE,
+    image_id BIGINT NOT NULL REFERENCES vision.images(id) ON DELETE CASCADE,
     text TEXT NOT NULL,
     language VARCHAR(10) DEFAULT 'en',
-    confidence FLOAT,
-    regions JSONB,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    confidence FLOAT
 );
 ```
 
 ---
 
-## 9. Memory Database (memory_db)
+## 9. Memory Schema (memory_) + Redis
 
-### memories
+Module: `nexus-memory`
 
 ```sql
-CREATE TABLE memories (
+CREATE SCHEMA IF NOT EXISTS memory;
+
+CREATE TABLE memory.memories (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     user_id BIGINT NOT NULL,
     tenant_id BIGINT NOT NULL,
@@ -465,20 +393,13 @@ CREATE TABLE memories (
     access_count INT NOT NULL DEFAULT 0,
     last_accessed_at TIMESTAMP,
     expires_at TIMESTAMP,
-    metadata JSONB,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+    metadata JSONB
 );
 
-CREATE INDEX idx_memories_embedding ON memories
+CREATE INDEX idx_memory_embedding ON memory.memories
 USING ivfflat (embedding vector_cosine_ops) WITH (lists = 50);
-CREATE INDEX idx_memories_user ON memories(user_id, tenant_id);
-```
 
-### conversation_history
-
-```sql
-CREATE TABLE conversation_history (
+CREATE TABLE memory.conversation_history (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     session_id BIGINT NOT NULL,
     user_id BIGINT NOT NULL,
@@ -486,78 +407,79 @@ CREATE TABLE conversation_history (
     role VARCHAR(20) NOT NULL,
     content TEXT NOT NULL,
     tokens_used INT,
-    model VARCHAR(100),
-    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    model VARCHAR(100)
 );
-
-CREATE INDEX idx_conversation_session ON conversation_history(session_id);
-CREATE INDEX idx_conversation_user ON conversation_history(user_id, created_at DESC);
 ```
+
+**Redis Usage:**
+
+| Key Pattern | TTL | Purpose |
+|---|---|---|
+| `conversation:{user_id}:{session_id}` | 24h | Active conversation context |
+| `rate:{tenant_id}:{category}` | 60s | Rate limiting counters |
+| `session:{session_id}` | 24h | Session metadata |
+| `memory:lock:{user_id}` | 30s | Distributed lock |
 
 ---
 
-## 10. Workflow Database (workflow_db)
+## 10. Workflow Schema (workflow_)
 
-### workflows
+Module: `nexus-workflow`
 
 ```sql
-CREATE TABLE workflows (
+CREATE SCHEMA IF NOT EXISTS workflow;
+
+CREATE TABLE workflow.definitions (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     tenant_id BIGINT NOT NULL,
     name VARCHAR(100) NOT NULL,
     description TEXT,
     definition JSONB NOT NULL,
     status VARCHAR(50) NOT NULL DEFAULT 'active',
-    version INT NOT NULL DEFAULT 1,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+    version INT NOT NULL DEFAULT 1
 );
-```
 
-### workflow_instances
-
-```sql
-CREATE TABLE workflow_instances (
+CREATE TABLE workflow.instances (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    workflow_id BIGINT NOT NULL REFERENCES workflows(id),
+    workflow_id BIGINT NOT NULL REFERENCES workflow.definitions(id),
     tenant_id BIGINT NOT NULL,
     initiated_by BIGINT NOT NULL,
     status VARCHAR(50) NOT NULL DEFAULT 'running',
-    context JSONB,
-    started_at TIMESTAMP NOT NULL DEFAULT NOW(),
-    completed_at TIMESTAMP,
-    error_message TEXT
+    context JSONB
 );
-```
 
-### workflow_steps
-
-```sql
-CREATE TABLE workflow_steps (
+CREATE TABLE workflow.steps (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    instance_id BIGINT NOT NULL REFERENCES workflow_instances(id) ON DELETE CASCADE,
+    instance_id BIGINT NOT NULL REFERENCES workflow.instances(id) ON DELETE CASCADE,
     step_number INT NOT NULL,
     step_type VARCHAR(50) NOT NULL,
     name VARCHAR(100),
     status VARCHAR(50) NOT NULL DEFAULT 'pending',
     assignee_id BIGINT,
     input JSONB,
-    output JSONB,
-    started_at TIMESTAMP,
-    completed_at TIMESTAMP
+    output JSONB
+);
+
+CREATE TABLE workflow.approvals (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    step_id BIGINT NOT NULL REFERENCES workflow.steps(id) ON DELETE CASCADE,
+    approver_id BIGINT NOT NULL,
+    status VARCHAR(50) NOT NULL DEFAULT 'pending',
+    comment TEXT
 );
 ```
 
 ---
 
-## 11. Audit Database (audit_db)
+## 11. Audit Schema (audit_) — Partitioned Tables
 
-### chat_trail (Partitioned by Month)
-
-Complete chat trail for every conversation — every message, every tool call, every response.
+Module: `nexus-audit`
 
 ```sql
-CREATE TABLE chat_trail (
+CREATE SCHEMA IF NOT EXISTS audit;
+
+-- Full chat trail — every message in every conversation
+CREATE TABLE audit.chat_trail (
     id              BIGINT GENERATED ALWAYS AS IDENTITY,
     tenant_id       BIGINT NOT NULL,
     session_id      VARCHAR(100) NOT NULL,
@@ -565,59 +487,37 @@ CREATE TABLE chat_trail (
     message_id      VARCHAR(100) NOT NULL,
     customer_id     BIGINT,
     user_id         BIGINT,
-    role            VARCHAR(20) NOT NULL,           -- user | assistant | system | tool
+    role            VARCHAR(20) NOT NULL,
     content         TEXT NOT NULL,
-    content_type    VARCHAR(50) DEFAULT 'text',     -- text | image | audio | tool_call | tool_result
-    model_used      VARCHAR(100),                   -- which AI model responded
+    content_type    VARCHAR(50) DEFAULT 'text',
+    model_used      VARCHAR(100),
     tokens_input    INTEGER,
     tokens_output   INTEGER,
     latency_ms      INTEGER,
-    tool_name       VARCHAR(100),                   -- tool invoked (if any)
-    tool_input      JSONB,                          -- tool call arguments
-    tool_output     JSONB,                          -- tool call result
-    tool_status     VARCHAR(20),                    -- success | error | blocked
-    safety_flag     VARCHAR(50),                    -- none | prompt_injection | jailbreak | policy_violation
-    metadata        JSONB,                          -- additional context
+    tool_name       VARCHAR(100),
+    tool_input      JSONB,
+    tool_output     JSONB,
+    tool_status     VARCHAR(20),
+    safety_flag     VARCHAR(50),
+    metadata        JSONB,
     ip_address      INET,
     user_agent      TEXT,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     PRIMARY KEY (id, created_at)
 ) PARTITION BY RANGE (created_at);
 
--- Monthly partitions (auto-created by pg_partman)
-CREATE TABLE chat_trail_2026_01 PARTITION OF chat_trail
-    FOR VALUES FROM ('2026-01-01') TO ('2026-02-01');
-CREATE TABLE chat_trail_2026_02 PARTITION OF chat_trail
-    FOR VALUES FROM ('2026-02-01') TO ('2026-03-01');
-CREATE TABLE chat_trail_2026_03 PARTITION OF chat_trail
-    FOR VALUES FROM ('2026-03-01') TO ('2026-04-01');
--- ... pg_partman auto-creates future partitions
-
--- Indexes on partitioned table
-CREATE INDEX idx_ct_tenant_session ON chat_trail(tenant_id, session_id, created_at DESC);
-CREATE INDEX idx_ct_conversation ON chat_trail(conversation_id, created_at);
-CREATE INDEX idx_ct_customer ON chat_trail(customer_id, created_at DESC);
-CREATE INDEX idx_ct_user ON chat_trail(user_id, created_at DESC);
-CREATE INDEX idx_ct_model ON chat_trail(model_used, created_at DESC);
-CREATE INDEX idx_ct_safety ON chat_trail(safety_flag) WHERE safety_flag != 'none';
-CREATE INDEX idx_ct_tool ON chat_trail(tool_name, created_at DESC);
-```
-
-### audit_events (Partitioned by Month)
-
-```sql
-CREATE TABLE audit_events (
+-- Audit events — all non-chat actions
+CREATE TABLE audit.events (
     id              BIGINT GENERATED ALWAYS AS IDENTITY,
     tenant_id       BIGINT NOT NULL,
     event_type      VARCHAR(100) NOT NULL,
     actor_user_id   BIGINT,
     actor_role      VARCHAR(50),
     actor_ip        INET,
-    actor_user_agent TEXT,
     resource_type   VARCHAR(50),
     resource_id     BIGINT,
     action          VARCHAR(100) NOT NULL,
-    result          VARCHAR(20) NOT NULL,           -- success | failure | blocked
+    result          VARCHAR(20) NOT NULL,
     details         JSONB,
     trace_id        VARCHAR(100),
     request_id      VARCHAR(100),
@@ -625,236 +525,115 @@ CREATE TABLE audit_events (
     PRIMARY KEY (id, created_at)
 ) PARTITION BY RANGE (created_at);
 
--- Monthly partitions
-CREATE TABLE audit_events_2026_01 PARTITION OF audit_events
-    FOR VALUES FROM ('2026-01-01') TO ('2026-02-01');
-CREATE TABLE audit_events_2026_02 PARTITION OF audit_events
-    FOR VALUES FROM ('2026-02-01') TO ('2026-03-01');
-CREATE TABLE audit_events_2026_03 PARTITION OF audit_events
-    FOR VALUES FROM ('2026-03-01') TO ('2026-04-01');
--- ... pg_partman auto-creates future partitions
-
-CREATE INDEX idx_audit_tenant ON audit_events(tenant_id, created_at DESC);
-CREATE INDEX idx_audit_event_type ON audit_events(event_type, created_at DESC);
-CREATE INDEX idx_audit_actor ON audit_events(actor_user_id, created_at DESC);
-CREATE INDEX idx_audit_resource ON audit_events(resource_type, resource_id);
-CREATE INDEX idx_audit_trace ON audit_events(trace_id);
-CREATE INDEX idx_audit_created ON audit_events(created_at);
-```
-
-### Partition Management (pg_partman)
-
-```sql
--- Auto-create next 3 months of partitions
+-- Partition management (pg_partman auto-creates monthly partitions)
 SELECT partman.create_parent(
-    p_parent_table := 'public.chat_trail',
+    p_parent_table := 'audit.chat_trail',
     p_control := 'created_at',
     p_type := 'range',
     p_premake := 3
 );
 
 SELECT partman.create_parent(
-    p_parent_table := 'public.audit_events',
+    p_parent_table := 'audit.events',
     p_control := 'created_at',
     p_type := 'range',
     p_premake := 3
 );
-
--- Retention: drop partitions older than 2 years
-UPDATE partman.part_config
-SET retention = '2 years',
-    retention_keep_table = false
-WHERE parent_table = 'public.chat_trail';
-
-UPDATE partman.part_config
-SET retention = '2 years',
-    retention_keep_table = false
-WHERE parent_table = 'public.audit_events';
 ```
 
-### Partition Strategy
+### Retention Policy
 
-| Table | Partition Key | Interval | Hot | Warm | Cold | Archive |
-|---|---|---|---|---|---|---|
-| `chat_trail` | `created_at` | Monthly | 0-3 months | 3-12 months | 1-2 years | MinIO |
-| `audit_events` | `created_at` | Monthly | 0-3 months | 3-12 months | 1-2 years | MinIO |
-
-### Retention Policies
-
-| Tier | Age | Storage | Compression | Access |
-|---|---|---|---|---|
-| Hot | 0-3 months | PostgreSQL (NVMe) | None | Full index scan |
-| Warm | 3-12 months | PostgreSQL (SSD) | LZ4 | Indexed scan |
-| Cold | 1-2 years | PostgreSQL (HDD) | ZSTD | Time-range scan |
-| Archive | 2+ years | MinIO (S3) | ZSTD | Restore on demand |
-
-### chat_trail Query Examples
-
-```sql
--- Get all messages in a conversation
-SELECT * FROM chat_trail
-WHERE conversation_id = 'conv_abc123'
-ORDER BY created_at ASC;
-
--- Get all conversations for a customer in last 7 days
-SELECT DISTINCT conversation_id, MIN(created_at) AS started, MAX(created_at) AS ended
-FROM chat_trail
-WHERE customer_id = 12345
-  AND created_at > NOW() - INTERVAL '7 days'
-GROUP BY conversation_id
-ORDER BY started DESC;
-
--- Get tool usage stats for a tenant
-SELECT tool_name, COUNT(*) AS invocations,
-       AVG(latency_ms) AS avg_latency,
-       SUM(CASE WHEN tool_status = 'error' THEN 1 ELSE 0 END) AS errors
-FROM chat_trail
-WHERE tenant_id = 1
-  AND tool_name IS NOT NULL
-  AND created_at > NOW() - INTERVAL '30 days'
-GROUP BY tool_name
-ORDER BY invocations DESC;
-
--- Get AI model performance stats
-SELECT model_used, COUNT(*) AS responses,
-       AVG(tokens_output) AS avg_tokens,
-       AVG(latency_ms) AS avg_latency
-FROM chat_trail
-WHERE role = 'assistant'
-  AND model_used IS NOT NULL
-  AND created_at > NOW() - INTERVAL '30 days'
-GROUP BY model_used;
-
--- Get safety-flagged conversations
-SELECT session_id, conversation_id, customer_id,
-       safety_flag, content, created_at
-FROM chat_trail
-WHERE safety_flag != 'none'
-  AND created_at > NOW() - INTERVAL '24 hours'
-ORDER BY created_at DESC;
-
--- Export conversation as JSON for compliance
-SELECT jsonb_build_object(
-    'conversation_id', conversation_id,
-    'messages', jsonb_agg(
-        jsonb_build_object(
-            'role', role,
-            'content', content,
-            'model', model_used,
-            'tokens', tokens_input + tokens_output,
-            'timestamp', created_at
-        ) ORDER BY created_at
-    )
-) AS conversation_json
-FROM chat_trail
-WHERE conversation_id = 'conv_abc123'
-GROUP BY conversation_id;
-```
+| Tier | Age | Storage | Compression |
+|---|---|---|---|
+| Hot | 0-3 months | NVMe | None |
+| Warm | 3-12 months | SSD | LZ4 |
+| Cold | 1-2 years | HDD | ZSTD |
+| Archive | 2+ years | MinIO | ZSTD |
 
 ---
 
 ## 12. Elasticsearch Indices
 
-| Index | Purpose | Retention |
-|---|---|---|
-| `ai_logs` | AI conversation logs | 90 days |
-| `audit_events` | Audit trail (searchable) | 365 days |
-| `documents` | Full-text document search | Permanent |
-| `security_events` | Security alerts | 365 days |
+| Index | Module | Purpose | Retention |
+|---|---|---|---|
+| `ai_logs` | nexus-audit | AI conversation logs | 90 days |
+| `audit_events` | nexus-audit | Audit trail | 365 days |
+| `documents` | nexus-rag | Full-text document search | Permanent |
+| `security_events` | nexus-security-ai | Security alerts | 365 days |
 
 ---
 
 ## 13. MinIO Buckets
 
-| Bucket | Purpose | Versioning |
-|---|---|---|
-| `aeroxe-documents` | RAG documents | Enabled |
-| `aeroxe-images` | Vision analysis images | Enabled |
-| `aeroxe-model-files` | Custom model files | Enabled |
-| `aeroxe-backups` | System backups | Enabled |
+| Bucket | Module | Purpose | Versioning |
+|---|---|---|---|
+| `aeroxe-documents` | nexus-rag | RAG documents | Enabled |
+| `aeroxe-images` | nexus-vision | Vision analysis images | Enabled |
+| `aeroxe-model-files` | nexus-model-registry | Custom model files | Enabled |
+| `aeroxe-backups` | All | System backups | Enabled |
 
 ---
 
-## 14. Database Event Synchronization
-
-### Pattern: Event-Driven Data Sync
-
-```
-rag-service
-    |
-    v  DocumentProcessed event
-NATS JetStream
-    |
-    v
-knowledge-graph-service
-    |
-    v  Update Apache AGE relationships
-```
-
-### Pattern: CQRS (Optional)
-
-For high-read services:
-- Write model: PostgreSQL (normalized)
-- Read model: Denormalized/optimized tables
-- Sync via NATS events
-
----
-
-## 15. Repository Pattern (Rust)
+## 14. Repository Pattern (Rust + SeaORM)
 
 ```rust
+// nexus-agent/src/infrastructure/persistence/agent_repo.rs
 #[async_trait]
-pub trait AgentRepository: Send + Sync {
-    async fn save(&self, agent: Agent) -> Result<AgentId>;
-    async fn find_by_id(&self, id: AgentId) -> Result<Option<Agent>>;
-    async fn find_by_tenant(&self, tenant_id: TenantId) -> Result<Vec<Agent>>;
-    async fn delete(&self, id: AgentId) -> Result<()>;
+impl AgentRepository for PostgresAgentRepository {
+    async fn save(&self, agent: Agent) -> Result<AgentId> {
+        // Uses SeaORM entity mapped to agent.agents table
+        let model = AgentModel {
+            name: agent.name,
+            agent_type: agent.agent_type.to_string(),
+            // ...
+        };
+        let result = model.insert(&self.db).await?;
+        Ok(AgentId(result.last_insert_id))
+    }
+
+    async fn find_by_id(&self, id: AgentId) -> Result<Option<Agent>> {
+        let model = AgentModel::find_by_id(id.0)
+            .one(&self.db)
+            .await?;
+        Ok(model.map(Agent::from))
+    }
 }
 ```
 
 ---
 
-## 16. Migration Strategy
+## 15. Migration Strategy
 
-### Tool: SeaORM Migrate (Rust)
+### Tool: SeaORM Migrations
 
 ```
 migrations/
-├── 001_create_users.sql
-├── 002_create_roles.sql
-├── 003_create_permissions.sql
-├── 004_create_ai_sessions.sql
-├── 005_create_documents.sql
-├── 006_enable_pgvector.sql
-├── 007_create_memories.sql
+├── 001_identity_create_schema.sql
+├── 002_identity_create_users.sql
+├── 003_ai_create_schema.sql
+├── 004_ai_create_sessions.sql
+├── 005_agent_create_schema.sql
+├── 006_rag_create_schema.sql
+├── 007_rag_enable_pgvector.sql
+├── 008_vision_create_schema.sql
+├── 009_memory_create_schema.sql
+├── 010_workflow_create_schema.sql
+├── 011_audit_create_schema.sql
 └── ...
 ```
 
+Each migration creates its module's schema first, then the tables within that schema.
+
 ---
 
-## 17. Backup Strategy
+## 16. Backup Strategy
 
 | Component | Strategy | Frequency |
 |---|---|---|
-| PostgreSQL | Full backup + WAL archiving | Daily full, continuous WAL |
+| PostgreSQL | Full + WAL archiving | Daily full, continuous WAL |
 | MinIO | Versioning + Replication | Continuous |
 | Redis | RDB + AOF snapshots | Every 15 min |
 | NATS JetStream | Stream snapshots | Daily |
 | Elasticsearch | Snapshot to MinIO | Daily |
 
-**Recovery Targets:**
-- RPO: < 15 minutes
-- RTO: < 2 hours
-
----
-
-## 18. Performance Targets
-
-| Component | Target |
-|---|---|
-| Vector Search (pgvector) | < 200ms |
-| SQL Query (PostgreSQL) | < 2s |
-| Redis Lookup | < 10ms |
-| PostgreSQL API Query | < 100ms |
-| Elasticsearch Search | < 300ms |
-| MinIO Upload | < 1s |
+**Recovery Targets:** RPO < 15 min, RTO < 2 hours

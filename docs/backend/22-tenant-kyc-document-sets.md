@@ -2,16 +2,18 @@
 
 ## Tenant Onboarding + KYC Verification + Document Set Management + Agent-Document Binding
 
+> **Modular Monolith Context:** KYC handling is in `nexus-identity` module (schema `identity_`), document sets in `nexus-rag` (schema `rag_`), and agent bindings in `nexus-agent` (schema `agent_`). All modules communicate via trait interfaces, not gRPC. See [DDD Domain Design](02-ddd-domain-design.md).
+
 ---
 
 ## 1. Overview
 
 This document defines five critical flows:
 
-1. **Tenant KYC Flow** — Verification before platform access
-2. **Document Set Creation** — Organizing documents into scoped collections
-3. **Agent-Document Set Binding** — Connecting agents to specific document sets
-4. **Agent-Database Binding** — Connecting agents to specific databases and tables with credential validation
+1. **Tenant KYC Flow** — Verification before platform access (in `nexus-identity`)
+2. **Document Set Creation** — Organizing documents into scoped collections (in `nexus-rag`)
+3. **Agent-Document Set Binding** — Connecting agents to specific document sets (in `nexus-agent`)
+4. **Agent-Database Binding** — Connecting agents to specific databases and tables with credential validation (in `nexus-agent`)
 5. **Agent Isolation** — Enforcing that agents access ONLY their bound resources
 
 ---
@@ -546,13 +548,13 @@ Result: Agent can ONLY query invoices/payments/credit_notes from billing
 
 | Layer | Enforcement |
 |---|---|
-| API Gateway | Agent SQL request validated |
-| SQL Agent Service | Table whitelist check before generation |
+| `nexus-gateway` | Agent SQL request validated |
+| `nexus-sql-agent` | Table whitelist check before generation (trait call) |
 | LLM Prompt | Schema context only includes bound tables |
 | Query Validator | AST analysis against bound schema |
 | Connection Router | Execute only on bound connection |
 | Result Filter | Strip any leaked metadata |
-| Audit | All queries logged with scope info |
+| `nexus-audit` | All queries logged with scope info (trait call) |
 
 ### 6.8 Isolation Violations
 
@@ -645,12 +647,12 @@ LIMIT $4;
 
 | Layer | Enforcement |
 |---|---|
-| API Gateway | Agent request validated against binding |
-| Agent Orchestrator | Scope injected into execution context |
-| RAG Service | Query filtered by document set scope |
+| `nexus-gateway` | Agent request validated against binding |
+| `nexus-agent` | Scope injected into execution context |
+| `nexus-rag` | Query filtered by document set scope (trait call) |
 | Vector Search | pgvector query scoped to bound documents |
-| Memory Service | Agent memory scoped to tenant + sets |
-| Audit | All access logged with scope info |
+| `nexus-memory` | Agent memory scoped to tenant + sets (trait call) |
+| `nexus-audit` | All access logged with scope info (trait call) |
 
 ### 5.5 Isolation Violations
 

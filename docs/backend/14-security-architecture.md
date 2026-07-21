@@ -1,6 +1,8 @@
 # AeroXe Nexus AI — Security Architecture
 
-## Zero Trust, RBAC, ABAC, mTLS, AI Security & Data Protection
+## Zero Trust, RBAC, ABAC, AI Security & Data Protection (Modular Monolith)
+
+> This document applies to the `aeroxe-nexus` modular monolith. Unlike microservice architectures, internal module-to-module calls do not use mTLS because they are in-process trait dispatches. Security focuses on: (1) external API security via `nexus-gateway`, (2) authentication via `nexus-identity`, (3) AI safety via `nexus-security-ai`, and (4) audit via `nexus-audit`.
 
 ---
 
@@ -21,18 +23,18 @@ User / Application
 API Gateway
        |
   ================================================
-  Security Enforcement Layer
+  Security Enforcement Layer (nexus-gateway)
   ================================================
-  Authentication | Authorization | Tenant Validation
-  Rate Limiting  | Request Validation | Threat Detection
+  JWT Validation | RBAC/ABAC | Tenant Extraction
+  Rate Limiting  | Input Validation | Audit
   ================================================
        |
        v
-Internal Microservices
+Internal Modules (in-process trait dispatch)
        |
   ================================================
-  Service Identity | mTLS | gRPC Authentication
-  NATS Permissions | Database Security
+  RequestContext Propagation | Permission Trait Calls
+  NATS Subject Permissions | Database Security
   ================================================
        |
        v
@@ -120,9 +122,9 @@ User Request -> JWT Validation -> Extract Claims
 
 Every request carries `tenant_id`. Enforcement:
 
-1. JWT contains `tenant_id`
+1. JWT contains `tenant_id` (validated by `nexus-identity` trait call)
 2. All database queries filter by `tenant_id`
-3. gRPC metadata propagates `tenant_id`
+3. `RequestContext` propagates `tenant_id` to all module trait calls
 4. NATS events include `tenant_id`
 5. Cross-tenant access returns `403 Forbidden`
 
@@ -137,39 +139,32 @@ SELECT * FROM documents WHERE tenant_id = $1;
 
 ---
 
-## 6. Service-to-Service Security
+## 6. Module-to-Module Security
 
-### Mutual TLS (mTLS)
+> In the modular monolith, modules communicate via Rust trait methods **within the same process**. There is no network between modules, so mTLS is not needed internally.
 
-Each service has:
-- Service certificate
-- Private key
-- Service identity
+### Security Enforcement
 
-```
-agent-service (agent.aeroxe.internal)
-    |  mTLS
-    v
-rag-service (rag.aeroxe.internal)
-```
-
-### gRPC Security Requirements
-
-Every gRPC request includes metadata:
-
-| Header | Purpose |
+| Layer | Mechanism |
 |---|---|
-| `authorization` | JWT token |
-| `tenant-id` | Tenant ID |
-| `service-id` | Calling service identity |
-| `request-id` | Request UUID |
-| `trace-id` | Distributed trace ID |
+| API Boundary | `nexus-gateway` validates JWT + tenant before trait dispatch |
+| Module Entry | Modules receive pre-validated `RequestContext` (no re-validation needed) |
+| Permission Check | Modules call `nexus-identity::check_permission()` trait method |
+| Tenant Isolation | All queries include `tenant_id` — enforced at database level |
 
-Validation steps:
-1. Certificate verification
-2. JWT validation
-3. Permission check
-4. Tenant validation
+### Request Context Propagation
+
+```rust
+// Every module trait method receives a context with authenticated claims
+pub struct RequestContext {
+    pub tenant_id: TenantId,
+    pub user_id: UserId,
+    pub roles: Vec<String>,
+    pub permissions: Vec<String>,
+    pub request_id: String,
+    pub trace_id: String,
+}
+```
 
 ---
 
@@ -270,9 +265,10 @@ SQL flow: Question -> LLM -> SQL Validator -> Permission Check -> Read Replica -
 | Component | Protocol |
 |---|---|
 | All External | TLS 1.3 |
-| gRPC Internal | mTLS |
-| NATS | TLS |
+| Internal Module Calls | In-process (no network) |
+| NATS (optional) | TLS |
 | Database | TLS |
+| Optional gRPC (external) | TLS 1.3 + optional mTLS |
 
 ---
 

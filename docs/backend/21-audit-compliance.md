@@ -2,6 +2,8 @@
 
 ## Comprehensive Audit Logging + Regulatory Compliance + Data Governance
 
+> **Modular Monolith Context:** The `nexus-audit` module handles all audit logging within the `aeroxe-nexus` binary. Modules call `AuditService::log_event()` trait method (synchronous) or publish to `aeroxe.audit.*` NATS subjects (asynchronous). See [Communication Architecture](12-communication-architecture.md).
+
 ---
 
 ## 1. Purpose
@@ -19,8 +21,10 @@ AeroXe Nexus AI maintains complete audit trails for:
 ## 2. Audit Architecture
 
 ```
-Application Layer → Audit Event → NATS JetStream → Audit Service → Elasticsearch + PostgreSQL
+Module (trait call or NATS) → AuditEvent → nexus-audit module → audit.events (PostgreSQL) + Elasticsearch
 ```
+
+> **Key Difference:** Audit events can be sent synchronously via `AuditService::log_event()` trait call (for critical events that must be persisted immediately) or asynchronously via NATS `aeroxe.audit.*` subjects (for high-volume events).
 
 ---
 
@@ -145,24 +149,24 @@ Application Layer → Audit Event → NATS JetStream → Audit Service → Elast
 
 ---
 
-## 5. Audit Service Implementation
+## 5. Audit Module Implementation
 
-### Service Identity
+### Module Identity
 
 | Property     | Value                              |
 | ------------ | ---------------------------------- |
+| Module       | `nexus-audit`                      |
 | Language     | Rust                               |
-| Port         | 50060 (gRPC), 8060 (REST)         |
-| Database     | PostgreSQL + Elasticsearch         |
+| Schema       | `audit_` (shared PostgreSQL)       |
 | Storage      | Hot (30d) → Warm (90d) → Cold (1y)|
 
 ### Responsibilities
 
-- Ingest audit events from all services
+- Ingest audit events from all modules (trait calls + NATS)
 - Validate event schema
 - Index events in Elasticsearch
-- Store events in PostgreSQL
-- Provide audit query API
+- Store events in PostgreSQL (`audit.chat_trail` + `audit.events`)
+- Provide audit query API (via `nexus-gateway` trait dispatch)
 - Generate compliance reports
 - Detect anomalies
 

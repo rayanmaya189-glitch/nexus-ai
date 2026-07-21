@@ -1,28 +1,32 @@
 # AeroXe Nexus AI — Communication Architecture
 
-## gRPC, Protocol Buffers, NATS JetStream & Event-Driven Design
+## Trait-Based Internal Calls + NATS JetStream Event-Driven Design
 
 ---
 
 ## 1. Communication Strategy Overview
 
-AeroXe Nexus AI follows a hybrid communication architecture:
+AeroXe Nexus AI follows a **hybrid communication architecture** optimized for modular monoliths:
 
 ```
                      External World
                            |
                   REST / WebSocket / HTTPS
                            |
-                     API Gateway
+               +---------------------------+
+               |    nexus-gateway Module    |
+               |    (axum HTTP/WS Server)   |
+               +---------------------------+
                            |
-  ================================================
-                 Internal Communication
-  ================================================
-        Synchronous              Asynchronous
-            gRPC                  NATS JetStream
-             |                         |
-     Service-to-Service        Event Driven Flow
-  ================================================
+          ======================================
+            Internal Communication (in-process)
+          ======================================
+              Synchronous          Asynchronous
+              Trait Methods          NATS JetStream
+                  |                       |
+          Module-to-Module         Event-Driven Flow
+          (direct fn calls)        (background jobs)
+          ======================================
 ```
 
 ---
@@ -33,136 +37,264 @@ AeroXe Nexus AI follows a hybrid communication architecture:
 |---|---|---|
 | External (Web/Mobile) | HTTPS REST | Client API |
 | Real-time Chat | WebSocket | Token streaming |
-| Internal Synchronous | gRPC + Protobuf | Service-to-service |
+| **Internal Synchronous** | **Rust trait methods** | Module-to-module (in-process) |
 | Internal Asynchronous | NATS JetStream | Events, background jobs |
 | AI Runtime | Ollama HTTP API | Model inference |
+| External gRPC (optional) | tonic | SDK / partner integrations |
 
 ---
 
-## 3. gRPC Architecture
+## 3. Trait-Based Internal Communication (Replaces gRPC)
 
 ### Design Principles
 
-Every gRPC service must have:
-- Versioned protobuf contracts (package `aeroxe.{service}`)
-- Backward compatibility (field deprecation, not removal)
-- Strong typing through Protocol Buffers
-- Standardized error codes
-- Authentication metadata propagation
+Every module communicates with other modules through **Rust trait interfaces**:
 
-### Required Metadata
+1. **Modules depend on traits, not implementations** — enables testing with mocks
+2. **Traits are defined in each module** — in `src/interfaces/api.rs`
+3. **Requests are in-process** — `Arc<dyn Trait>` references wired at startup
+4. **Strong typing** — all inputs/outputs are typed Rust structs
+5. **No serialization overhead** — direct struct passing
+6. **Compile-time safety** — missing methods are compile errors
 
-Every gRPC request must include:
+### Trait Definition Pattern
 
-```text
-authorization     - JWT token
-tenant-id         - Tenant ID
-user-id           - User ID
-request-id        - Request UUID for tracing
-trace-id          - Distributed trace ID
+```rust
+// nexus-rag/src/interfaces/api.rs
+#[async_trait]
+pub trait RagService: Send + Sync {
+    async fn search(&self, query: SearchQuery) -> Result<SearchResults, RagError>;
+    async fn upload_document(&self, request: UploadRequest) -> Result<DocumentStatus>;
+}
+
+// nexus-agent/src/agent_service.rs — uses RagService as dependency
+pub struct AgentServiceImpl {
+    rag: Arc<dyn RagService>,
+    memory: Arc<dyn MemoryService>,
+    ollama: OllamaClient,
+}
+
+#[async_trait]
+impl AgentService for AgentServiceImpl {
+    async fn start_execution(&self, request: StartAgentRequest) -> Result<ExecutionResponse> {
+        // Call RAG synchronously — no gRPC, no serialization
+        let docs = self.rag.search(SearchQuery {
+            query: request.task.clone(),
+            tenant_id: request.tenant_id,
+            limit: 5,
+        }).await?;
+
+        // Call Ollama directly
+        let plan = self.ollama.chat(/* ... */).await?;
+
+        Ok(ExecutionResponse { /* ... */ })
+    }
+}
+```
+
+### Wiring at Application Startup
+
+```rust
+// src/main.rs
+async fn main() {
+    // Shared infrastructure
+    let db = PgPool::connect(&config.database_url).await?;
+    let redis = RedisClient::open(config.redis_url)?;
+    let nats = NatsClient::connect(config.nats_url).await?;
+    let ollama = OllamaClient::new(config.ollama_url);
+
+    // Instantiate module implementations (all in same process)
+    let identity: Arc<dyn IdentityService> = Arc::new(
+        nexus_identity::IdentityServiceImpl::new(db.clone(), redis.clone())
+    );
+    let rag: Arc<dyn RagService> = Arc::new(
+        nexus_rag::RagServiceImpl::new(db.clone(), nats.clone(), ollama.clone())
+    );
+    let memory: Arc<dyn MemoryService> = Arc::new(
+        nexus_memory::MemoryServiceImpl::new(db.clone(), redis.clone(), ollama.clone())
+    );
+    let agent: Arc<dyn AgentService> = Arc::new(
+        nexus_agent::AgentServiceImpl::new(rag.clone(), memory.clone(), ollama.clone())
+    );
+
+    // Build gateway
+    let app = nexus_gateway::build_router(AppState {
+        identity, agent, rag, memory, // ...
+    });
+
+    axum::serve(listener, app).await?;
+}
+```
+
+### Performance Comparison
+
+| Aspect | Microservice (gRPC) | Modular Monolith (Trait) |
+|---|---|---|
+| Latency per call | 2-5ms (network + serialization) | < 1μs (trait vtable dispatch) |
+| Overhead | Protobuf encode/decode | Zero — direct struct passing |
+| Error handling | gRPC status codes | Rust `Result<T, E>` |
+| Testing | Need running services | `Mockall` mocks |
+| Type safety | Protobuf codegen | Rust compiler |
+
+---
+
+## 4. When to Use NATS vs Trait Calls
+
+| Scenario | Use | Reason |
+|---|---|---|
+| User requests AI chat | Trait method | Need immediate response |
+| Agent needs RAG data | Trait method | Synchronous data needed for reasoning |
+| Agent needs memory | Trait method | Synchronous context retrieval |
+| Agent execution completes | NATS | Other modules need to react asynchronously |
+| Document uploaded | NATS | Long-running processing, don't block client |
+| Audit event | NATS | Fire-and-forget, must not impact latency |
+| Notification send | NATS | Background delivery, retry on failure |
+| Workflow step completed | NATS | Decoupled step orchestration |
+| Config change broadcast | NATS | All modules must eventually reconfigure |
+
+---
+
+## 5. Module Service Dependency Graph
+
+```
+                    nexus-gateway
+                         |
+        +----------------+----------------+----------------+
+        |                |                |                |
+   nexus-identity  nexus-ai-gateway  nexus-model-registry  |
+        |                |                                   |
+        |          nexus-agent                                |
+        |                |       |        |        |          |
+        |                v       v        v        v          |
+        |          nexus-rag  nexus-  nexus-  nexus-memory   |
+        |                     vision  sql-agent               |
+        |                                                     |
+        +-------------------+-----+------+------------------+
+                            |     |      |
+                     nexus-workflow  nexus-security-ai
+                            |              |
+                            v              v
+                     nexus-notification  nexus-audit
 ```
 
 ---
 
-## 4. Proto Repository Structure
+## 6. Module API Trait Catalogue
 
-```
-aeroxe-proto/
-├── common/
-│   └── common.proto
-├── identity/
-│   └── identity.proto
-├── agent/
-│   └── agent.proto
-├── rag/
-│   └── rag.proto
-├── vision/
-│   └── vision.proto
-├── sql/
-│   └── sql.proto
-├── memory/
-│   └── memory.proto
-├── workflow/
-│   └── workflow.proto
-├── security/
-│   └── security.proto
-├── audit/
-│   └── audit.proto
-└── gateway/
-    └── gateway.proto
-```
+### nexus-identity
 
----
-
-## 5. Common Proto Definitions
-
-### common/common.proto
-
-```protobuf
-syntax = "proto3";
-package aeroxe.common;
-
-message RequestContext {
-  string request_id = 1;
-  string tenant_id = 2;
-  string user_id = 3;
-  string trace_id = 4;
-}
-
-message ErrorResponse {
-  string code = 1;
-  string message = 2;
-  string details = 3;
-  string request_id = 4;
-}
-
-enum ErrorCode {
-  UNKNOWN = 0;
-  INVALID_REQUEST = 1;
-  UNAUTHORIZED = 2;
-  FORBIDDEN = 3;
-  NOT_FOUND = 4;
-  TIMEOUT = 5;
-  MODEL_ERROR = 6;
-  DATABASE_ERROR = 7;
+```rust
+#[async_trait]
+pub trait IdentityService: Send + Sync {
+    async fn authenticate(&self, req: AuthRequest) -> Result<AuthResponse>;
+    async fn verify_token(&self, token: &str) -> Result<JWTClaims>;
+    async fn check_permission(&self, req: PermissionRequest) -> Result<bool>;
+    async fn validate_tenant(&self, tenant_id: TenantId) -> Result<Tenant>;
+    async fn create_user(&self, req: CreateUserRequest) -> Result<User>;
 }
 ```
 
----
+### nexus-ai-gateway
 
-## 6. Service-to-Service gRPC Flows
-
-### Agent -> RAG
-
-```protobuf
-service RagService {
-  rpc SearchKnowledge(SearchRequest) returns (SearchResponse);
+```rust
+#[async_trait]
+pub trait AIGatewayService: Send + Sync {
+    async fn submit_request(&self, req: AIRequest) -> Result<AIResponse>;
+    async fn stream_response(&self, req: AIRequest) -> Result<Receiver<AIChunk>>;
+    async fn cancel_request(&self, id: RequestId) -> Result<()>;
+    async fn get_session_status(&self, id: SessionId) -> Result<SessionStatus>;
 }
 ```
 
-### Agent -> Vision
+### nexus-agent
 
-```protobuf
-service VisionService {
-  rpc AnalyzeImage(ImageRequest) returns (ImageAnalysisResponse);
+```rust
+#[async_trait]
+pub trait AgentService: Send + Sync {
+    async fn start_execution(&self, req: StartAgentRequest) -> Result<ExecutionResponse>;
+    async fn get_execution_status(&self, id: ExecutionId) -> Result<ExecutionStatus>;
+    async fn stream_execution(&self, req: StreamRequest) -> Result<Receiver<ExecutionEvent>>;
+    async fn cancel_execution(&self, id: ExecutionId) -> Result<()>;
 }
 ```
 
-### Agent -> SQL
+### nexus-rag
 
-```protobuf
-service SQLService {
-  rpc GenerateQuery(QueryRequest) returns (SQLResponse);
-  rpc ExecuteQuery(SQLRequest) returns (ResultResponse);
+```rust
+#[async_trait]
+pub trait RagService: Send + Sync {
+    async fn search(&self, query: SearchQuery) -> Result<SearchResults>;
+    async fn upload_document(&self, req: UploadRequest) -> Result<DocumentStatus>;
+    async fn get_document_status(&self, id: DocumentId) -> Result<Option<DocumentStatus>>;
+    async fn delete_document(&self, id: DocumentId) -> Result<()>;
 }
 ```
 
-### Agent -> Memory
+### nexus-vision
 
-```protobuf
-service MemoryService {
-  rpc StoreMemory(StoreMemoryRequest) returns (MemoryResponse);
-  rpc SearchMemory(SearchMemoryRequest) returns (MemoryList);
+```rust
+#[async_trait]
+pub trait VisionService: Send + Sync {
+    async fn analyze_image(&self, req: ImageRequest) -> Result<ImageAnalysisResponse>;
+    async fn extract_text(&self, req: ImageRequest) -> Result<OCRResponse>;
+    async fn troubleshoot_device(&self, req: DeviceImageRequest) -> Result<TroubleshootResponse>;
+}
+```
+
+### nexus-sql-agent
+
+```rust
+#[async_trait]
+pub trait SQLAgentService: Send + Sync {
+    async fn generate_query(&self, req: QueryRequest) -> Result<SQLResponse>;
+    async fn execute_query(&self, req: SQLRequest) -> Result<ResultResponse>;
+    async fn test_connection(&self, req: TestConnectionRequest) -> Result<ConnectionStatus>;
+}
+```
+
+### nexus-memory
+
+```rust
+#[async_trait]
+pub trait MemoryService: Send + Sync {
+    async fn store(&self, req: StoreMemoryRequest) -> Result<()>;
+    async fn search(&self, req: SearchMemoryRequest) -> Result<Vec<MemoryItem>>;
+    async fn get_conversation_context(&self, session_id: SessionId) -> Result<Vec<Message>>;
+    async fn clear_session(&self, session_id: SessionId) -> Result<()>;
+}
+```
+
+### nexus-workflow
+
+```rust
+#[async_trait]
+pub trait WorkflowService: Send + Sync {
+    async fn start_workflow(&self, req: StartWorkflowRequest) -> Result<WorkflowResponse>;
+    async fn get_status(&self, id: WorkflowId) -> Result<WorkflowStatus>;
+    async fn approve_step(&self, req: ApproveRequest) -> Result<()>;
+    async fn cancel_workflow(&self, id: WorkflowId) -> Result<()>;
+}
+```
+
+### nexus-security-ai
+
+```rust
+#[async_trait]
+pub trait SecurityService: Send + Sync {
+    async fn analyze_code(&self, req: CodeReviewRequest) -> Result<CodeReviewResponse>;
+    async fn scan_security(&self, req: SecurityScanRequest) -> Result<SecurityReport>;
+    async fn scan_prompt(&self, prompt: &str) -> Result<PromptScanResult>;
+}
+```
+
+### nexus-audit
+
+```rust
+#[async_trait]
+pub trait AuditService: Send + Sync {
+    async fn log_event(&self, event: AuditEvent) -> Result<()>;
+    async fn query_events(&self, query: AuditQuery) -> Result<Vec<AuditEvent>>;
+    async fn generate_report(&self, req: ReportRequest) -> Result<Report>;
 }
 ```
 
@@ -172,11 +304,11 @@ service MemoryService {
 
 ### Subject Naming Standard
 
-Format: `aeroxe.<domain>.<event>`
+Format: `aeroxe.<module>.<event>`
 
 ### All Subjects
 
-| Subject | Domain | Description |
+| Subject | Module | Description |
 |---|---|---|
 | `aeroxe.ai.request.created` | AI Gateway | New AI request |
 | `aeroxe.ai.response.generated` | AI Gateway | Response ready |
@@ -188,31 +320,35 @@ Format: `aeroxe.<domain>.<event>`
 | `aeroxe.rag.document.uploaded` | RAG | Document received |
 | `aeroxe.rag.document.processed` | RAG | Processing done |
 | `aeroxe.rag.embedding.created` | RAG | Embeddings stored |
+| `aeroxe.rag.knowledge.updated` | RAG | Knowledge base modified |
 | `aeroxe.vision.image.received` | Vision | Image uploaded |
 | `aeroxe.vision.analysis.completed` | Vision | Analysis done |
 | `aeroxe.workflow.started` | Workflow | Workflow started |
-| `aeroxe.workflow.completed` | Workflow | Workflow done |
+| `aeroxe.workflow.step.completed` | Workflow | Step finished |
+| `aeroxe.workflow.completed` | Workflow | All steps complete |
 | `aeroxe.workflow.failed` | Workflow | Workflow error |
 | `aeroxe.security.scan.started` | Security | Scan initiated |
 | `aeroxe.security.threat.detected` | Security | Threat found |
 | `aeroxe.audit.*` | Audit | All audit events |
+| `aeroxe.identity.*` | Identity | User/tenant events |
+| `aeroxe.memory.*` | Memory | Memory lifecycle events |
+| `aeroxe.gateway.*` | Gateway | Gateway operational events |
+| `aeroxe.config.*` | Config | Configuration changes |
 
 ---
 
 ## 8. Event Schema Standard
 
-Every NATS event follows this structure:
-
 ```json
 {
   "event_id": "550e8400-e29b-41d4-a716-446655440000",
   "event_type": "AgentCompleted",
-  "timestamp": "2026-07-15T12:00:00Z",
-  "tenant_id": "tenant-uuid",
-  "service": "agent-orchestrator-service",
+  "timestamp": "2026-07-21T12:00:00Z",
+  "tenant_id": 1,
+  "module": "nexus-agent",
   "version": "1.0",
   "data": {
-    "execution_id": "12345",
+    "execution_id": 12345,
     "agent": "customer-agent",
     "status": "success",
     "tokens_used": 1250,
@@ -225,52 +361,14 @@ Every NATS event follows this structure:
 
 ## 9. JetStream Stream Design
 
-### AI Stream
-
-| Parameter | Value |
-|---|---|
-| Stream Name | `AI_EVENTS` |
-| Subjects | `aeroxe.ai.*` |
-| Retention | 7 days |
-| Storage | File |
-| Replication | 3 |
-
-### Agent Stream
-
-| Parameter | Value |
-|---|---|
-| Stream Name | `AGENT_EVENTS` |
-| Subjects | `aeroxe.agent.*` |
-| Retention | 30 days |
-| Storage | File |
-| Replication | 3 |
-
-### RAG Stream
-
-| Parameter | Value |
-|---|---|
-| Stream Name | `RAG_EVENTS` |
-| Subjects | `aeroxe.rag.*` |
-| Retention | 14 days |
-| Storage | File |
-
-### Audit Stream
-
-| Parameter | Value |
-|---|---|
-| Stream Name | `AUDIT_EVENTS` |
-| Subjects | `aeroxe.audit.*` |
-| Retention | 365 days |
-| Storage | File |
-| Replication | 3 |
-
-### Workflow Stream
-
-| Parameter | Value |
-|---|---|
-| Stream Name | `WORKFLOW_EVENTS` |
-| Subjects | `aeroxe.workflow.*` |
-| Retention | 30 days |
+| Stream Name | Subjects | Retention | Replication |
+|---|---|---|---|
+| `AI_EVENTS` | `aeroxe.ai.*` | 7 days | 3 |
+| `AGENT_EVENTS` | `aeroxe.agent.*` | 30 days | 3 |
+| `RAG_EVENTS` | `aeroxe.rag.*` | 14 days | 1 |
+| `AUDIT_EVENTS` | `aeroxe.audit.*` | 365 days | 3 |
+| `WORKFLOW_EVENTS` | `aeroxe.workflow.*` | 30 days | 1 |
+| `SECURITY_EVENTS` | `aeroxe.security.*` | 365 days | 3 |
 
 ---
 
@@ -279,110 +377,100 @@ Every NATS event follows this structure:
 **User asks:** "Why is customer internet slow?"
 
 ```
-User
-    |
-    v
-API Gateway (REST/WS)
-    |
-    v
-AI Gateway Service (JWT validation, rate limiting)
-    |
-    v
-Agent Orchestrator (gRPC)
-    |
-    v
-LFM2.5 Thinking Model (Intent detection)
-    |
-    v
-Plan Created
-    |
-    v
-NATS: aeroxe.agent.execution.started
-    |
-    ├── Customer Agent (gRPC -> Broadband Service)
-    ├── SQL Agent (gRPC -> Customer DB)
-    ├── RAG Agent (gRPC -> Knowledge Base)
-    |
-    v
-Results Aggregated
-    |
-    v
-Command-R 7B (Generate final answer)
-    |
-    v
-Response streamed back to user via WebSocket
+User → HTTP POST /api/v1/ai/chat
+  → nexus-gateway (auth, rate-limit)
+    → nexus-ai-gateway::submit_request() [trait call]
+      → nexus-agent::start_execution() [trait call]
+        → Ollama: LFM2.5 Thinking (intent detection)
+          → Plan: check customer, check network, search knowledge
+        → nexus-rag::search() [trait call] — document knowledge
+        → nexus-memory::search() [trait call] — past conversations
+        → Ollama: Command-R 7B (generate final answer)
+      ← Response + audit event (NATS: aeroxe.audit.ai.request)
+    ← HTTP 200 + JSON response
 ```
+
+Note: **Every arrow is an in-process Rust trait method call**, not a network hop. The entire flow completes in < 3 seconds.
 
 ---
 
 ## 11. Streaming Response Architecture
 
-For Chat UI with token streaming:
+```
+Client WebSocket
+    |
+    v
+nexus-gateway (axum WebSocket handler)
+    |
+    v
+nexus-ai-gateway::stream_response()
+    |  → returns tokio::sync::mpsc::Receiver<AIChunk>
+    v
+nexus-agent::stream_execution()
+    |  → returns tokio::sync::mpsc::Receiver<ExecutionEvent>
+    v
+Ollama HTTP streaming API
+    |
+    v
+Token stream → Receiver → WebSocket → Client
+```
 
-```
-User
-    |
-    v
-WebSocket Connection
-    |
-    v
-AI Gateway
-    |
-    v
-gRPC Stream
-    |
-    v
-Ollama (Token generation)
-    |
-    v
-Token Stream
-    |
-    v
-WebSocket -> Frontend
-```
+All streams use **tokio channels** for zero-copy token relay between modules.
 
 ---
 
 ## 12. Security Requirements
 
-### gRPC Security
+### Internal Trait Calls
 
 | Requirement | Implementation |
 |---|---|
-| TLS Encryption | All gRPC traffic encrypted |
-| Service Authentication | mTLS certificates |
-| Metadata Validation | JWT + tenant validation |
-| Rate Limiting | Per-service limits |
+| Authentication | JWT validated by nexus-gateway, claims attached to request |
+| Authorization | nexus-identity::check_permission() called by gateway |
+| Tenant Isolation | tenant_id propagated via RequestContext struct |
+| Rate Limiting | Token bucket in gateway middleware |
 
 ### NATS Security
 
 | Requirement | Implementation |
 |---|---|
 | TLS | All NATS connections encrypted |
-| Account Isolation | Separate accounts per service |
+| Account Isolation | Separate accounts per module |
 | Subject Permissions | Publish/subscribe ACLs |
 | Authentication | NKey or JWT-based auth |
 
-### Service Permission Matrix
-
-| Service | Publish | Subscribe |
-|---|---|---|
-| agent-orchestrator | `aeroxe.agent.*` | `aeroxe.rag.*`, `aeroxe.vision.*` |
-| rag-service | `aeroxe.rag.*` | `aeroxe.rag.document.*` |
-| vision-service | `aeroxe.vision.*` | `aeroxe.vision.image.*` |
-| audit-service | - | `aeroxe.*` (all events) |
-| workflow-service | `aeroxe.workflow.*` | `aeroxe.workflow.*` |
-
 ---
 
-## 13. Final Communication Stack
+## 13. Testing Communication Contracts
 
-| Layer | Technology |
-|---|---|
-| Mobile/Web API | REST |
-| Real-time Chat | WebSocket |
-| Internal RPC | gRPC |
-| Contract | Protocol Buffers |
-| Event Bus | NATS JetStream |
-| AI Runtime API | Ollama API |
-| Database Access | Repository Pattern |
+### Module Boundary Tests (TDD)
+
+```rust
+/// Contract: nexus-agent must be able to call nexus-rag::search()
+/// This test validates the trait interface, not a specific implementation.
+#[tokio::test]
+async fn test_agent_rag_integration() {
+    let rag = MockRagService::new();
+    // The mock implements the same trait as the real service
+    let agent = AgentServiceImpl::new(Arc::new(rag), /* ... */);
+
+    let result = agent.start_execution(/* ... */).await;
+    assert!(result.is_ok());
+}
+```
+
+### NATS Contract Tests
+
+```rust
+#[tokio::test]
+async fn test_agent_completed_event_is_published() {
+    let nats = nats_test_server().await;
+    let agent = AgentServiceImpl::new(/* ... with nats */);
+
+    agent.start_execution(/* ... */).await;
+
+    // Verify event was published
+    let msg = nats.subscribe("aeroxe.agent.completed").await?;
+    // ...
+}
+```

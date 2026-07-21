@@ -2,6 +2,8 @@
 
 ## Hardware Sizing + Network Design + High Availability + Disaster Recovery
 
+> **Modular Monolith Context:** This document covers deployment of the single `aeroxe-nexus` binary. For detailed container/K8s configuration, see [DevOps Deployment](17-devops-deployment.md). This document focuses on hardware sizing, zones, and operational considerations.
+
 ---
 
 ## 1. Production Deployment Goals
@@ -20,7 +22,7 @@ AeroXe Nexus AI production platform must support:
 
 ---
 
-## 2. Final Production Architecture Overview
+## 2. Production Architecture Overview
 
 ```
                            INTERNET
@@ -32,15 +34,10 @@ AeroXe Nexus AI production platform must support:
 ================================================================
                       Kubernetes Cluster
 ================================================================
-                         API Gateway
-                               |
-================================================================
-                      Application Layer
-================================================================
-  Identity Service        AI Gateway          Agent Orchestrator
-  RAG Service             Vision Service      SQL Agent
-  Workflow Service        Memory Service      Integration Service
-  Notification Service
++---------------------------+
+|   aeroxe-nexus (Monolith)  |  ← Single binary, all modules
+|   Port 8080 (HTTP/WS)      |
++---------------------------+
 ================================================================
                       Data Layer
 ================================================================
@@ -50,13 +47,15 @@ AeroXe Nexus AI production platform must support:
                       AI Compute Layer
 ================================================================
   Ollama GPU Servers
-  Mistral   Qwen   Llama   Command-R   Qwen3-VL   WhiteRabbitNeo
+  LFM   Hermes3   Phi4   Qwen Coder   Qwen3-VL   Command-R   Llama   WhiteRabbitNeo
 ================================================================
                       Monitoring Layer
 ================================================================
   Prometheus   Grafana   Loki   Tempo   OpenTelemetry
 ================================================================
 ```
+
+> **Key Difference:** A single `aeroxe-nexus` deployment replaces 10+ separate microservice deployments.
 
 ---
 
@@ -260,17 +259,13 @@ Minimum 4 nodes:
 
 ## 9. Internal Communication
 
-Microservices use:
+Modules within the monolith communicate via **Rust trait method calls** (in-process). No gRPC or mTLS needed internally.
 
 ```
-gRPC + mTLS
+nexus-agent → RagService::search() trait method call → same process, no network
 ```
 
-Example:
-
-```
-Agent Service → gRPC → RAG Service
-```
+External gRPC is available only for optional partner SDK integrations via `nexus-gateway`.
 
 ---
 
@@ -307,12 +302,12 @@ Stores: Documents, Images, AI Files, Backups, Models
 
 ## 12. High Availability Design
 
-### Application Layer
+### Application Layer (Modular Monolith)
 
-Multiple replicas per service:
+Multiple replicas of the single binary:
 
 ```
-agent-service → Replica 1, Replica 2, Replica 3
+aeroxe-nexus → Replica 1, Replica 2, Replica 3 (all modules scale together)
 ```
 
 ### PostgreSQL HA
@@ -410,8 +405,8 @@ Application → OpenTelemetry →
 ## 16. Deployment Pipeline
 
 ```
-Developer → Git Push → GitLab CI → Testing → Security Scan
-  → Docker Build → Container Registry → Kubernetes Deployment → Production
+Developer → Git Push → GitHub Actions → Testing (cargo test, clippy) → Security Scan (cargo-audit, trivy)
+  → Docker Build → Container Registry → Kubernetes Rolling Update → Production
 ```
 
 ---
@@ -456,45 +451,45 @@ Development → Testing → Staging → Production
 
 ---
 
-## 19. Final AeroXe Nexus AI Architecture
+## 19. Final Production Architecture
 
 ```
                         AeroXe Nexus AI
-                                |
 ================================================================
                            Clients
 ================================================================
   Web   Mobile   Enterprise Apps   APIs
 ================================================================
-                                |
+                        |
 ================================================================
-                        API Gateway
++------------------------------+  ← Single Deployment
+|     aeroxe-nexus (Monolith)   |
+|  http://:8080  /health       |
+|  +-----+  +------+  +-----+ |
+|  |gate |  |ai-gw |  |agent| |
+|  |way  |  |ateway|  |     | |
+|  +-----+  +------+  +-----+ |
+|  +-----+  +------+  +-----+ |
+|  |rag  |  |vision|  |sql  | |
+|  +-----+  +------+  +-----+ |
+|  +-----+  +------+  +-----+ |
+|  |mem  |  |work  |  |sec  | |
+|  +-----+  +------+  +-----+ |
++------------------------------+
 ================================================================
-                                |
+                      Infrastructure
 ================================================================
-                     AI Agent Platform
+  PostgreSQL  Elasticsearch  Redis  NATS  MinIO
 ================================================================
-  Planner Agent   RAG Agent   Developer Agent
-  Vision Agent    Security Agent   Business Agents
+                             |
 ================================================================
-                                |
+                      AI Runtime (Ollama)
 ================================================================
-                      Knowledge Intelligence
+  LFM   Hermes3   Phi4   Qwen   Qwen3-VL   Command-R   Llama   WRNeo
 ================================================================
-  PostgreSQL   pgvector   Apache AGE   ElasticSearch   Redis   MinIO
 ================================================================
-                                |
+                       Observability
 ================================================================
-                         AI Runtime
-================================================================
-  Ollama
-  LFM Thinking   Hermes3   Phi4 Mini   Qwen Coder
-  Qwen3-VL   Command-R   Llama3.1   WhiteRabbitNeo
-================================================================
-                                |
-================================================================
-                    Infrastructure Platform
-================================================================
-  Kubernetes   Docker   NATS   gRPC   OpenTelemetry   Prometheus   Grafana
+  Prometheus  Grafana  Loki  Tempo  OpenTelemetry
 ================================================================
 ```

@@ -2,6 +2,8 @@
 
 ## Ollama Runtime, Model Routing, Multi-Model Strategy & GPU Management
 
+> **Modular Monolith Context:** Model routing is handled by the `nexus-agent` module within the `aeroxe-nexus` binary. The `nexus-model-registry` module manages model lifecycle. Both call Ollama via HTTP within the same process.
+
 ---
 
 ## 1. Architecture Overview
@@ -9,21 +11,23 @@
 AeroXe Nexus AI uses **Ollama** as the local AI inference runtime. The platform does NOT use a single model for everything. Instead, it employs a multi-model strategy where specialized models handle specific domains.
 
 ```
-User Request
+User Request → nexus-gateway → nexus-ai-gateway → nexus-agent
     |
     v
-Agent Router (LFM2.5 Thinking)
+nexus-agent: Planner (LFM2.5 Thinking via Ollama HTTP)
     |
     v
 Intent Classification
     |
     ├── Coding     -> Qwen2.5-Coder:3B
     ├── Security   -> WhiteRabbitNeo:7B
-    ├── Vision     -> Qwen3-VL:4B
-    ├── RAG        -> Command-R:7B
+    ├── Vision     -> Qwen3-VL:4B  (+ nexus-vision module)
+    ├── RAG        -> Command-R:7B (+ nexus-rag module)
     ├── Reasoning  -> Llama3.1:7B
     └── General    -> Phi-4-Mini:3.8B
 ```
+
+> **Key Difference:** In the modular monolith, model routing is NOT a separate network service — it's logic within `nexus-agent` that calls Ollama directly via HTTP client.
 
 ---
 
@@ -45,6 +49,8 @@ Intent Classification
 ## 3. Model Purpose Details
 
 ### 3.1 LFM2.5 Thinking 1.2B — Planning Engine
+
+**Used by:** `nexus-agent` module for task decomposition
 
 **Responsibilities:**
 - Intent detection from user input
@@ -69,12 +75,16 @@ Planner output:
 
 ### 3.2 Hermes3 3B — Agent Controller
 
+**Used by:** `nexus-agent` module for tool calling
+
 **Responsibilities:**
 - Tool calling and function execution
 - MCP (Model Context Protocol) integration
 - Workflow control and sequencing
 
 ### 3.3 Phi-4 Mini 3.8B — General Assistant
+
+**Used by:** `nexus-agent` module for general chat
 
 **Use Cases:**
 - Customer chatbot
@@ -84,6 +94,8 @@ Planner output:
 
 ### 3.4 Qwen2.5 Coder 3B — Developer AI
 
+**Used by:** `nexus-agent` module for code generation, `nexus-sql-agent` for SQL generation
+
 **Functions:**
 - Code generation (Rust, Go, TypeScript, Python)
 - Code review and debugging
@@ -91,6 +103,8 @@ Planner output:
 - API design suggestions
 
 ### 3.5 Qwen3-VL 4B — Vision Intelligence
+
+**Used by:** `nexus-vision` module for image analysis
 
 **Capabilities:**
 - Image understanding and description
@@ -106,6 +120,8 @@ Planner output:
 
 ### 3.6 Command-R 7B — Enterprise Knowledge AI
 
+**Used by:** `nexus-rag` module for answer generation from knowledge
+
 **Responsibilities:**
 - RAG-powered answers from enterprise knowledge
 - Policy search and interpretation
@@ -114,6 +130,8 @@ Planner output:
 
 ### 3.7 Llama 3.1 7B — Advanced Reasoning
 
+**Used by:** `nexus-agent` module for complex business reasoning
+
 **Responsibilities:**
 - Complex business analysis
 - Architecture decisions
@@ -121,6 +139,8 @@ Planner output:
 - Strategic recommendations
 
 ### 3.8 WhiteRabbitNeo 7B — Security AI
+
+**Used by:** `nexus-security-ai` module for vulnerability detection
 
 **Responsibilities:**
 - Security code review

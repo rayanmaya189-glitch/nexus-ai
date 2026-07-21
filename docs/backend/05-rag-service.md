@@ -1,26 +1,28 @@
-# AeroXe Nexus AI — RAG Service
+# AeroXe Nexus AI — RAG Module
 
 ## Enterprise Knowledge Intelligence: Ingestion, Embeddings, Hybrid Search & Knowledge Graph
 
+> **Modular Monolith Module:** This document describes the `nexus-rag` crate — a module within the single `aeroxe-nexus` binary. It communicates with other modules via Rust trait interfaces (see [Communication Architecture](12-communication-architecture.md)).
+
 ---
 
-## 1. Service Identity
+## 1. Module Identity
 
 | Attribute | Value |
 |---|---|
-| Service Name | `rag-service` |
+| Module Name | `nexus-rag` |
+| Crate | `nexus-rag` (workspace member) |
 | Bounded Context | RAG Knowledge Intelligence |
 | Domain Type | Core Domain |
 | Language | Rust |
-| Database | `rag_db` (PostgreSQL + pgvector) |
-| gRPC Port | 50053 |
-| Object Storage | MinIO (`aeroxe-documents` bucket) |
+| Schema | `rag_` (in shared PostgreSQL + pgvector) |
+| Dependencies | Ollama (embeddings), MinIO, Elasticsearch |
 
 ---
 
 ## 2. Purpose
 
-The RAG (Retrieval-Augmented Generation) Service provides enterprise knowledge intelligence by:
+The RAG module provides enterprise knowledge intelligence within the `aeroxe-nexus` monolith by:
 
 - Ingesting documents from multiple sources (PDF, DOCX, HTML, Markdown, code)
 - Parsing and chunking content using semantic chunking
@@ -76,53 +78,32 @@ KnowledgeDocument (Aggregate Root)
 
 ---
 
-## 4. gRPC Contract
+## 4. Public API Trait
 
-```protobuf
-syntax = "proto3";
-package aeroxe.rag;
-
-service RagService {
-  rpc SearchKnowledge(SearchRequest) returns (SearchResponse);
-  rpc UploadDocument(DocumentRequest) returns (DocumentResponse);
-  rpc GetDocumentStatus(StatusRequest) returns (DocumentStatus);
-  rpc DeleteDocument(DeleteRequest) returns (DeleteResponse);
-  rpc StreamSearch(SearchRequest) returns (stream SearchResult);
+```rust
+// nexus-rag/src/interfaces/api.rs
+#[async_trait]
+pub trait RagService: Send + Sync {
+    async fn search(&self, query: SearchQuery) -> Result<SearchResults, RagError>;
+    async fn upload_document(&self, req: UploadRequest) -> Result<DocumentStatus, RagError>;
+    async fn get_document_status(&self, id: DocumentId) -> Result<Option<DocumentStatus>, RagError>;
+    async fn delete_document(&self, id: DocumentId) -> Result<(), RagError>;
 }
 
-message SearchRequest {
-  string query = 1;
-  int32 limit = 2;
-  string tenant_id = 3;
-  repeated string filters = 4;
+pub struct SearchQuery {
+    pub query: String,
+    pub limit: u32,
+    pub tenant_id: TenantId,
+    pub filters: Vec<String>,
 }
 
-message SearchResponse {
-  repeated DocumentResult results = 1;
-  float total_latency_ms = 2;
-}
-
-message DocumentResult {
-  string document_id = 1;
-  string title = 2;
-  string content = 3;
-  float score = 4;
-  string source = 5;
-  map<string, string> metadata = 6;
-}
-
-message DocumentRequest {
-  string filename = 1;
-  bytes content = 2;
-  string content_type = 3;
-  string tenant_id = 4;
-}
-
-message DocumentResponse {
-  string document_id = 1;
-  string status = 2;
+pub struct SearchResults {
+    pub results: Vec<DocumentResult>,
+    pub total_latency_ms: f64,
 }
 ```
+
+> **Note:** Other modules (like `nexus-agent`) call `RagService` methods synchronously via trait dispatch. Document upload processing is async via NATS.
 
 ---
 
@@ -469,7 +450,7 @@ LIMIT $4;
 ### documents
 
 ```sql
-CREATE TABLE documents (
+CREATE TABLE rag.documents (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     tenant_id BIGINT NOT NULL,
     filename TEXT NOT NULL,
@@ -485,9 +466,9 @@ CREATE TABLE documents (
 ### document_chunks
 
 ```sql
-CREATE TABLE document_chunks (
+CREATE TABLE rag.chunks (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    document_id BIGINT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+    document_id BIGINT NOT NULL REFERENCES rag.documents(id) ON DELETE CASCADE,
     content TEXT NOT NULL,
     chunk_index INT NOT NULL,
     token_count INT,
@@ -500,9 +481,9 @@ CREATE TABLE document_chunks (
 ### document_metadata
 
 ```sql
-CREATE TABLE document_metadata (
+CREATE TABLE rag.document_metadata (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    document_id BIGINT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+    document_id BIGINT NOT NULL REFERENCES rag.documents(id) ON DELETE CASCADE,
     metadata JSONB NOT NULL
 );
 ```

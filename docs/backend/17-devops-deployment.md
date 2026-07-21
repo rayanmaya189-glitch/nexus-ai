@@ -1,6 +1,6 @@
 # AeroXe Nexus AI — DevOps & Deployment
 
-## Docker, Kubernetes, CI/CD, GPU Infrastructure & Observability
+## Docker, Kubernetes, CI/CD, GPU Infrastructure (Modular Monolith Deployment)
 
 ---
 
@@ -9,9 +9,12 @@
 **Private Infrastructure First:**
 - Run offline after model download
 - Support local GPU inference
-- Scale AI workloads independently
+- Scale the binary, not individual services
 - Maintain enterprise security
 - Enable future cloud/hybrid deployment
+
+**Key Difference from Microservices:**
+The entire backend is a **single Rust binary**. You deploy one container instead of 10+.
 
 ---
 
@@ -22,72 +25,147 @@
                       |
                 Load Balancer
                       |
-               Nexus API Gateway
+          +-----------------------+
+          |   aeroxe-nexus:latest  |  ← Single binary
+          |   (modular monolith)   |
+          +-----------------------+
                       |
-  ====================================================
-                     Kubernetes Cluster
-  ====================================================
-  Identity | AI Gateway | Agent Orchestrator | RAG
-  Vision | SQL Agent | Memory | Workflow | Audit
-  ====================================================
+  ==========================================
+              Infrastructure Layer
+  ==========================================
+  PostgreSQL | Redis | NATS | MinIO | ES
+  ==========================================
                       |
-  ====================================================
-                  Infrastructure Layer
-  ====================================================
-  PostgreSQL | Redis | NATS JetStream | Elasticsearch | MinIO
-  ====================================================
-                      |
-  ====================================================
-                  AI Compute Layer
-  ====================================================
-                  Ollama GPU Nodes
-  ====================================================
+  ==========================================
+              AI Compute Layer
+  ==========================================
+              Ollama GPU Nodes
+  ==========================================
 ```
 
 ---
 
 ## 3. Container Architecture
 
-Every microservice runs as an independent container:
+### Single Dockerfile
 
 ```dockerfile
-# Rust service example
-FROM rust:1.80 AS builder
+# Multi-stage Rust build
+FROM rust:1.84-slim-bookworm AS builder
 WORKDIR /app
-COPY .
-RUN cargo build --release
+COPY Cargo.toml Cargo.lock ./
+COPY src/ src/
+COPY nexus-gateway/ nexus-gateway/
+COPY nexus-identity/ nexus-identity/
+COPY nexus-agent/ nexus-agent/
+COPY nexus-rag/ nexus-rag/
+COPY nexus-vision/ nexus-vision/
+COPY nexus-sql-agent/ nexus-sql-agent/
+COPY nexus-memory/ nexus-memory/
+COPY nexus-workflow/ nexus-workflow/
+COPY nexus-security-ai/ nexus-security-ai/
+COPY nexus-audit/ nexus-audit/
+COPY nexus-notification/ nexus-notification/
+COPY nexus-model-registry/ nexus-model-registry/
+COPY nexus-config/ nexus-config/
+COPY nexus-ecosystem/ nexus-ecosystem/
+RUN cargo build --release --bin aeroxe-nexus
 
+# Runtime image
 FROM debian:bookworm-slim
-COPY --from=builder /app/target/release/service /app/service
-CMD ["/app/service"]
+RUN apt-get update && apt-get install -y ca-certificates && rm -rf /var/lib/apt/lists/*
+COPY --from=builder /app/target/release/aeroxe-nexus /usr/local/bin/
+COPY migrations/ /app/migrations/
+EXPOSE 8080
+HEALTHCHECK --interval=15s --timeout=3s --start-period=30s \
+  CMD curl -f http://localhost:8080/health || exit 1
+CMD ["aeroxe-nexus"]
 ```
 
-### Required Files Per Service
+### Image Size
 
-```
-service-name/
-├── Dockerfile
-├── docker-compose.yml
-├── .env.example
-├── healthcheck.sh
-├── README.md
-└── migrations/
-```
+| Component | Size |
+|---|---|
+| Builder image | ~4GB (build dependencies) |
+| Runtime image | **~50MB** (static binary + Debian slim) |
+| Startup time | < 1 second (no JVM, no interpreter) |
 
 ---
 
 ## 4. Local Development
 
-### Docker Compose Stack
+### Docker Compose (Development Stack)
+
+```yaml
+version: "3.9"
+services:
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_DB: aeroxe_nexus
+      POSTGRES_USER: aeroxe
+      POSTGRES_PASSWORD: aeroxe_dev
+    ports: ["5432:5432"]
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+
+  nats:
+    image: nats:2.10-alpine
+    ports: ["4222:4222"]
+
+  minio:
+    image: minio/minio
+    ports: ["9000:9000", "9001:9001"]
+    command: server /data --console-address ":9001"
+
+  elasticsearch:
+    image: elasticsearch:8.12
+    environment:
+      - discovery.type=single-node
+    ports: ["9200:9200"]
+
+  ollama:
+    image: ollama/ollama:latest
+    ports: ["11434:11434"]
+    volumes:
+      - ollama_models:/root/.ollama
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  app:
+    build: .
+    ports: ["8080:8080"]
+    environment:
+      DATABASE_URL: postgres://aeroxe:aeroxe_dev@postgres:5432/aeroxe_nexus
+      REDIS_URL: redis://redis:6379
+      NATS_URL: nats://nats:4222
+      OLLAMA_URL: http://ollama:11434
+      JWT_SECRET: dev-secret-do-not-use-in-prod
+    depends_on:
+      - postgres
+      - redis
+      - nats
+      - ollama
+```
 
 | Service | Port | Purpose |
 |---|---|---|
 | PostgreSQL | 5432 | Primary database |
-| Redis | 6379 | Cache, short-term memory |
+| Redis | 6379 | Cache, sessions |
 | NATS | 4222 | Event streaming |
 | MinIO | 9000 | Object storage |
-| Ollama | 11434 | AI inference |
 | Elasticsearch | 9200 | Full-text search |
+| Ollama | 11434 | AI inference |
+| **app** | **8080** | **Single monolith binary** |
 
 ---
 
@@ -97,79 +175,140 @@ service-name/
 
 | Namespace | Contents |
 |---|---|
-| `aeroxe-system` | System services, ingress |
-| `aeroxe-ai` | AI microservices |
+| `aeroxe-system` | nexus monolith, ingress |
 | `aeroxe-data` | PostgreSQL, Redis, NATS, MinIO, ES |
 | `aeroxe-monitoring` | Prometheus, Grafana, Loki, Tempo |
 | `aeroxe-gpu` | Ollama GPU nodes |
 
-### Deployment Example
+### Deployment (Single Monolith)
 
 ```yaml
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: agent-service
+  name: aeroxe-nexus
+  namespace: aeroxe-system
 spec:
   replicas: 3
   selector:
     matchLabels:
-      app: agent-service
+      app: aeroxe-nexus
   template:
+    metadata:
+      labels:
+        app: aeroxe-nexus
     spec:
       containers:
-      - name: agent
-        image: aeroxe/agent-service:v1
+      - name: nexus
+        image: aeroxe/nexus:v1.0.0
         ports:
-        - containerPort: 50051
+        - containerPort: 8080
+          name: http
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: nexus-db
+              key: url
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: nexus-jwt
+              key: secret
+        - name: REDIS_URL
+          value: redis://redis.aeroxe-data:6379
+        - name: NATS_URL
+          value: nats://nats.aeroxe-data:4222
+        - name: OLLAMA_URL
+          value: http://ollama.aeroxe-gpu:11434
+        - name: LOG_LEVEL
+          value: info
         resources:
+          requests:
+            memory: "1Gi"
+            cpu: "1"
           limits:
-            memory: "2Gi"
-            cpu: "2"
+            memory: "4Gi"
+            cpu: "4"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 15
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: aeroxe-nexus
+  namespace: aeroxe-system
+spec:
+  selector:
+    app: aeroxe-nexus
+  ports:
+  - port: 8080
+    targetPort: 8080
+  type: ClusterIP
 ```
+
+### Scaling
+
+| Metric | Scale Up | Scale Down |
+|---|---|---|
+| CPU | >70% for 2 min | <30% for 5 min |
+| Active requests | >1000 per instance | <100 for 5 min |
+| WebSocket connections | >500 per instance | <50 for 5 min |
+
+Because it's a monolith, scaling means **replicating the entire binary**. All modules scale together.
 
 ---
 
 ## 6. CI/CD Pipeline
 
-```
-Developer
-    |
-    v
-Git Push
-    |
-    v
-GitLab CI
-    |
-    v
-[Stage 1] Code Quality
-    |  cargo fmt / clippy (Rust)
-    |
-    v
-[Stage 2] Testing
-    |  Unit Tests
-    |  Integration Tests
-    |  Contract Tests
-    |
-    v
-[Stage 3] Security Scan
-    |  Trivy (container scan)
-    |  OWASP Dependency Check
-    |  SAST Scanner
-    |
-    v
-[Stage 4] Build
-    |  Docker Image
-    |
-    v
-[Stage 5] Push to Registry
-    |
-    v
-[Stage 6] Deploy to Kubernetes
-    |  Rolling Update
-    |
-    v
-Production
+```yaml
+name: CI/CD
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+      - name: Run all tests
+        run: cargo nextest run --all-features
+      - name: Clippy
+        run: cargo clippy -- -D warnings
+      - name: Format check
+        run: cargo fmt --check
+
+  security-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Trivy scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          severity: 'CRITICAL,HIGH'
+
+  build-and-deploy:
+    needs: [test, security-scan]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build Docker image
+        run: docker build -t aeroxe/nexus:${{ github.sha }} .
+      - name: Push to registry
+        run: docker push aeroxe/nexus:${{ github.sha }}
+      - name: Deploy to K8s
+        run: kubectl set image deployment/aeroxe-nexus nexus=aeroxe/nexus:${{ github.sha }}
 ```
 
 ---
@@ -178,20 +317,34 @@ Production
 
 ```
 aeroxe-nexus-ai/
-├── services/
-│   ├── identity-service/
-│   ├── agent-service/
-│   ├── rag-service/
-│   ├── vision-service/
-│   └── ...
-├── proto/
+├── Cargo.toml                      # Workspace root
+├── Cargo.lock
+├── src/
+│   └── main.rs                     # Binary entry point (wires modules)
+├── nexus-gateway/                  # API Gateway module crate
+├── nexus-identity/                 # Identity module crate
+├── nexus-ai-gateway/              # AI Gateway module crate
+├── nexus-agent/                    # Agent Orchestrator module crate
+├── nexus-rag/                      # RAG module crate
+├── nexus-vision/                   # Vision module crate
+├── nexus-sql-agent/                # SQL Agent module crate
+├── nexus-memory/                   # Memory module crate
+├── nexus-workflow/                 # Workflow module crate
+├── nexus-security-ai/              # Security AI module crate
+├── nexus-audit/                    # Audit module crate
+├── nexus-notification/             # Notifications module crate
+├── nexus-model-registry/           # Model registry module crate
+├── nexus-config/                   # Config module crate
+├── nexus-ecosystem/                # Ecosystem integration module crate
+├── proto/                          # Optional external gRPC protos
 ├── infrastructure/
 │   ├── kubernetes/
 │   └── docker/
+├── migrations/
 ├── docs/
-│   ├── srs/
-│   └── backend/
 └── tests/
+    ├── e2e/                        # End-to-end tests
+    └── benchmarks/                 # Performance benchmarks
 ```
 
 ---
@@ -204,65 +357,35 @@ aeroxe-nexus-ai/
 | Logs | Loki | Log aggregation |
 | Tracing | Tempo | Distributed tracing |
 | Dashboard | Grafana | Visualization |
-| Instrumentation | OpenTelemetry | Auto-instrumentation |
+| Instrumentation | OpenTelemetry + `tracing` | Auto-instrumentation |
 
-### Application Metrics
-
-Every service exposes `/metrics`:
+### Application Metrics (Single Binary)
 
 | Category | Metrics |
 |---|---|
-| API | request_count, latency, error_rate |
-| AI | tokens_generated, model_latency, prompt_size |
-| Database | connection_pool, query_time, slow_queries |
-| Infrastructure | cpu, memory, gpu_usage |
+| API | `requests_total`, `request_duration_ms`, `error_rate` |
+| AI | `tokens_generated`, `model_latency`, `prompt_size` |
+| Module | `module_call_count`, `module_latency_ms` (per module) |
+| Database | `connection_pool_size`, `query_time`, `slow_queries` |
+| Infrastructure | `cpu`, `memory`, `gpu_usage` |
 
 ### Logging Standard
 
 ```json
 {
-  "timestamp": "2026-07-15",
-  "service": "agent-service",
+  "timestamp": "2026-07-21T12:00:00Z",
+  "module": "nexus-agent",
   "level": "INFO",
-  "trace_id": "123",
-  "request_id": "456",
-  "tenant_id": "789",
-  "message": "Agent completed execution"
+  "trace_id": "abc123",
+  "request_id": "def456",
+  "tenant_id": 1,
+  "message": "Agent execution completed"
 }
 ```
 
-### Health Check Standard
-
-```
-GET /health/live    -> 200 OK (process alive)
-GET /health/ready   -> 200 OK (dependencies available)
-```
-
 ---
 
-## 9. Scaling Architecture
-
-### Horizontal Scaling
-
-```
-Agent Service: 1 Replica
-        |
-   High Traffic
-        |
-Agent Service: 10 Replicas
-```
-
-### AI Scaling Strategy
-
-| Node Type | Hardware | Models |
-|---|---|---|
-| Small AI Node | RTX 3060 12GB | LFM, Hermes, Phi, Qwen Coder, Qwen3-VL |
-| Large AI Node | RTX 4090 24GB | Command-R, Llama, WhiteRabbitNeo |
-| Enterprise | A6000 / L40S | All models, parallel inference |
-
----
-
-## 10. Production Hardware
+## 9. Production Hardware
 
 ### Development
 
@@ -277,22 +400,20 @@ Agent Service: 10 Replicas
 
 | Component | Spec |
 |---|---|
-| Application Server | 32 cores, 128GB RAM, 2TB NVMe |
-| Database Server | 32 cores, 128GB RAM, 4TB NVMe RAID |
+| Application + DB Server | 32 cores, 128GB RAM, 4TB NVMe |
 | AI Server | 16 cores, 64GB RAM, RTX 4090 |
 
 ### Enterprise (100K-1M users)
 
 | Component | Spec |
 |---|---|
-| K8s Control Plane | 3 nodes, 16 cores, 64GB each |
-| Worker Nodes | 4+ nodes, 32-64 cores, 128-256GB |
+| K8s Workers (3-5 nodes) | 32-64 cores, 128-256GB RAM each |
 | GPU Node 1 | 2x RTX 4090 (small models) |
 | GPU Node 2 | A6000 / L40S (large models) |
 
 ---
 
-## 11. Backup & Disaster Recovery
+## 10. Backup & Disaster Recovery
 
 | Component | Strategy |
 |---|---|
@@ -308,7 +429,7 @@ Agent Service: 10 Replicas
 
 ---
 
-## 12. Production Alerting
+## 11. Production Alerting
 
 | Alert | Threshold |
 |---|---|
@@ -316,7 +437,7 @@ Agent Service: 10 Replicas
 | RAM | > 90% |
 | Disk | > 85% |
 | GPU Temperature | > 85C |
+| Module Latency | > 5s (any module) |
 | Model Unavailable | Any |
-| API Latency | > 5s |
 | Failed Logins | > 10/min |
 | Prompt Injection | Any |

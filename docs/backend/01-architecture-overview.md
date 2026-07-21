@@ -1,6 +1,6 @@
 # AeroXe Nexus AI — Backend Architecture Overview
 
-## System-Level Backend Documentation
+## Modular Monolithic DDD + Test-Driven Architecture
 
 ---
 
@@ -12,234 +12,288 @@
 | Domain | aeroxenexus.com |
 | Category | Enterprise Agentic AI Platform |
 | Backend Language | Rust |
+| Architecture | **Modular Monolith** (DDD Bounded Contexts → Rust Modules) |
 | AI Runtime | Ollama (local GPU inference) |
-| Communication | gRPC + Protocol Buffers + NATS JetStream |
-| External API | REST + WebSocket |
-| Deployment | Private Infrastructure First |
+| Internal Communication | Rust trait interfaces + NATS JetStream (async) |
+| External API | REST + WebSocket (via API Gateway module) |
+| Deployment | Single binary with optional sidecar services |
+| Testing | **TDD-First**: No code without tests |
 
 ---
 
-## 2. System Architecture Diagram
+## 2. Architecture Principles
+
+### 2.1 Modular Monolithic Architecture
+
+The entire backend is a **single Rust binary** organized into DDD modules:
 
 ```
-                         Users / Applications
-                                |
-                        Nexus API Gateway
-                                |
-                  AI Agent Orchestrator
-                                |
-                        NATS JetStream
-                                |
-  ============================================================
-                     AI Microservices
-  ============================================================
-    identity-service        ai-gateway-service
-    agent-orchestrator-service    rag-service
-    vision-service          sql-agent-service
-    memory-service          workflow-service
-    security-ai-service     audit-service
-    notification-service    model-registry-service
-    configuration-service   ecosystem-integration-service
-  ============================================================
-                                |
-                        Model Router
-                                |
-  ============================================================
-                     Ollama Runtime
-  ============================================================
-    lfm2.5-thinking:1.2b    hermes3:3b
-    phi4-mini:3.8b           qwen2.5-coder:3b
-    qwen3-vl:4b              command-r7b:7b
-    llama3.1:7b              whiterabbitneo:7b
-  ============================================================
-                                |
-  ============================================================
-                   Intelligence Platform
-  ============================================================
-    RAG Engine    SQL Agent    Knowledge Graph
-    Memory System    Workflow Engine
-  ============================================================
++-------------------------------------------------------------------+
+|                    AeroXe Nexus AI Monolith                        |
+|                                                                   |
+|  +------------------+  +------------------+  +------------------+  |
+|  |   API Gateway    |  |  AI Gateway      |  | Agent Orchestrator| |
+|  |   Module         |  |  Module          |  | Module           | |
+|  +------------------+  +------------------+  +------------------+  |
+|                                                                   |
+|  +------------------+  +------------------+  +------------------+  |
+|  |   RAG Module     |  |  Vision Module   |  | SQL Agent Module | |
+|  +------------------+  +------------------+  +------------------+  |
+|                                                                   |
+|  +------------------+  +------------------+  +------------------+  |
+|  |   Identity Module |  |  Memory Module   |  | Workflow Module  | |
+|  +------------------+  +------------------+  +------------------+  |
+|                                                                   |
+|  +------------------+  +------------------+  +------------------+  |
+|  |   Security Module |  |  Audit Module    |  | Integration M.   | |
+|  +------------------+  +------------------+  +------------------+  |
++-------------------------------------------------------------------+
+                              |
+        +---------------------------------------------------+
+        |              Shared Infrastructure                 |
+        |  PostgreSQL | Redis | NATS | MinIO | Elasticsearch |
+        +---------------------------------------------------+
+                              |
+        +---------------------------------------------------+
+        |              AI Compute (Ollama)                   |
+        |  LFM | Hermes3 | Phi4 | Qwen | Command-R | Llama  |
+        +---------------------------------------------------+
 ```
 
+### 2.2 Domain-Driven Design (DDD)
+
+- **Bounded Contexts** → Rust modules (`crate::domain::*`)
+- **Aggregates** → Rust structs with invariant enforcement
+- **Entities + Value Objects** → Typed structs with validation
+- **Domain Events** → NATS JetStream (async) + in-process (sync)
+- **Repository Traits** → `#[async_trait]` with SeaORM implementations
+
+### 2.3 Test-Driven Development (TDD)
+
+**Hard rule:** No production code without automated tests.
+
+```
+RED (write failing test) → GREEN (implement) → REFACTOR → INTEGRATE
+```
+
+Every module enforces:
+- **Unit tests** for domain logic (entities, value objects, aggregates)
+- **Integration tests** for repository + infrastructure
+- **Module boundary tests** for cross-module contracts
+- **API contract tests** for external interfaces
+
+### 2.4 Architecture Decisions
+
+| Decision | Rationale |
+|---|---|
+| **Single binary** vs microservices | Eliminates gRPC overhead, simplifies deployment, enables stronger compile-time guarantees |
+| **Trait-based module interfaces** | Modules communicate through Rust traits — type-safe, testable, mockable |
+| **NATS for async events only** | Background jobs, cross-module notifications, audit logging |
+| **Schema-per-BoundedContext** | Logical database isolation without physical separation — enables future extraction to microservices |
+| **TDD enforced at module boundaries** | Each module has a public API surface + comprehensive test suite |
+
 ---
 
-## 3. Architecture Principles
+## 3. Backend Technology Stack
 
-### 3.1 Domain-Driven Design (DDD)
+### 3.1 Language & Core
 
-The platform is divided into independent bounded contexts. Each bounded context owns its business logic, database, and exposes contracts through gRPC while publishing events via NATS JetStream.
-
-### 3.2 Test-Driven Development (TDD)
-
-No production code exists without automated tests. The cycle: Write Test -> Implement -> Refactor -> Integration Test -> Production.
-
-### 3.3 Microservice Architecture
-
-Each service:
-- Owns its database (Database-per-Microservice pattern)
-- Owns its business rules
-- Communicates through versioned contracts (gRPC)
-- Deploys independently
-- Has independent scaling lifecycle
-
-### 3.4 Hybrid Communication Strategy
-
-| Layer | Technology |
+| Component | Technology |
 |---|---|
-| External (Mobile/Web) | HTTPS REST + WebSocket |
-| Internal Synchronous | gRPC + Protocol Buffers |
-| Internal Asynchronous | NATS JetStream |
-| AI Runtime | Ollama HTTP API |
-| Database Access | Repository Pattern |
-
----
-
-## 4. Backend Technology Stack
-
-### 4.1 Language
-
-| Language | Usage | Rationale |
-|---|---|---|
-| Rust | All backend services | Memory safety, zero-cost abstractions, async runtime (Tokio), performance |
-
-### 4.2 Core Libraries
-
-| Component | Rust |
-|---|---|
-| gRPC | tonic |
-| NATS | async-nats |
-| Database | SeaORM |
-| Vector | pgvector (SeaORM) |
+| Language | **Rust** (edition 2024) |
+| Async Runtime | Tokio (multi-threaded) |
+| HTTP / WS Server | **axum** |
+| gRPC (external only) | tonic (optional, for SDK/partner integrations) |
 | Serialization | serde + serde_json |
-| Async Runtime | Tokio |
-| HTTP | axum |
-| WebSocket | tokio-tungstenite |
+| Configuration | environment-based + config files |
+| Logging | tracing + OpenTelemetry |
 
-### 4.3 Infrastructure
+### 3.2 DDD / Testing Libraries
 
 | Component | Technology |
 |---|---|
-| Container Runtime | Docker |
-| Orchestration | Kubernetes |
-| CI/CD | GitLab CI |
-| Monitoring | OpenTelemetry + Prometheus + Grafana |
-| Logging | Loki |
-| Tracing | Tempo |
-| Object Storage | MinIO |
-| Search | Elasticsearch |
-| Cache | Redis |
-| Graph | Apache AGE (PostgreSQL extension) |
+| Async Traits | `async-trait` crate |
+| Mocking | `mockall` crate |
+| Test Runners | `cargo test`, `cargo nextest` |
+| Property Testing | `proptest` crate |
+| Fuzzing | `cargo-fuzz` |
+
+### 3.3 Infrastructure
+
+| Component | Technology |
+|---|---|
+| Primary Database | **PostgreSQL 18** (single cluster, schema-per-module) |
 | Vector Search | pgvector (PostgreSQL extension) |
-| Primary Database | PostgreSQL 18 |
+| Knowledge Graph | Apache AGE (PostgreSQL extension) |
+| Cache / STM | Redis |
+| Event Bus | NATS JetStream |
+| File Storage | MinIO |
+| Full-Text Search | Elasticsearch |
+| AI Runtime | Ollama HTTP API |
+
+### 3.4 Module Communication Matrix
+
+| Caller → Callee | Synchronous | Asynchronous |
+|---|---|---|
+| API Gateway → any module | `trait` method call | NATS for long ops |
+| AI Gateway → Agent | `trait` method call | — |
+| Agent Orchestrator → RAG | `trait` method call | NATS for ingestion |
+| Agent Orchestrator → Memory | `trait` method call | — |
+| Agent Orchestrator → SQL | `trait` method call | — |
+| Agent Orchestrator → Vision | `trait` method call | — |
+| Workflow → any module | `trait` method call | NATS for step events |
+| Audit ← any module | `trait` method call | NATS for fire-and-forget |
 
 ---
 
-## 5. Service Catalogue
+## 4. Module Catalogue (Bounded Contexts)
 
-### 5.1 Core Domain Services
+### 4.1 Core Domain Modules
 
-| Service | Purpose |
-|---|---|
-| `agent-orchestrator` | Agent lifecycle, planning, tool execution |
-| `rag-service` | Document ingestion, embeddings, hybrid search |
-| `vision-service` | Image processing, OCR, visual reasoning |
-| `security-ai` | Security analysis, vulnerability detection |
-| `memory-service` | Short-term and long-term AI memory |
+| Module | Bounded Context | Purpose |
+|---|---|---|
+| `nexus-gateway` | API Gateway | HTTP/WS server, auth, rate-limit, routing |
+| `nexus-ai-gateway` | AI Gateway | AI request lifecycle, prompt safety |
+| `nexus-agent` | Agent Orchestration | Agent lifecycle, planning, tool execution |
+| `nexus-rag` | RAG Intelligence | Document ingestion, embeddings, search |
+| `nexus-vision` | Vision Intelligence | Image analysis, OCR |
+| `nexus-sql-agent` | SQL Intelligence | NL→SQL, safe query execution |
+| `nexus-security-ai` | Security Intelligence | Code review, threat detection |
 
-### 5.2 Infrastructure
+### 4.2 Supporting Domain Modules
 
-| Component | Technology |
-|---|---|
-| Container Runtime | Docker |
-| Orchestration | Kubernetes |
-| CI/CD | GitHub Actions |
-| Monitoring | OpenTelemetry + Prometheus + Grafana |
-| Object Storage | MinIO |
-| Search | Elasticsearch |
-| Cache | Redis |
-| Graph | Apache AGE (PostgreSQL extension) |
-| Vector Search | pgvector (PostgreSQL extension) |
-| Primary Database | PostgreSQL 18 |
+| Module | Bounded Context | Purpose |
+|---|---|---|
+| `nexus-identity` | Identity & Auth | IAM, JWT, RBAC/ABAC, tenant mgmt |
+| `nexus-memory` | Memory | Short/long-term AI memory |
+| `nexus-workflow` | Workflow | Business process automation |
+| `nexus-audit` | Audit & Compliance | Full audit trail, compliance |
+
+### 4.3 Infrastructure Modules
+
+| Module | Bounded Context | Purpose |
+|---|---|---|
+| `nexus-model-registry` | Model Management | Ollama model lifecycle |
+| `nexus-notification` | Notifications | Email, WhatsApp, push |
+| `nexus-config` | Configuration | Dynamic config, feature flags |
+| `nexus-ecosystem` | Ecosystem Integration | AeroXe product connectors |
+
+---
+
+## 5. Module Dependency Flow
+
+```
+                   +----------------+
+                   | nexus-gateway  |  ← External HTTP/WS
+                   +----------------+
+                          |
+          +---------------+---------------+
+          |               |               |
+          v               v               v
+   +-----------+   +-----------+   +-----------+
+   | nexus-    |   | nexus-    |   | nexus-    |
+   | identity  |   | ai-gateway|   | model-    |
+   +-----------+   +-----------+   | registry  |
+          |               |        +-----------+
+          |               v
+          |        +-----------+
+          |        | nexus-    |
+          |        | agent     |
+          |        +-----------+
+          |          |     |     |     |
+          v          v     v     v     v
+   +-----------+   +-----+ +---+ +---+ +--------+
+   | nexus-    |   | RAG | | V. | |SQL| |memory |
+   | workflow  |   +-----+ +---+ +---+ +--------+
+   +-----------+         |     |     |
+          |              v     v     v
+          v        +-------------------+
+   +-----------+   |   nexus-security  |
+   | nexus-    |   +-------------------+
+   | notification|          |
+   +-----------+          v
+                   +-----------+
+                   | nexus-    |
+                   | audit     |
+                   +-----------+
+```
 
 ---
 
 ## 6. Request Flow
 
-### 6.1 Synchronous Request (gRPC)
+### 6.1 AI Chat Request (Modular Monolith)
 
 ```
-User Request
-    |
-    v
-API Gateway (REST/WS)
-    |
-    v
-AI Gateway Service
-    |
-    v
-Agent Orchestrator (gRPC)
-    |
-    v
-RAG Service / Vision Service / SQL Service (gRPC)
-    |
-    v
-Ollama (HTTP)
-    |
-    v
-Response (streamed back)
+User → HTTP POST /api/v1/ai/chat
+  → nexus-gateway::router
+    → [Middleware] Auth, Tenant, Rate-Limit
+    → nexus-gateway::handlers::ai_chat
+      → nexus-ai-gateway::AIGatewayService::submit_request()
+        → nexus-agent::AgentService::start_execution()
+          → [Planning]   LFM2.5 Thinking (Ollama)
+          → [Execution]   Qwen2.5-Coder / Command-R / etc. (Ollama)
+          → [Tools]       nexus-rag / nexus-sql-agent / nexus-vision (trait calls)
+          → [Memory]      nexus-memory::MemoryService (trait call)
+        ← Response (streamed via axum WebSocket)
+      → nexus-audit::AuditService::log_event() (NATS + trait)
+    ← HTTP 200 + JSON body or WebSocket stream
 ```
 
-### 6.2 Asynchronous Request (NATS JetStream)
+### 6.2 Document Upload (Async via NATS)
 
 ```
-Document Uploaded
-    |
-    v
-nexus.rag.document.created (NATS Event)
-    |
-    v
-RAG Worker
-    |
-    v
-Chunk Generation
-    |
-    v
-Embedding Creation
-    |
-    v
-Vector Store Update
-    |
-    v
-nexus.rag.embedding.created (NATS Event)
+User → POST /api/v1/rag/documents
+  → nexus-gateway → nexus-rag::RagService::upload_document()
+    → Store file in MinIO
+    → Publish NATS: aeroxe.rag.document.uploaded
+    ← HTTP 202 Accepted
+
+[NATS Consumer]
+  → nexus-rag::DocumentProcessor (async worker)
+    → Parse → Chunk → Embed (Ollama) → Store pgvector
+    → Publish NATS: aeroxe.rag.document.processed
+    → Update knowledge graph (Apache AGE)
 ```
 
 ---
 
-## 7. Deployment Model
+## 7. Module Internal Structure (DDD Layers)
 
-### 7.1 Private Infrastructure First
-
-The platform is designed to:
-- Run offline after model download
-- Support local GPU inference via Ollama
-- Scale AI workloads independently
-- Maintain enterprise security (Zero Trust)
-- Enable future cloud/hybrid deployment
-
-### 7.2 Kubernetes Namespaces
+Every module follows the same layered structure:
 
 ```
-aeroxe-system          - System services
-aeroxe-ai              - AI microservices
-aeroxe-data            - PostgreSQL, Redis, NATS, MinIO, Elasticsearch
-aeroxe-monitoring      - Prometheus, Grafana, Loki, Tempo
-aeroxe-gpu             - Ollama GPU nodes
-```
-
-### 7.3 Environment Separation
-
-```
-Development  ->  Testing  ->  Staging  ->  Production
+nexus-<name>/
+├── Cargo.toml
+├── src/
+│   ├── lib.rs                      # Public API (re-exports)
+│   ├── domain/
+│   │   ├── mod.rs
+│   │   ├── aggregates/             # Aggregate roots with invariants
+│   │   ├── entities/               # Mutable domain objects
+│   │   ├── value_objects/          # Immutable validated types
+│   │   └── events/                 # Domain event definitions
+│   ├── application/
+│   │   ├── mod.rs
+│   │   ├── commands/               # CQRS command structs
+│   │   ├── queries/                # CQRS query structs
+│   │   ├── handlers/               # Command/query handler impls
+│   │   └── services/               # Application services (use cases)
+│   ├── infrastructure/
+│   │   ├── mod.rs
+│   │   ├── persistence/            # SeaORM repos + migrations
+│   │   ├── ollama/                 # Ollama HTTP client
+│   │   └── nats/                   # NATS publisher/subscriber
+│   └── interfaces/
+│       ├── mod.rs
+│       ├── api/                    # Module's internal API traits
+│       └── events/                 # NATS event handlers
+├── tests/
+│   ├── unit/                       # Domain unit tests
+│   ├── integration/                # Integration tests (DB, NATS, Ollama)
+│   ├── contract/                   # Module boundary contract tests
+│   └── e2e/                        # End-to-end flow tests
+└── migrations/                     # SeaORM migration files
 ```
 
 ---
@@ -248,16 +302,14 @@ Development  ->  Testing  ->  Staging  ->  Production
 
 | Component | Target |
 |---|---|
-| API Gateway | 50,000 req/sec |
-| gRPC Internal | 100,000 req/sec |
-| Vector Search | < 200ms |
-| SQL Query | < 2s |
+| API Gateway (HTTP serving) | 50,000 req/sec |
+| Module trait dispatch | < 1μs overhead |
+| PostgreSQL query (indexed) | < 10ms |
+| Vector Search (pgvector) | < 200ms |
 | Redis Lookup | < 10ms |
-| PostgreSQL API Query | < 100ms |
-| Elasticsearch Search | < 300ms |
 | Chat First Token | < 2s |
 | RAG Search | < 500ms |
-| Vision Request | < 5s |
+| Vision Analysis | < 5s |
 
 ---
 
@@ -265,14 +317,13 @@ Development  ->  Testing  ->  Staging  ->  Production
 
 | Concern | Implementation |
 |---|---|
-| Authentication | JWT + API Keys |
+| Authentication | JWT + API Keys (`nexus-identity`) |
 | Authorization | RBAC + ABAC Hybrid |
-| Multi-Tenancy | tenant_id column in all tables |
-| Encryption at Rest | AES-256 |
-| Encryption in Transit | TLS 1.3 + mTLS |
-| Secrets | Hashicorp Vault / K8s Secrets |
-| Audit | Every sensitive action logged |
+| Multi-Tenancy | `tenant_id` column in all tables |
+| Input Validation | `validator` crate + serde deserialization |
 | Rate Limiting | Token Bucket (Redis) |
-| Observability | OpenTelemetry (metrics, logs, traces) |
+| Observability | OpenTelemetry (metrics, logs, traces via `tracing`) |
+| Audit | Every sensitive action logged via `nexus-audit` |
+| Secrets | Environment variables + Hashicorp Vault |
 | Backup | Daily full + WAL archiving |
 | DR | RPO < 15min, RTO < 2hr |

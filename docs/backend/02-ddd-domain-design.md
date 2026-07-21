@@ -1,88 +1,177 @@
 # AeroXe Nexus AI — DDD Domain Design
 
-## Domain-Driven Design + Bounded Contexts + Aggregate Design
+## Domain-Driven Design + Modular Monolith + Aggregate Design
 
 ---
 
 ## 1. DDD Architecture Overview
 
-AeroXe Nexus AI is designed using Domain-Driven Design principles. The system is divided into independent Bounded Contexts, each owning its business logic, database, gRPC contracts, and NATS events.
+AeroXe Nexus AI is designed using **Domain-Driven Design** principles organized as a **modular monolith**. The system is divided into independent **Bounded Contexts**, each owning its business logic, database schema, and trait interfaces. Modules communicate through Rust trait methods (synchronous) and NATS events (asynchronous).
+
+### Key Difference from Microservices
+
+| Aspect | Microservice Architecture | Modular Monolith (This Project) |
+|---|---|---|
+| Communication | gRPC over network | Rust trait method calls (in-process) |
+| Database | Separate DB per service | Shared PostgreSQL, schema per module |
+| Deployment | N containers | 1 binary |
+| Testing | Service-level integration tests | Module-level + full binary tests |
+| Latency | 2-5ms per gRPC call | < 1μs per trait dispatch |
+| Extractability | N/A | Any module can be extracted to a microservice later |
 
 ---
 
 ## 2. Core Domain Classification
 
-| Domain | Type | Service | Language |
+| Domain | Type | Module Name | Schema Prefix |
 |---|---|---|---|
-| Agent Orchestration | Core Domain | `agent-orchestrator-service` | Rust |
-| AI Gateway | Core Domain | `ai-gateway-service` | Rust |
-| RAG Intelligence | Core Domain | `rag-service` | Rust |
-| Vision Intelligence | Core Domain | `vision-service` | Rust |
-| SQL Intelligence | Core Domain | `sql-agent-service` | Rust |
-| Security Intelligence | Core Domain | `security-ai-service` | Rust |
-| Identity | Supporting Domain | `identity-service` | Rust |
-| Memory | Supporting Domain | `memory-service` | Rust |
-| Audit | Supporting Domain | `audit-service` | Rust |
-| Workflow | Supporting Domain | `workflow-service` | Rust |
+| Agent Orchestration | **Core Domain** | `nexus-agent` | `agent_` |
+| AI Gateway | **Core Domain** | `nexus-ai-gateway` | `ai_` |
+| RAG Intelligence | **Core Domain** | `nexus-rag` | `rag_` |
+| Vision Intelligence | **Core Domain** | `nexus-vision` | `vision_` |
+| SQL Intelligence | **Core Domain** | `nexus-sql-agent` | `sql_` |
+| Security Intelligence | **Core Domain** | `nexus-security-ai` | `security_` |
+| Identity | Supporting | `nexus-identity` | `identity_` |
+| Memory | Supporting | `nexus-memory` | `memory_` |
+| Audit | Supporting | `nexus-audit` | `audit_` |
+| Workflow | Supporting | `nexus-workflow` | `workflow_` |
 
-### Infrastructure Services
+### Infrastructure Modules
 
-| Service | Language |
-|---|---|
-| `model-registry-service` | Rust |
-| `notification-service` | Rust |
-| `configuration-service` | Rust |
-
----
-
-## 3. Microservice Code Structure
-
-Every microservice follows a strict layered architecture:
-
-```
-service-name/
-├── domain/
-│   ├── entities/
-│   ├── aggregates/
-│   ├── value_objects/
-│   ├── domain_events/
-│   └── repositories/
-├── application/
-│   ├── commands/
-│   ├── queries/
-│   ├── handlers/
-│   └── use_cases/
-├── infrastructure/
-│   ├── database/
-│   ├── grpc/
-│   ├── nats/
-│   └── external/
-├── interfaces/
-│   ├── rest/
-│   ├── websocket/
-│   └── grpc/
-└── tests/
-    ├── unit/
-    ├── integration/
-    ├── contract/
-    ├── performance/
-    └── security/
-```
+| Module | Purpose | Schema Prefix |
+|---|---|---|
+| `nexus-gateway` | API Gateway (axum HTTP/WS) | — (stateless) |
+| `nexus-model-registry` | Ollama model management | `models_` |
+| `nexus-notification` | Email, WhatsApp, push | `notif_` |
+| `nexus-config` | Dynamic configuration | `config_` |
+| `nexus-ecosystem` | AeroXe product connectors | `eco_` |
 
 ---
 
-## 4. Identity Bounded Context
+## 3. Module Internal Code Structure (DDD Layers)
 
-**Service:** `identity-service`
+Every module follows a strict layered architecture:
+
+```
+nexus-<name>/                      # Cargo crate
+├── Cargo.toml
+├── src/
+│   ├── lib.rs                     # Public API: trait definitions + re-exports
+│   ├── domain/                    # 🟢 DDD Layer: Business logic
+│   │   ├── mod.rs
+│   │   ├── aggregates/            # Aggregate roots with invariants
+│   │   ├── entities/              # Mutable domain objects (with IDs)
+│   │   ├── value_objects/         # Immutable validated types (no IDs)
+│   │   └── events/                # Domain event structs + serialization
+│   ├── application/               # 🟡 DDD Layer: Use cases / orchestration
+│   │   ├── mod.rs
+│   │   ├── commands/              # Command structs (what you tell the system to do)
+│   │   ├── queries/               # Query structs (what you ask the system)
+│   │   ├── handlers/              # Command/Query handler implementations
+│   │   └── services/              # Application services (orchestration)
+│   ├── infrastructure/            # 🔵 DDD Layer: Technical concerns
+│   │   ├── mod.rs
+│   │   ├── persistence/           # SeaORM repositories + migrations
+│   │   ├── ollama/                # Ollama HTTP client adapter
+│   │   └── nats/                  # NATS publisher/subscriber adapter
+│   └── interfaces/                # 🟣 Ports & Adapters
+│       ├── mod.rs
+│       ├── api.rs                 # Public trait definitions (other modules consume)
+│       └── events.rs              # NATS event subscribers
+├── tests/
+│   ├── unit/                      # 🔴 TDD: Domain unit tests (no infra)
+│   ├── integration/               # 🟠 TDD: Integration tests (DB + NATS)
+│   ├── contract/                  # 🟢 TDD: Module boundary contract tests
+│   └── e2e/                       # 🔵 TDD: Full flow tests (all modules)
+├── migrations/                    # SeaORM migration files
+│   ├── 001_create_tables.sql
+│   └── ...
+└── Cargo.lock
+```
+
+---
+
+## 4. Module Public API Trait Pattern
+
+Each module exposes its public API as Rust traits. Other modules depend on the trait, not the implementation.
+
+```rust
+// nexus-rag/src/interfaces/api.rs
+#[async_trait]
+pub trait RagService: Send + Sync {
+    async fn search(&self, query: SearchQuery) -> Result<SearchResults, RagError>;
+    async fn upload_document(&self, request: UploadRequest) -> Result<DocumentStatus>;
+    async fn get_document_status(&self, id: DocumentId) -> Result<Option<DocumentStatus>>;
+    async fn delete_document(&self, id: DocumentId) -> Result<()>;
+}
+
+// nexus-agent uses RagService via trait, not directly
+pub struct AgentServiceImpl {
+    rag: Arc<dyn RagService>,     // <-- injected at binary composition
+    memory: Arc<dyn MemoryService>,
+    ollama: OllamaClient,
+    // ...
+}
+```
+
+The binary's `main.rs` wires all module implementations together:
+
+```rust
+// src/main.rs (binary crate)
+#[tokio::main]
+async fn main() {
+    // Init infrastructure
+    let db = init_db().await;
+    let redis = init_redis().await;
+    let nats = init_nats().await;
+    let ollama = OllamaClient::new(config.ollama_url);
+
+    // Init module implementations (each implements the trait)
+    let identity = Arc::new(nexus_identity::IdentityServiceImpl::new(db.clone(), redis.clone())) as Arc<dyn IdentityService>;
+    let memory = Arc::new(nexus_memory::MemoryServiceImpl::new(db.clone(), redis.clone(), ollama.clone())) as Arc<dyn MemoryService>;
+    let rag = Arc::new(nexus_rag::RagServiceImpl::new(db.clone(), nats.clone(), ollama.clone())) as Arc<dyn RagService>;
+    let agent = Arc::new(nexus_agent::AgentServiceImpl::new(rag.clone(), memory.clone(), ollama.clone())) as Arc<dyn AgentService>;
+    // ... etc
+
+    // Build API gateway with all module traits
+    let app = nexus_gateway::build_router(AppState {
+        identity, agent, rag, memory, /* ... */
+    });
+
+    // Start server
+    let listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await?;
+    axum::serve(listener, app).await?;
+}
+```
+
+---
+
+## 5. Identity Bounded Context
+
+**Module:** `nexus-identity`
+**Schema:** `identity_` prefix in shared PostgreSQL
 **Purpose:** Manage users, tenants, roles, permissions
 
 ### Aggregate: User
 
 ```
-User
+User (Aggregate Root)
 ├── Profile
-├── Roles[]
-└── Permissions[]
+│   ├── UserId
+│   ├── EmailAddress (value object)
+│   ├── DisplayName
+│   └── Avatar
+├── Authentication
+│   ├── PasswordHash (bcrypt, cost 12)
+│   ├── OTP Secret
+│   └── MFA Settings
+├── Roles[] (Entities)
+│   ├── RoleId
+│   ├── Name
+│   └── Permissions[] (value objects)
+└── TenantMembership
+    ├── TenantId
+    └── TenantRole
 ```
 
 ### Entities
@@ -90,254 +179,245 @@ User
 | Entity | Attributes |
 |---|---|
 | User | UserId, TenantId, Email, Status, CreatedAt |
-| Role | RoleId, Name, Permissions[] |
-| Tenant | TenantId, Name, Plan, Settings |
+| Role | RoleId, Name, Permissions[] (shared with tenant) |
+| Tenant | TenantId, Name, Plan, Settings, KYC status |
+| APIKey | KeyId, TenantId, UserId, KeyHash, Scopes[] |
 
 ### Value Objects
 
-- `UserId` (i64)
-- `TenantId` (i64)
-- `EmailAddress` (validated string)
-- `Permission` (resource + action pair)
+| Value Object | Rust Type | Validation |
+|---|---|---|
+| `UserId` | `i64` | Positive |
+| `TenantId` | `i64` | Positive |
+| `EmailAddress` | `String` | Regex validated |
+| `Permission` | `String` | Format: `{resource}.{action}` |
+| `PasswordHash` | `String` | bcrypt verified |
+| `JWTToken` | `String` | RS256 signed + exp check |
 
-### Domain Events
+### Domain Events (NATS Subjects)
 
 | Event | Trigger |
 |---|---|
-| `UserCreated` | New user registration |
-| `UserUpdated` | Profile change |
-| `RoleAssigned` | Role assignment |
-| `PermissionChanged` | Permission modification |
+| `aeroxe.identity.user.created` | New user registration |
+| `aeroxe.identity.user.updated` | Profile change |
+| `aeroxe.identity.role.assigned` | Role assignment |
+| `aeroxe.identity.permission.changed` | Permission modification |
 
-### Commands / Queries
+### Public API Trait
+
+```rust
+#[async_trait]
+pub trait IdentityService: Send + Sync {
+    async fn authenticate(&self, req: AuthRequest) -> Result<AuthResponse, IdentityError>;
+    async fn verify_token(&self, token: &str) -> Result<JWTClaims, IdentityError>;
+    async fn check_permission(&self, req: PermissionRequest) -> Result<bool, IdentityError>;
+    async fn validate_tenant(&self, tenant_id: TenantId) -> Result<Tenant, IdentityError>;
+    async fn create_user(&self, req: CreateUserRequest) -> Result<User, IdentityError>;
+    async fn get_user(&self, id: UserId) -> Result<Option<User>, IdentityError>;
+}
+```
+
+### TDD: Command / Query Pattern
 
 | Command | Query |
 |---|---|
 | `CreateUserCommand` | `GetUserQuery` |
 | `AssignRoleCommand` | `GetPermissionsQuery` |
 | `UpdatePermissionCommand` | `GetTenantUsersQuery` |
+| `LoginCommand` | `GetTenantQuery` |
+
+**Unit Test Example:**
+
+```rust
+#[tokio::test]
+async fn test_user_creation_requires_valid_email() {
+    let mut repo = MockUserRepository::new();
+    let service = IdentityServiceImpl::new(repo, /* ... */);
+
+    let result = service.create_user(CreateUserRequest {
+        email: "invalid".to_string(), // no @ symbol
+        password: "ValidPass123!".to_string(),
+        tenant_id: TenantId(1),
+    }).await;
+
+    assert!(matches!(result, Err(IdentityError::InvalidEmail)));
+}
+```
 
 ---
 
-## 5. AI Gateway Bounded Context
+## 6. AI Gateway Bounded Context
 
-**Service:** `ai-gateway-service`
-**Purpose:** Central AI request management and routing
+**Module:** `nexus-ai-gateway`
+**Schema:** `ai_` prefix
+**Purpose:** Central AI request lifecycle, prompt safety, model routing
 
 ### Aggregate: AIRequest
 
 ```
-AIRequest
+AIRequest (Aggregate Root)
 ├── RequestContext
+│   ├── RequestId (UUID)
+│   ├── TenantId
+│   ├── UserId
+│   └── TraceId
 ├── SecurityContext
+│   ├── JWT Claims
+│   ├── Permissions
+│   └── Tenant Scope
 └── ExecutionPlan
+    ├── TargetAgent (via nexus-agent)
+    ├── ModelPreference
+    └── Priority
 ```
 
-### Entities
+### Public API Trait
 
-| Entity | Attributes |
-|---|---|
-| AISession | SessionId, UserId, TenantId, StartedAt, Status |
-| AIRequest | RequestId, SessionId, Prompt, Model, Status |
-
-### Value Objects
-
-- `Prompt` (sanitized text)
-- `ModelName` (validated model identifier)
-- `RequestId` (UUID)
-- `TenantId` (i64)
-
-### Domain Events
-
-| Event | Description |
-|---|---|
-| `AIRequestReceived` | New request enters the gateway |
-| `AIResponseGenerated` | Model response produced |
-| `AIRequestFailed` | Request could not be fulfilled |
-
-### Commands
-
-| Command | Description |
-|---|---|
-| `SubmitAIRequestCommand` | Queue a new AI request |
-| `CancelAIRequestCommand` | Cancel in-flight request |
+```rust
+#[async_trait]
+pub trait AIGatewayService: Send + Sync {
+    async fn submit_request(&self, req: AIRequest) -> Result<AIResponse, AIGatewayError>;
+    async fn stream_response(&self, req: AIRequest) -> Result<Receiver<AIChunk>, AIGatewayError>;
+    async fn cancel_request(&self, id: RequestId) -> Result<(), AIGatewayError>;
+    async fn get_session_status(&self, id: SessionId) -> Result<SessionStatus, AIGatewayError>;
+}
+```
 
 ---
 
-## 6. Agent Orchestration Bounded Context
+## 7. Agent Orchestration Bounded Context
 
-**Service:** `agent-orchestrator-service`
+**Module:** `nexus-agent`
+**Schema:** `agent_` prefix
 **Purpose:** AI agent lifecycle, planning, tool selection, execution
 
 ### Aggregate: AgentExecution
 
 ```
-AgentExecution
+AgentExecution (Aggregate Root)
 ├── Task
+│   ├── TaskId
+│   ├── Description
+│   ├── Priority
+│   └── Status
 ├── Plan
+│   ├── Steps[]
+│   └── Dependencies
 ├── ToolExecution[]
+│   ├── ToolName
+│   ├── Parameters
+│   ├── Result
+│   └── Status
 └── Result
+    ├── Output
+    ├── TokensUsed
+    └── LatencyMs
 ```
 
-### Entities
-
-| Entity | Attributes |
-|---|---|
-| Agent | AgentId, AgentType, Capabilities[], Model |
-| Task | TaskId, Status, Priority, CreatedAt |
-| ExecutionStep | StepId, ExecutionId, StepNumber, Action, Result |
-
-### Value Objects
-
-- `AgentId` (i64)
-- `TaskId` (i64)
-- `ExecutionId` (i64)
-- `AgentType` (enum: planner, customer, developer, rag, vision, security, business)
-
-### Domain Events
-
-| Event | Description |
-|---|---|
-| `AgentStarted` | Agent begins execution |
-| `AgentCompleted` | Agent finishes successfully |
-| `AgentFailed` | Agent execution error |
-| `ToolExecuted` | A tool call was made |
-
-### Commands
-
-| Command | Description |
-|---|---|
-| `StartAgentCommand` | Initialize agent execution |
-| `ExecuteToolCommand` | Invoke a tool through the policy engine |
-| `CompleteTaskCommand` | Mark task as done |
-
-### Agent Routing Logic
+### Agent Routing Logic (In-Process)
 
 ```
 User Request
     |
     v
-Planner Agent (lfm2.5-thinking:1.2b)
+nexus-ai-gateway → submit_request()
+    |
+    v
+nexus-agent → start_execution()
+    |
+    v
+Planner Agent (Ollama: lfm2.5-thinking:1.2b)
     |
     v
 Intent Classification
     |
-    ├── Coding     -> Qwen2.5-Coder:3B
-    ├── Security   -> WhiteRabbitNeo:7B
-    ├── Image      -> Qwen3-VL:4B
-    ├── Document   -> Command-R:7B
-    ├── Business   -> Llama3.1:7B
-    └── General    -> Phi-4-Mini:3.8B
+    ├── Coding     → Qwen2.5-Coder:3B
+    ├── Security   → WhiteRabbitNeo:7B
+    ├── Image      → Qwen3-VL:4B  (→ nexus-vision trait)
+    ├── Document   → Command-R:7B (→ nexus-rag trait)
+    ├── Business   → Llama3.1:7B
+    └── General    → Phi-4-Mini:3.8B
 ```
 
 ---
 
-## 7. RAG Knowledge Bounded Context
+## 8. RAG Knowledge Bounded Context
 
-**Service:** `rag-service`
+**Module:** `nexus-rag`
+**Schema:** `rag_` prefix
 **Purpose:** Enterprise knowledge intelligence
 
 ### Aggregate: KnowledgeDocument
 
 ```
-KnowledgeDocument
+KnowledgeDocument (Aggregate Root)
 ├── Metadata
+│   ├── DocumentId
+│   ├── TenantId
+│   ├── FileName
+│   ├── FileType
+│   ├── Status
+│   └── Tags[]
 ├── Chunks[]
-└── Embeddings[]
-```
-
-### Entities
-
-| Entity | Attributes |
-|---|---|
-| Document | DocumentId, TenantId, FileName, Type, Status |
-| Chunk | ChunkId, Content, Position, Embedding (vector) |
-
-### Value Objects
-
-- `DocumentId` (i64)
-- `EmbeddingVector` (768-dimensional float array)
-- `DocumentType` (enum: pdf, docx, html, markdown, code)
-
-### Domain Events
-
-| Event | Description |
-|---|---|
-| `DocumentUploaded` | File received |
-| `DocumentProcessed` | Parsing complete |
-| `EmbeddingCreated` | Vector embeddings generated |
-| `KnowledgeUpdated` | Knowledge base modified |
-
-### Commands
-
-| Command | Description |
-|---|---|
-| `UploadDocumentCommand` | Submit a document for ingestion |
-| `ProcessDocumentCommand` | Trigger parsing + chunking + embedding |
-| `SearchKnowledgeCommand` | Query the knowledge base |
-
-### RAG Processing Flow
-
-```
-Upload -> Parser -> Chunking -> Embedding -> Vector Store
-                                                |
-                                                v
-Query -> Hybrid Search -> Re-ranking -> Command-R 7B -> Answer
+│   ├── ChunkId
+│   ├── Content
+│   ├── Position
+│   └── Embedding (vector(768))
+└── AccessControl
+    ├── DocumentSetId
+    └── Classification
 ```
 
 ---
 
-## 8. Vision Intelligence Bounded Context
+## 9. Vision Intelligence Bounded Context
 
-**Service:** `vision-service`
-**Model:** `Qwen3-VL:4B`
+**Module:** `nexus-vision`
+**Schema:** `vision_` prefix
+**Model:** `qwen3-vl:4b` (Ollama)
 
 ### Aggregate: VisionAnalysis
 
 ```
-VisionAnalysis
+VisionAnalysis (Aggregate Root)
 ├── Image
+│   ├── ImageId
+│   ├── StoragePath
+│   └── FileType
 ├── Detection
+│   ├── Description
+│   ├── Confidence
+│   └── DetectedObjects[]
 └── Extraction
+    ├── Text (OCR)
+    ├── StructuredData
+    └── Metadata
 ```
-
-### Entities
-
-| Entity | Attributes |
-|---|---|
-| Image | ImageId, URL, Type, Size, TenantId |
-| AnalysisResult | ResultId, Confidence, Description, Metadata |
-
-### Domain Events
-
-| Event | Description |
-|---|---|
-| `ImageUploaded` | Image received |
-| `VisionProcessingStarted` | Analysis begins |
-| `VisionCompleted` | Analysis complete |
-
-### Commands
-
-| Command | Description |
-|---|---|
-| `AnalyzeImageCommand` | General image understanding |
-| `ExtractTextCommand` | OCR extraction |
-| `DetectObjectCommand` | Object detection |
 
 ---
 
-## 9. SQL Intelligence Bounded Context
+## 10. SQL Intelligence Bounded Context
 
-**Service:** `sql-agent-service`
+**Module:** `nexus-sql-agent`
+**Schema:** `sql_` prefix
 **Purpose:** Natural language business intelligence
 
 ### Aggregate: QueryExecution
 
 ```
-QueryExecution
+QueryExecution (Aggregate Root)
 ├── GeneratedSQL
+│   ├── RawSQL
+│   ├── ParsedAST
+│   └── ValidationStatus
 ├── ValidationResult
+│   ├── IsSafe (read-only check)
+│   ├── BlockedOperations
+│   └── Permissions
 └── ResultSet
+    ├── Columns[]
+    ├── Rows[]
+    └── Summary
 ```
 
 ### SQL Safety Rules
@@ -345,160 +425,164 @@ QueryExecution
 **Allowed:** SELECT, JOIN, GROUP BY, ORDER BY, COUNT, SUM, AVG
 **Blocked:** DELETE, UPDATE, DROP, ALTER, TRUNCATE, INSERT
 
-### Domain Events
-
-| Event | Description |
-|---|---|
-| `QueryGenerated` | SQL generated from natural language |
-| `QueryApproved` | Passed validation |
-| `QueryExecuted` | Executed against read replica |
-
 ---
 
-## 10. Memory Bounded Context
+## 11. Memory Bounded Context
 
-**Service:** `memory-service`
+**Module:** `nexus-memory`
+**Schema:** `memory_` prefix + Redis
 **Purpose:** Maintain AI memory across sessions
 
 ### Aggregate: MemoryProfile
 
 ```
-MemoryProfile
-├── ShortTermMemory (Redis)
-└── LongTermMemory (PostgreSQL + pgvector)
+MemoryProfile (Aggregate Root)
+├── ShortTermMemory (Redis, TTL: 24h)
+│   ├── CurrentConversation
+│   ├── ActiveTasks
+│   └── TemporaryContext
+├── LongTermMemory (PostgreSQL + pgvector, permanent)
+│   ├── UserPreferences
+│   ├── PastConversations
+│   └── ImportantFacts
+└── OrganizationalMemory (Apache AGE)
+    ├── EntityRelationships
+    └── BusinessKnowledge
 ```
-
-### Storage Strategy
-
-| Type | Technology | TTL | Purpose |
-|---|---|---|---|
-| Short-Term | Redis | 24h | Current conversation, temporary context |
-| Long-Term | PostgreSQL + pgvector | Permanent | User preferences, past conversations |
-| Organizational | Apache AGE | Permanent | Entity relationships |
 
 ---
 
-## 11. Workflow Bounded Context
+## 12. Workflow Bounded Context
 
-**Service:** `workflow-service`
+**Module:** `nexus-workflow`
+**Schema:** `workflow_` prefix
 **Purpose:** Business automation and approvals
 
 ### Aggregate: WorkflowInstance
 
 ```
-WorkflowInstance
+WorkflowInstance (Aggregate Root)
+├── WorkflowDefinition
+│   ├── Name
+│   ├── Steps[]
+│   └── Triggers
 ├── Steps[]
+│   ├── StepId
+│   ├── Type (ai_task, approval, notification, api_call, condition)
+│   ├── Status
+│   └── Assignee
 ├── Approvals[]
 └── Actions[]
 ```
 
-### Domain Events
-
-| Event | Description |
-|---|---|
-| `WorkflowStarted` | Workflow execution begins |
-| `StepCompleted` | Individual step done |
-| `WorkflowFinished` | All steps complete |
-
 ---
 
-## 12. Security Intelligence Bounded Context
+## 13. Security Intelligence Bounded Context
 
-**Service:** `security-ai-service`
-**Model:** `WhiteRabbitNeo:7B`
+**Module:** `nexus-security-ai`
+**Schema:** `security_` prefix
+**Model:** `whiterabbitneo:7b` (Ollama)
 
 ### Aggregate: SecurityAnalysis
 
 ```
-SecurityAnalysis
-├── Finding
-└── Recommendation
+SecurityAnalysis (Aggregate Root)
+├── Finding[]
+│   ├── Severity (CRITICAL, HIGH, MEDIUM, LOW, INFO)
+│   ├── Category
+│   ├── Description
+│   └── Recommendation
+├── Recommendation[]
+│   ├── Priority
+│   ├── Action
+│   └── Impact
+└── RiskScore
+    ├── Overall
+    └── Breakdown[]
 ```
-
-### Domain Events
-
-| Event | Description |
-|---|---|
-| `SecurityScanStarted` | Scan initiated |
-| `ThreatDetected` | Security issue found |
-| `ReportGenerated` | Analysis report produced |
 
 ---
 
-## 13. Audit Bounded Context
+## 14. Audit Bounded Context
 
-**Service:** `audit-service`
+**Module:** `nexus-audit`
+**Schema:** `audit_` prefix
 **Purpose:** Complete AI activity tracking for compliance
 
-### Domain Events
+### Domain Events (All Via NATS)
 
 | Event | Description |
 |---|---|
-| `AIRequestLogged` | AI interaction recorded |
-| `DataAccessLogged` | Data access tracked |
-| `ToolExecutionLogged` | Tool call recorded |
-| `SecurityEventLogged` | Security event tracked |
+| `aeroxe.audit.ai.request` | AI interaction recorded |
+| `aeroxe.audit.data.access` | Data access tracked |
+| `aeroxe.audit.tool.execution` | Tool call recorded |
+| `aeroxe.audit.security.event` | Security event tracked |
+
+All other modules publish to these subjects. `nexus-audit` subscribes and persists to partitioned tables.
 
 ---
 
-## 14. Domain Event Architecture
+## 15. Domain Event Architecture
 
-All domains communicate through events via NATS JetStream.
+### Synchronous Events (In-Process)
 
-### Event Flow Example
+For events that must be handled immediately within a transaction:
 
-```
-rag-service
-    |
-    v  DocumentProcessed event
-NATS JetStream
-    |
-    v  Consumer
-knowledge-graph-service
-    |
-    v  Update Relationships
-```
+```rust
+// Module emits event within its aggregate method
+pub struct AgentExecuted {
+    pub execution_id: ExecutionId,
+    pub result: AgentResult,
+    pub timestamp: ChronoDateTime,
+}
 
-### Event Schema Standard
-
-Every event follows this structure:
-
-```json
-{
-  "event_id": "uuid",
-  "event_type": "AgentCompleted",
-  "timestamp": "2026-07-15T12:00:00Z",
-  "tenant_id": "uuid",
-  "service": "agent-service",
-  "version": "1.0",
-  "data": {}
+// Event handler is called synchronously via a trait
+pub trait AgentEventHandler: Send + Sync {
+    fn handle(&self, event: &AgentExecuted);
 }
 ```
 
+### Asynchronous Events (NATS JetStream)
+
+For cross-module notifications and background processing:
+
+| Subject | Publisher | Consumers |
+|---|---|---|
+| `aeroxe.rag.document.uploaded` | nexus-rag | nexus-rag (self) |
+| `aeroxe.rag.document.processed` | nexus-rag | nexus-gateway (status updates) |
+| `aeroxe.agent.completed` | nexus-agent | nexus-ai-gateway, nexus-audit |
+| `aeroxe.workflow.step.completed` | nexus-workflow | nexus-notification, nexus-audit |
+| `aeroxe.security.threat.detected` | nexus-security-ai | nexus-audit, nexus-notification |
+
 ---
 
-## 15. Final DDD Service Map
+## 16. Final DDD Module Map
 
 ```
-AeroXe Nexus AI
+AeroXe Nexus AI — Modular Monolith
 
-Core Domain
-├── ai-gateway-service
-├── agent-orchestrator-service
-├── rag-service
-├── vision-service
-├── sql-agent-service
-├── security-ai-service
-
-Supporting Domain
-├── identity-service
-├── memory-service
-├── workflow-service
-├── audit-service
-
-Infrastructure
-├── model-registry-service
-├── notification-service
-├── configuration-service
-├── ecosystem-integration-service
++---------------------------------------------------------------+
+|                     Binary: aeroxe-nexus                        |
+|                                                               |
+|  Core Domain Modules:                                          |
+|  ├── nexus-ai-gateway    (AI request lifecycle)                |
+|  ├── nexus-agent         (Agent orchestration)                 |
+|  ├── nexus-rag           (Document knowledge)                  |
+|  ├── nexus-vision        (Image intelligence)                  |
+|  ├── nexus-sql-agent     (Natural language SQL)                |
+|  └── nexus-security-ai   (Security intelligence)               |
+|                                                               |
+|  Supporting Domain Modules:                                    |
+|  ├── nexus-identity      (IAM, RBAC/ABAC)                     |
+|  ├── nexus-memory        (AI memory system)                    |
+|  ├── nexus-workflow      (Business automation)                 |
+|  └── nexus-audit         (Compliance logging)                  |
+|                                                               |
+|  Infrastructure Modules:                                       |
+|  ├── nexus-gateway       (API Gateway — HTTP/WS + middleware) |
+|  ├── nexus-model-registry (Model management)                  |
+|  ├── nexus-notification  (Email, WhatsApp, push)               |
+|  ├── nexus-config        (Dynamic configuration)               |
+|  └── nexus-ecosystem     (AeroXe product connectors)          |
++---------------------------------------------------------------+
 ```

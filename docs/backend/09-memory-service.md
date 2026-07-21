@@ -1,25 +1,28 @@
-# AeroXe Nexus AI — Memory Service
+# AeroXe Nexus AI — Memory Module
 
 ## Short-Term, Long-Term & Organizational AI Memory
 
+> **Modular Monolith Module:** This document describes the `nexus-memory` crate — a module within the single `aeroxe-nexus` binary. It communicates with other modules via Rust trait interfaces (see [Communication Architecture](12-communication-architecture.md)).
+
 ---
 
-## 1. Service Identity
+## 1. Module Identity
 
 | Attribute | Value |
 |---|---|
-| Service Name | `memory-service` |
+| Module Name | `nexus-memory` |
+| Crate | `nexus-memory` (workspace member) |
 | Bounded Context | Memory |
 | Domain Type | Supporting Domain |
 | Language | Rust |
-| Database | `memory_db` (PostgreSQL + pgvector) + Redis |
-| gRPC Port | 50057 |
+| Schema | `memory_` (in shared PostgreSQL + pgvector) + Redis |
+| Dependencies | Ollama (embeddings), Redis (short-term), PostgreSQL (long-term) |
 
 ---
 
 ## 2. Purpose
 
-The Memory Service provides persistent AI memory across conversations and sessions. It stores:
+The Memory module provides persistent AI memory across conversations and sessions within the `aeroxe-nexus` monolith. It stores:
 
 - Current conversation context (short-term)
 - User preferences and past interactions (long-term)
@@ -103,48 +106,45 @@ Customer --has--> Subscription --connected_to--> Device
 
 ---
 
-## 5. gRPC Contract
+## 5. Public API Trait
 
-```protobuf
-syntax = "proto3";
-package aeroxe.memory;
-
-service MemoryService {
-  rpc StoreMemory(StoreMemoryRequest) returns (MemoryResponse);
-  rpc SearchMemory(SearchMemoryRequest) returns (MemoryList);
-  rpc GetConversationContext(ContextRequest) returns (ContextResponse);
-  rpc ClearSession(ClearSessionRequest) returns (ClearResponse);
+```rust
+// nexus-memory/src/interfaces/api.rs
+#[async_trait]
+pub trait MemoryService: Send + Sync {
+    async fn store(&self, req: StoreMemoryRequest) -> Result<(), MemoryError>;
+    async fn search(&self, req: SearchMemoryRequest) -> Result<Vec<MemoryItem>, MemoryError>;
+    async fn get_conversation_context(&self, session_id: SessionId) -> Result<Vec<Message>, MemoryError>;
+    async fn clear_session(&self, session_id: SessionId) -> Result<(), MemoryError>;
 }
 
-message StoreMemoryRequest {
-  string user_id = 1;
-  string tenant_id = 2;
-  string content = 3;
-  string type = 4; // "preference", "fact", "conversation", "context"
-  float importance = 5;
-  map<string, string> metadata = 6;
+pub struct StoreMemoryRequest {
+    pub user_id: UserId,
+    pub tenant_id: TenantId,
+    pub content: String,
+    pub memory_type: MemoryType, // Preference, Fact, Conversation, Context
+    pub importance: f32,
+    pub metadata: HashMap<String, String>,
 }
 
-message SearchMemoryRequest {
-  string user_id = 1;
-  string tenant_id = 2;
-  string query = 3;
-  int32 limit = 4;
-  string memory_type = 5; // "short_term", "long_term", "all"
+pub struct SearchMemoryRequest {
+    pub user_id: UserId,
+    pub tenant_id: TenantId,
+    pub query: String,
+    pub limit: u32,
+    pub memory_type: MemoryTypeFilter,
 }
 
-message MemoryList {
-  repeated MemoryItem memories = 1;
-}
-
-message MemoryItem {
-  string id = 1;
-  string content = 2;
-  float similarity = 3;
-  string type = 4;
-  string created_at = 5;
+pub struct MemoryItem {
+    pub id: String,
+    pub content: String,
+    pub similarity: f32,
+    pub memory_type: MemoryType,
+    pub created_at: String,
 }
 ```
+
+> **Note:** `MemoryService` is consumed by `nexus-agent` during execution (context retrieval) and `nexus-ai-gateway` (session management) — all via in-process trait dispatch.
 
 ---
 
@@ -202,7 +202,7 @@ Current context: "User asking about billing"
 ### memories
 
 ```sql
-CREATE TABLE memories (
+CREATE TABLE memory.memories (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     user_id BIGINT NOT NULL,
     tenant_id BIGINT NOT NULL,
@@ -218,14 +218,14 @@ CREATE TABLE memories (
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_memories_embedding ON memories
+CREATE INDEX idx_memories_embedding ON memory.memories
 USING ivfflat (embedding vector_cosine_ops) WITH (lists = 50);
 ```
 
 ### conversation_history
 
 ```sql
-CREATE TABLE conversation_history (
+CREATE TABLE memory.conversation_history (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     session_id BIGINT NOT NULL,
     user_id BIGINT NOT NULL,
@@ -237,8 +237,8 @@ CREATE TABLE conversation_history (
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_conversation_session ON conversation_history(session_id);
-CREATE INDEX idx_conversation_user ON conversation_history(user_id, created_at DESC);
+CREATE INDEX idx_conversation_session ON memory.conversation_history(session_id);
+CREATE INDEX idx_conversation_user ON memory.conversation_history(user_id, created_at DESC);
 ```
 
 ---
