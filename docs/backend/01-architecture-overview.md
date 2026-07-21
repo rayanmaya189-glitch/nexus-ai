@@ -108,7 +108,7 @@ Each service:
 |---|---|
 | gRPC | tonic |
 | NATS | async-nats |
-| Database | SeaORM + SQLx |
+| Database | SeaORM |
 | Vector | pgvector (SeaORM) |
 | Serialization | serde + serde_json |
 | Async Runtime | Tokio |

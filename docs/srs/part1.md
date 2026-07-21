@@ -59,7 +59,8 @@ The final SRS will contain:
 | Event System            | NATS JetStream                     |
 | AI Runtime              | Ollama                             |
 | Deployment              | Private Infrastructure             |
-| Backend                 | Rust + Go                          |
+| Backend                 | Rust                               |
+| ORM                     | SeaORM                             |
 | Database                | PostgreSQL + pgvector + Apache AGE |
 
 ---
@@ -781,7 +782,6 @@ Elasticsearch
 
 ```
 Rust
-Go
 ```
 
 ## AI

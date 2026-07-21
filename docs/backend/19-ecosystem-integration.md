@@ -344,7 +344,7 @@ Capabilities:
 Example:
 
 ```
-HR: "Find candidates for Go developer"
+HR: "Find candidates for Rust developer"
 AI: Search resumes → Match skills → Rank candidates → Schedule interview
 ```
 

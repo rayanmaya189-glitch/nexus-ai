@@ -126,7 +126,7 @@ POST /api/v1/agents/execute
 ```json
 {
   "agent": "developer-agent",
-  "task": "Review this Go code",
+  "task": "Review this Rust code",
   "context": { "repository": "backend" }
 }
 ```

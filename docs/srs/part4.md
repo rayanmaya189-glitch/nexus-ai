@@ -140,25 +140,22 @@ AeroXe Nexus AI supports:
 
 Every business table must include:
 
-```sql
-tenant_id BIGINT NOT NULL
+```rust
+// SeaORM Entity - Every business table includes tenant_id
+tenant_id: i64,
 ```
 
-Example:
-
-```sql
-CREATE TABLE ai_sessions (
-
-id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-
-tenant_id BIGINT NOT NULL,
-
-user_id BIGINT NOT NULL,
-
-created_at TIMESTAMP NOT NULL
-
-);
-
+Example:```rust
+// SeaORM Entity Definition
+#[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
+#[sea_orm(table_name = "ai_sessions")]
+pub struct Model {
+    #[sea_orm(primary_key)]
+    pub id: i64,
+    pub tenant_id: i64,
+    pub user_id: i64,
+    pub created_at: chrono::NaiveDateTime,
+}
 ```
 
 ---
@@ -177,303 +174,210 @@ Authentication and authorization.
 
 ---
 
-# 5.1 Users Table
-
-```sql
-CREATE TABLE users (
-
-id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-
-tenant_id BIGINT NOT NULL,
-
-email VARCHAR(255) UNIQUE,
-
-password_hash TEXT,
-
-status VARCHAR(50),
-
-created_at TIMESTAMP,
-
-updated_at TIMESTAMP
-
-);
-
+# 5.1 Users Table```rust
+// SeaORM Entity Definition
+#[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
+#[sea_orm(table_name = "users")]
+pub struct Model {
+    #[sea_orm(primary_key)]
+    pub id: i64,
+    pub tenant_id: i64,
+    pub email: Option<String>,
+    pub password_hash: Option<String>,
+    pub status: Option<String>,
+    pub created_at: Option<chrono::NaiveDateTime>,
+    pub updated_at: Option<chrono::NaiveDateTime>,
+}
 ```
 
 ---
 
-# 5.2 Roles
-
-```sql
-CREATE TABLE roles (
-
-id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-
-tenant_id BIGINT,
-
-name VARCHAR(100),
-
-description TEXT
-
-);
-
+# 5.2 Roles```rust
+// SeaORM Entity Definition
+#[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
+#[sea_orm(table_name = "roles")]
+pub struct Model {
+    #[sea_orm(primary_key)]
+    pub id: i64,
+    pub tenant_id: Option<i64>,
+    pub name: Option<String>,
+    pub description: Option<String>,
+}
 ```
 
 ---
 
-# 5.3 Permissions
-
-```sql
-CREATE TABLE permissions (
-
-id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-
-name VARCHAR(100),
-
-resource VARCHAR(100),
-
-action VARCHAR(50)
-
-);
-
+# 5.3 Permissions```rust
+// SeaORM Entity Definition
+#[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
+#[sea_orm(table_name = "permissions")]
+pub struct Model {
+    #[sea_orm(primary_key)]
+    pub id: i64,
+    pub name: Option<String>,
+    pub resource: Option<String>,
+    pub action: Option<String>,
+}
 ```
 
 ---
 
-# 5.4 User Roles
-
-```sql
-CREATE TABLE user_roles (
-
-user_id BIGINT,
-
-role_id BIGINT,
-
-PRIMARY KEY(user_id,role_id)
-
-);
-
+# 5.4 User Roles```rust
+// SeaORM Entity Definition
+#[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
+#[sea_orm(table_name = "user_roles")]
+pub struct Model {
+    #[sea_orm(primary_key)]
+    pub user_id: i64,
+    #[sea_orm(primary_key)]
+    pub role_id: i64,
+}
 ```
 
 ---
 
-# 5.5 Tenants
-
-```sql
-CREATE TABLE tenants (
-
-id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-
-name VARCHAR(255) NOT NULL,
-
-slug VARCHAR(100) UNIQUE NOT NULL,
-
-plan VARCHAR(50) NOT NULL DEFAULT 'free',
-
-status VARCHAR(50) NOT NULL DEFAULT 'pending_kyc',
-
-kyc_status VARCHAR(50) NOT NULL DEFAULT 'pending',
-
-kyc_submitted_at TIMESTAMP,
-
-kyc_reviewed_at TIMESTAMP,
-
-kyc_reviewed_by BIGINT,
-
-settings JSONB,
-
-created_at TIMESTAMP NOT NULL DEFAULT NOW()
-
-);
-
+# 5.5 Tenants```rust
+// SeaORM Entity Definition
+#[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
+#[sea_orm(table_name = "tenants")]
+pub struct Model {
+    #[sea_orm(primary_key)]
+    pub id: i64,
+    pub name: String,
+    pub slug: String,
+    pub plan: String,
+    pub status: String,
+    pub kyc_status: String,
+    pub kyc_submitted_at: Option<chrono::NaiveDateTime>,
+    pub kyc_reviewed_at: Option<chrono::NaiveDateTime>,
+    pub kyc_reviewed_by: Option<i64>,
+    pub settings: Option<serde_json::Value>,
+    pub created_at: chrono::NaiveDateTime,
+}
 ```
 
 ---
 
-# 5.6 KYC Documents
-
-```sql
-CREATE TABLE kyc_documents (
-
-id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-
-tenant_id BIGINT NOT NULL REFERENCES tenants(id),
-
-document_type VARCHAR(100) NOT NULL,
-
-filename TEXT NOT NULL,
-
-storage_path TEXT NOT NULL,
-
-status VARCHAR(50) NOT NULL DEFAULT 'uploaded',
-
-reviewed_at TIMESTAMP,
-
-reviewed_by BIGINT,
-
-rejection_reason TEXT,
-
-created_at TIMESTAMP NOT NULL DEFAULT NOW()
-
-);
-
+# 5.6 KYC Documents```rust
+// SeaORM Entity Definition
+#[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
+#[sea_orm(table_name = "kyc_documents")]
+pub struct Model {
+    #[sea_orm(primary_key)]
+    pub id: i64,
+    pub tenant_id: i64,
+    pub document_type: String,
+    pub filename: String,
+    pub storage_path: String,
+    pub status: String,
+    pub reviewed_at: Option<chrono::NaiveDateTime>,
+    pub reviewed_by: Option<i64>,
+    pub rejection_reason: Option<String>,
+    pub created_at: chrono::NaiveDateTime,
+}
 ```
 
 ---
 
-# 5.7 Document Sets
-
-```sql
-CREATE TABLE document_sets (
-
-id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-
-tenant_id BIGINT NOT NULL,
-
-name VARCHAR(255) NOT NULL,
-
-description TEXT,
-
-tags JSONB,
-
-status VARCHAR(50) NOT NULL DEFAULT 'draft',
-
-document_count INT DEFAULT 0,
-
-total_chunks INT DEFAULT 0,
-
-created_by BIGINT NOT NULL,
-
-created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-
-updated_at TIMESTAMP NOT NULL DEFAULT NOW()
-
-);
-
+# 5.7 Document Sets```rust
+// SeaORM Entity Definition
+#[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
+#[sea_orm(table_name = "document_sets")]
+pub struct Model {
+    #[sea_orm(primary_key)]
+    pub id: i64,
+    pub tenant_id: i64,
+    pub name: String,
+    pub description: Option<String>,
+    pub tags: Option<serde_json::Value>,
+    pub status: String,
+    pub document_count: Option<i32>,
+    pub total_chunks: Option<i32>,
+    pub created_by: i64,
+    pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
+}
 ```
 
 ---
 
-# 5.8 Document Set Documents
-
-```sql
-CREATE TABLE document_set_documents (
-
-document_set_id BIGINT NOT NULL REFERENCES document_sets(id) ON DELETE CASCADE,
-
-document_id BIGINT NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
-
-added_at TIMESTAMP NOT NULL DEFAULT NOW(),
-
-PRIMARY KEY(document_set_id, document_id)
-
-);
-
+# 5.8 Document Set Documents```rust
+// SeaORM Entity Definition
+#[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
+#[sea_orm(table_name = "document_set_documents")]
+pub struct Model {
+    #[sea_orm(primary_key)]
+    pub document_set_id: i64,
+    #[sea_orm(primary_key)]
+    pub document_id: i64,
+    pub added_at: chrono::NaiveDateTime,
+}
 ```
 
 ---
 
-# 5.9 Agent Document Sets
-
-```sql
-CREATE TABLE agent_document_sets (
-
-id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-
-agent_id BIGINT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
-
-document_set_id BIGINT NOT NULL REFERENCES document_sets(id) ON DELETE CASCADE,
-
-tenant_id BIGINT NOT NULL,
-
-permission_level VARCHAR(50) NOT NULL DEFAULT 'read',
-
-bound_by BIGINT NOT NULL,
-
-bound_at TIMESTAMP NOT NULL DEFAULT NOW(),
-
-UNIQUE(agent_id, document_set_id)
-
-);
-
+# 5.9 Agent Document Sets```rust
+// SeaORM Entity Definition
+#[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
+#[sea_orm(table_name = "agent_document_sets")]
+pub struct Model {
+    #[sea_orm(primary_key)]
+    pub id: i64,
+    pub agent_id: i64,
+    pub document_set_id: i64,
+    pub tenant_id: i64,
+    pub permission_level: String,
+    pub bound_by: i64,
+    pub bound_at: chrono::NaiveDateTime,
+}
 ```
 
 ---
 
-# 5.10 Agent Databases
-
-```sql
-CREATE TABLE agent_databases (
-
-id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-
-agent_id BIGINT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
-
-tenant_id BIGINT NOT NULL,
-
-connection_name VARCHAR(100) NOT NULL,
-
-host VARCHAR(255) NOT NULL,
-
-port INT NOT NULL DEFAULT 5432,
-
-database_name VARCHAR(100) NOT NULL,
-
-username VARCHAR(100) NOT NULL,
-
-password_encrypted TEXT NOT NULL,
-
-ssl_mode VARCHAR(20) NOT NULL DEFAULT 'require',
-
-status VARCHAR(50) NOT NULL DEFAULT 'pending',
-
-last_tested_at TIMESTAMP,
-
-last_test_result VARCHAR(50),
-
-server_version VARCHAR(50),
-
-discovered_tables_count INT DEFAULT 0,
-
-created_by BIGINT NOT NULL,
-
-created_at TIMESTAMP NOT NULL DEFAULT NOW(),
-
-updated_at TIMESTAMP NOT NULL DEFAULT NOW(),
-
-UNIQUE(agent_id, database_name)
-
-);
-
+# 5.10 Agent Databases```rust
+// SeaORM Entity Definition
+#[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
+#[sea_orm(table_name = "agent_databases")]
+pub struct Model {
+    #[sea_orm(primary_key)]
+    pub id: i64,
+    pub agent_id: i64,
+    pub tenant_id: i64,
+    pub connection_name: String,
+    pub host: String,
+    pub port: i32,
+    pub database_name: String,
+    pub username: String,
+    pub password_encrypted: String,
+    pub ssl_mode: String,
+    pub status: String,
+    pub last_tested_at: Option<chrono::NaiveDateTime>,
+    pub last_test_result: Option<String>,
+    pub server_version: Option<String>,
+    pub discovered_tables_count: Option<i32>,
+    pub created_by: i64,
+    pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
+}
 ```
 
 ---
 
-# 5.11 Agent Database Tables
-
-```sql
-CREATE TABLE agent_database_tables (
-
-id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-
-agent_database_id BIGINT NOT NULL REFERENCES agent_databases(id) ON DELETE CASCADE,
-
-agent_id BIGINT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
-
-table_name VARCHAR(255) NOT NULL,
-
-columns JSONB NOT NULL,
-
-primary_key JSONB,
-
-row_count_estimate INT,
-
-bound_at TIMESTAMP NOT NULL DEFAULT NOW(),
-
-UNIQUE(agent_database_id, table_name)
-
-);
-
+# 5.11 Agent Database Tables```rust
+// SeaORM Entity Definition
+#[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
+#[sea_orm(table_name = "agent_database_tables")]
+pub struct Model {
+    #[sea_orm(primary_key)]
+    pub id: i64,
+    pub agent_database_id: i64,
+    pub agent_id: i64,
+    pub table_name: String,
+    pub columns: serde_json::Value,
+    pub primary_key: Option<serde_json::Value>,
+    pub row_count_estimate: Option<i32>,
+    pub bound_at: chrono::NaiveDateTime,
+}
 ```
 
 ---
@@ -492,46 +396,35 @@ Store AI sessions and requests.
 
 ---
 
-# 6.1 AI Session
-
-```sql
-CREATE TABLE ai_sessions (
-
-id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-
-tenant_id BIGINT,
-
-user_id BIGINT,
-
-started_at TIMESTAMP,
-
-status VARCHAR(50)
-
-);
-
+# 6.1 AI Session```rust
+// SeaORM Entity Definition
+#[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
+#[sea_orm(table_name = "ai_sessions")]
+pub struct Model {
+    #[sea_orm(primary_key)]
+    pub id: i64,
+    pub tenant_id: Option<i64>,
+    pub user_id: Option<i64>,
+    pub started_at: Option<chrono::NaiveDateTime>,
+    pub status: Option<String>,
+}
 ```
 
 ---
 
-# 6.2 AI Requests
-
-```sql
-CREATE TABLE ai_requests (
-
-id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-
-session_id BIGINT,
-
-prompt TEXT,
-
-model VARCHAR(100),
-
-status VARCHAR(50),
-
-created_at TIMESTAMP
-
-);
-
+# 6.2 AI Requests```rust
+// SeaORM Entity Definition
+#[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
+#[sea_orm(table_name = "ai_requests")]
+pub struct Model {
+    #[sea_orm(primary_key)]
+    pub id: i64,
+    pub session_id: Option<i64>,
+    pub prompt: Option<String>,
+    pub model: Option<String>,
+    pub status: Option<String>,
+    pub created_at: Option<chrono::NaiveDateTime>,
+}
 ```
 
 ---
@@ -550,69 +443,52 @@ Track AI agent execution.
 
 ---
 
-# 7.1 Agents
-
-```sql
-CREATE TABLE agents (
-
-id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-
-name VARCHAR(100),
-
-type VARCHAR(100),
-
-model VARCHAR(100),
-
-status VARCHAR(50)
-
-);
-
+# 7.1 Agents```rust
+// SeaORM Entity Definition
+#[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
+#[sea_orm(table_name = "agents")]
+pub struct Model {
+    #[sea_orm(primary_key)]
+    pub id: i64,
+    pub name: Option<String>,
+    pub type_: Option<String>,  // 'type' is a Rust keyword
+    pub model: Option<String>,
+    pub status: Option<String>,
+}
 ```
 
 ---
 
-# 7.2 Agent Executions
-
-```sql
-CREATE TABLE agent_executions (
-
-id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-
-tenant_id BIGINT,
-
-agent_id BIGINT,
-
-task TEXT,
-
-status VARCHAR(50),
-
-started_at TIMESTAMP,
-
-completed_at TIMESTAMP
-
-);
-
+# 7.2 Agent Executions```rust
+// SeaORM Entity Definition
+#[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
+#[sea_orm(table_name = "agent_executions")]
+pub struct Model {
+    #[sea_orm(primary_key)]
+    pub id: i64,
+    pub tenant_id: Option<i64>,
+    pub agent_id: Option<i64>,
+    pub task: Option<String>,
+    pub status: Option<String>,
+    pub started_at: Option<chrono::NaiveDateTime>,
+    pub completed_at: Option<chrono::NaiveDateTime>,
+}
 ```
 
 ---
 
-# 7.3 Agent Steps
-
-```sql
-CREATE TABLE agent_steps (
-
-id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-
-execution_id BIGINT,
-
-step_number INT,
-
-action TEXT,
-
-result JSONB
-
-);
-
+# 7.3 Agent Steps```rust
+// SeaORM Entity Definition
+#[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
+#[sea_orm(table_name = "agent_steps")]
+pub struct Model {
+    #[sea_orm(primary_key)]
+    pub id: i64,
+    pub execution_id: Option<i64>,
+    pub step_number: Option<i32>,
+    pub action: Option<String>,
+    pub result: Option<serde_json::Value>,
+}
 ```
 
 ---
@@ -638,78 +514,78 @@ pgvector
 
 ---
 
-# 8.1 Documents Table
-
-```sql
-CREATE TABLE documents (
-
-id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-
-tenant_id BIGINT,
-
-filename TEXT,
-
-type VARCHAR(50),
-
-status VARCHAR(50),
-
-created_at TIMESTAMP
-
-);
-
+# 8.1 Documents Table```rust
+// SeaORM Entity Definition
+#[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
+#[sea_orm(table_name = "documents")]
+pub struct Model {
+    #[sea_orm(primary_key)]
+    pub id: i64,
+    pub tenant_id: Option<i64>,
+    pub filename: Option<String>,
+    pub type_: Option<String>,  // 'type' is a Rust keyword
+    pub status: Option<String>,
+    pub created_at: Option<chrono::NaiveDateTime>,
+}
 ```
 
 ---
 
-# 8.2 Document Chunks
-
-```sql
-CREATE TABLE document_chunks (
-
-id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-
-document_id BIGINT,
-
-content TEXT,
-
-chunk_index INT,
-
-embedding vector(768)
-
-);
-
+# 8.2 Document Chunks```rust
+// SeaORM Entity Definition
+#[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
+#[sea_orm(table_name = "document_chunks")]
+pub struct Model {
+    #[sea_orm(primary_key)]
+    pub id: i64,
+    pub document_id: Option<i64>,
+    pub content: Option<String>,
+    pub chunk_index: Option<i32>,
+    pub embedding: Option<Vec<f32>>,  // pgvector vector(768)
+}
 ```
 
 ---
 
-# 8.3 Vector Index
+# 8.3 Vector Index```rust
+// SeaORM Migration - Index creation
+use sea_orm_migration::prelude;
 
-```sql
-CREATE INDEX embedding_index
+#[derive(Iden)]
+pub struct DocumentChunks;
 
-ON document_chunks
+pub struct CreateEmbeddingIndex;
 
-USING ivfflat
-
-(embedding vector_cosine_ops);
-
+#[async_trait::async_trait]
+impl MigrationTrait for CreateEmbeddingIndex {
+    async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+        manager
+            .create_index(
+                Index::create()
+                    .name("embedding_index")
+                    .table(DocumentChunks::Table)
+                    .col(DocumentChunks::Embedding)
+                    .index_type(IndexType::Custom("ivfflat".into()))
+                    .using("vector_cosine_ops")
+                    .to_owned(),
+            )
+            .await
+    }
+}
 ```
 
 ---
 
-# 8.4 Metadata
-
-```sql
-CREATE TABLE document_metadata (
-
-id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-
-document_id BIGINT,
-
-metadata JSONB
-
-);
-
+# 8.4 Metadata```rust
+// SeaORM Entity Definition
+#[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
+#[sea_orm(table_name = "document_metadata")]
+pub struct Model {
+    #[sea_orm(primary_key)]
+    pub id: i64,
+    pub document_id: Option<i64>,
+    pub metadata: Option<serde_json::Value>,
+}
 ```
 
 Example:
@@ -886,63 +762,49 @@ vision_db
 
 ---
 
-# 11.1 Images
-
-```sql
-CREATE TABLE images (
-
-id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-
-tenant_id BIGINT,
-
-storage_path TEXT,
-
-type VARCHAR(50),
-
-created_at TIMESTAMP
-
-);
-
+# 11.1 Images```rust
+// SeaORM Entity Definition
+#[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
+#[sea_orm(table_name = "images")]
+pub struct Model {
+    #[sea_orm(primary_key)]
+    pub id: i64,
+    pub tenant_id: Option<i64>,
+    pub storage_path: Option<String>,
+    pub type_: Option<String>,  // 'type' is a Rust keyword
+    pub created_at: Option<chrono::NaiveDateTime>,
+}
 ```
 
 ---
 
-# 11.2 Vision Analysis
-
-```sql
-CREATE TABLE vision_analysis (
-
-id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-
-image_id BIGINT,
-
-model VARCHAR(100),
-
-description TEXT,
-
-confidence FLOAT,
-
-metadata JSONB
-
-);
-
+# 11.2 Vision Analysis```rust
+// SeaORM Entity Definition
+#[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
+#[sea_orm(table_name = "vision_analysis")]
+pub struct Model {
+    #[sea_orm(primary_key)]
+    pub id: i64,
+    pub image_id: Option<i64>,
+    pub model: Option<String>,
+    pub description: Option<String>,
+    pub confidence: Option<f64>,
+    pub metadata: Option<serde_json::Value>,
+}
 ```
 
 ---
 
-# 11.3 OCR Results
-
-```sql
-CREATE TABLE ocr_results (
-
-id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-
-image_id BIGINT,
-
-text TEXT
-
-);
-
+# 11.3 OCR Results```rust
+// SeaORM Entity Definition
+#[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
+#[sea_orm(table_name = "ocr_results")]
+pub struct Model {
+    #[sea_orm(primary_key)]
+    pub id: i64,
+    pub image_id: Option<i64>,
+    pub text: Option<String>,
+}
 ```
 
 ---
@@ -982,25 +844,19 @@ Stores:
 
 # 12.2 Long Term Memory
 
-PostgreSQL:
-
-```sql
-CREATE TABLE memories (
-
-id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-
-user_id BIGINT,
-
-content TEXT,
-
-embedding vector(768),
-
-importance FLOAT,
-
-created_at TIMESTAMP
-
-);
-
+PostgreSQL:```rust
+// SeaORM Entity Definition
+#[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
+#[sea_orm(table_name = "memories")]
+pub struct Model {
+    #[sea_orm(primary_key)]
+    pub id: i64,
+    pub user_id: Option<i64>,
+    pub content: Option<String>,
+    pub embedding: Option<Vec<f32>>,  // pgvector vector(768)
+    pub importance: Option<f64>,
+    pub created_at: Option<chrono::NaiveDateTime>,
+}
 ```
 
 ---
@@ -1015,38 +871,31 @@ workflow_db
 
 ---
 
-# 13.1 Workflow Definition
-
-```sql
-CREATE TABLE workflows (
-
-id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-
-name VARCHAR(100),
-
-definition JSONB
-
-);
-
+# 13.1 Workflow Definition```rust
+// SeaORM Entity Definition
+#[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
+#[sea_orm(table_name = "workflows")]
+pub struct Model {
+    #[sea_orm(primary_key)]
+    pub id: i64,
+    pub name: Option<String>,
+    pub definition: Option<serde_json::Value>,
+}
 ```
 
 ---
 
-# 13.2 Workflow Execution
-
-```sql
-CREATE TABLE workflow_instances (
-
-id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-
-workflow_id BIGINT,
-
-status VARCHAR(50),
-
-started_at TIMESTAMP
-
-);
-
+# 13.2 Workflow Execution```rust
+// SeaORM Entity Definition
+#[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
+#[sea_orm(table_name = "workflow_instances")]
+pub struct Model {
+    #[sea_orm(primary_key)]
+    pub id: i64,
+    pub workflow_id: Option<i64>,
+    pub status: Option<String>,
+    pub started_at: Option<chrono::NaiveDateTime>,
+}
 ```
 
 ---
@@ -1065,25 +914,19 @@ Complete compliance tracking.
 
 ---
 
-# 14.1 Audit Events
-
-```sql
-CREATE TABLE audit_events (
-
-id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-
-tenant_id BIGINT,
-
-service VARCHAR(100),
-
-event_type VARCHAR(100),
-
-payload JSONB,
-
-created_at TIMESTAMP
-
-);
-
+# 14.1 Audit Events```rust
+// SeaORM Entity Definition
+#[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
+#[sea_orm(table_name = "audit_events")]
+pub struct Model {
+    #[sea_orm(primary_key)]
+    pub id: i64,
+    pub tenant_id: Option<i64>,
+    pub service: Option<String>,
+    pub event_type: Option<String>,
+    pub payload: Option<serde_json::Value>,
+    pub created_at: Option<chrono::NaiveDateTime>,
+}
 ```
 
 ---
@@ -1172,26 +1015,98 @@ Update Relationships
 DDD Repository Example:
 
 ```rust
-trait AgentRepository {
+use sea_orm::{DatabaseConnection, EntityTrait, Set};
+use crate::domain::entities::agent;
 
-
-async fn save(
-
-agent: Agent
-
-);
-
-
-
-async fn find_by_id(
-
-id: AgentId
-
-);
-
-
+#[async_trait]
+pub trait AgentRepository: Send + Sync {
+    async fn save(&self, agent: agent::Model) -> Result<(), DbErr>;
+    async fn find_by_id(&self, id: i64) -> Result<Option<agent::Model>, DbErr>;
+    async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<agent::Model>, DbErr>;
 }
 
+pub struct PostgresAgentRepository {
+    db: DatabaseConnection,
+}
+
+#[async_trait]
+impl AgentRepository for PostgresAgentRepository {
+    async fn save(&self, agent: agent::Model) -> Result<(), DbErr> {
+        agent::Entity::insert(agent.into_active_model()).exec(&self.db).await?;
+        Ok(())
+    }
+
+    async fn find_by_id(&self, id: i64) -> Result<Option<agent::Model>, DbErr> {
+        agent::Entity::find_by_id(id).one(&self.db).await
+    }
+
+    async fn find_by_tenant(&self, tenant_id: i64) -> Result<Vec<agent::Model>, DbErr> {
+        agent::Entity::find()
+            .filter(agent::Column::TenantId.eq(tenant_id))
+            .all(&self.db)
+            .await
+    }
+}
+```
+
+---
+
+# 18.1 SeaORM Dependencies
+
+Required `Cargo.toml` dependencies:
+
+```toml
+[dependencies]
+sea-orm = { version = "1.0", features = ["sqlx-postgres", "runtime-tokio-rustls", "macros"] }
+sea-orm-migration = "1.0"
+sea-orm-cli = "1.0"  # Optional: for CLI migrations
+chrono = { version = "0.4", features = ["serde"] }
+serde_json = "1.0"
+async-trait = "0.1"
+
+[dev-dependencies]
+sea-orm = { version = "1.0", features = ["sqlx-postgres", "runtime-tokio-rustls", "macros", "mock"] }
+```
+
+---
+
+# 18.2 Entity Relationships
+
+SeaORM entities require `Relation` enum and `Related` trait for foreign keys:
+
+```rust
+use sea_orm::entity::prelude::*;
+
+#[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
+#[sea_orm(table_name = "agent_executions")]
+pub struct Model {
+    #[sea_orm(primary_key)]
+    pub id: i64,
+    pub tenant_id: Option<i64>,
+    pub agent_id: Option<i64>,
+    pub task: Option<String>,
+    pub status: Option<String>,
+    pub started_at: Option<chrono::NaiveDateTime>,
+    pub completed_at: Option<chrono::NaiveDateTime>,
+}
+
+#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+pub enum Relation {
+    #[sea_orm(
+        belongs_to = "super::agent::Entity",
+        from = "Column::AgentId",
+        to = "super::agent::Column::Id"
+    )]
+    Agent,
+}
+
+impl Related<super::agent::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Agent.def()
+    }
+}
+
+impl ActiveModelBehavior for ActiveModel {}
 ```
 
 ---
@@ -1200,30 +1115,60 @@ id: AgentId
 
 Technology:
 
-Recommended:
-
-```text
-EntORM Migrate (Go)
-```
-
-or
-
 ```text
 SeaORM Migrate (Rust)
 ```
 
 Structure:
 
-```
+```text
 migrations/
 
+├── src/
+│
+│   ├── lib.rs
+│
+│   ├── m20220101_000001_create_users_table.rs
+│
+│   ├── m20220101_000002_create_roles_table.rs
+│
+│   └── m20220101_000003_create_permissions_table.rs
+│
+└── Cargo.toml
+```
 
-001_create_users.sql
+Example Migration:
 
-002_create_roles.sql
+```rust
+use sea_orm_migration::prelude;
 
-003_add_permissions.sql
+pub struct CreateUsersTable;
 
+#[async_trait::async_trait]
+impl MigrationTrait for CreateUsersTable {
+    async fn up(&self, manager: &SchemaManager) -> Result<(), DbErr> {
+        manager
+            .create_table(
+                Table::create()
+                    .table(Users::Table)
+                    .if_not_exists()
+                    .col(
+                        ColumnDef::new(Users::Id)
+                            .big_integer()
+                            .not_null()
+                            .auto_increment()
+                            .primary_key(),
+                    )
+                    .col(ColumnDef::new(Users::TenantId).big_integer().not_null())
+                    .col(ColumnDef::new(Users::Email).string_len(255).unique_key())
+                    .col(ColumnDef::new(Users::PasswordHash).text())
+                    .col(ColumnDef::new(Users::Status).string_len(50))
+                    .col(ColumnDef::new(Users::Timestamp).timestamp())
+                    .to_owned(),
+            )
+            .await
+    }
+}
 ```
 
 ---

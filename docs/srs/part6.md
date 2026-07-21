@@ -671,28 +671,14 @@ aeroxe-nexus-ai/
 
 ---
 
-# 18. CI Pipeline Stages
-
-## Stage 1
-
+# 18. CI Pipeline Stages## Stage 1
 Code Quality
-
 Tools:
-
 ```text
 Rust:
-
 cargo fmt
-
 cargo clippy
-
-
-Go:
-
-go vet
-
-golangci-lint
-
+cargo audit
 ```
 
 ---

@@ -332,7 +332,7 @@ Request:
  "developer-agent",
 
  "task":
- "Review this Go code",
+ "Review this Rust code",
 
  "context":
  {

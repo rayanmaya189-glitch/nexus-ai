@@ -669,7 +669,7 @@ Example:
 
 HR:
 
-> "Find candidates for Go developer"
+> "Find candidates for Rust developer"
 
 AI:
 
