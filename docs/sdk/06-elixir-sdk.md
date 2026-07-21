@@ -308,8 +308,8 @@ end)
 
 ```elixir
 {:ok, agents} = Client.agents_list(client, %{
-  page: 1,
-  page_size: 20,
+  limit: 10,
+  offset: 0,
 })
 
 Enum.each(agents.data, fn agent ->
@@ -362,8 +362,8 @@ IO.puts(status.size)     # 1024000
 
 ```elixir
 {:ok, docs} = Client.rag_list_documents(client, %{
-  page: 1,
-  page_size: 20,
+  limit: 10,
+  offset: 0,
   status: "completed",
 })
 
@@ -522,8 +522,8 @@ end)
 
 ```elixir
 {:ok, workflows} = Client.workflow_list(client, %{
-  page: 1,
-  page_size: 20,
+  limit: 10,
+  offset: 0,
 })
 ```
 

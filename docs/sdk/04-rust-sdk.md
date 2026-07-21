@@ -270,8 +270,8 @@ while let Some(event) = stream.next().await {
 
 ```rust
 let agents = client.agents().list(&nexus_sdk::AgentListRequest {
-    page: Some(1),
-    page_size: Some(20),
+    limit: Some(10),
+    offset: Some(0),
 }).await?;
 
 for agent in &agents.data {
@@ -326,8 +326,8 @@ println!("{}", status.size);    // 1024000
 
 ```rust
 let docs = client.rag().list_documents(&nexus_sdk::DocumentListRequest {
-    page: Some(1),
-    page_size: Some(20),
+    limit: Some(10),
+    offset: Some(0),
     status: Some("completed".to_string()),
 }).await?;
 
@@ -496,8 +496,8 @@ for step in &status.steps {
 
 ```rust
 let workflows = client.workflow().list(&nexus_sdk::WorkflowListRequest {
-    page: Some(1),
-    page_size: Some(20),
+    limit: Some(10),
+    offset: Some(0),
 }).await?;
 ```
 

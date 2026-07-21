@@ -1229,6 +1229,32 @@ PostgreSQL
 
 
 
+├── telephony_db        ← NEW (Voice/Calling)
+
+├── conversation_db     ← NEW (State Machine)
+
+├── stt_db              ← NEW (Speech-to-Text)
+
+├── tts_db              ← NEW (Text-to-Speech)
+
+├── analytics_db        ← NEW (Metrics/BI)
+
+├── webhook_db          ← NEW (Event Delivery)
+
+├── outbound_db         ← NEW (Campaigns)
+
+├── billing_db          ← NEW (Subscriptions)
+
+├── outbox_db           ← NEW (Transactional Outbox)
+
+├── distributed_locks_db ← NEW (Distributed Locking)
+
+├── distributed_cache_db ← NEW (Distributed Caching)
+
+├── ledger_db           ← NEW (Double Entry Ledger)
+
+
+
 pgvector
 
 └── Semantic Search
@@ -1276,3 +1302,14 @@ Covered:
 ✅ Multi-tenancy
 ✅ Repository pattern
 ✅ Backup strategy
+✅ Telephony schema (NEW)
+✅ Conversation schema (NEW)
+✅ STT/TTS schemas (NEW)
+✅ Analytics schema (NEW)
+✅ Webhook schema (NEW)
+✅ Outbound schema (NEW)
+✅ Billing schema (NEW)
+✅ Outbox schema (NEW)
+✅ Distributed Locking schema (NEW)
+✅ Distributed Caching schema (NEW)
+✅ Ledger schema (NEW)

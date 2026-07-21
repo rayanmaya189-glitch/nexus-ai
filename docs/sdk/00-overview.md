@@ -262,7 +262,7 @@ wss://api.aeroxenexus.com/ws/chat/{conversation_id}
 ### Offset-Based Pagination
 
 ```http
-GET /api/v1/agents?page=1&page_size=20
+GET /api/v1/agents?limit=10&offset=0
 ```
 
 **Response:**
@@ -270,10 +270,10 @@ GET /api/v1/agents?page=1&page_size=20
 {
   "data": [...],
   "pagination": {
-    "page": 1,
-    "page_size": 20,
-    "total_items": 150,
-    "total_pages": 8
+    "total": 150,
+    "limit": 10,
+    "offset": 0,
+    "has_more": true
   }
 }
 ```

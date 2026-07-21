@@ -749,6 +749,353 @@ Responsibilities:
 
 ---
 
+## 7.11 Telephony Module (NEW)
+
+Name:
+
+```
+telephony (src/modules/telephony/)
+```
+
+Schema:
+
+```
+telephony_
+```
+
+Responsibilities:
+
+* Voice channel management (SIP/WebRTC/PSTN)
+* Call lifecycle (create, hold, transfer, end)
+* Caller authentication (PIN, voice biometrics)
+* Anti-fraud and anti-spoofing
+* Call recording and transcription
+* Voicemail system
+* IVR (Interactive Voice Response)
+* Real-time call monitoring
+* Audio quality monitoring
+* DTMF handling
+* Queue management and ACD
+
+---
+
+## 7.12 Conversation Module (NEW)
+
+Name:
+
+```
+conversation (src/modules/conversation/)
+```
+
+Schema:
+
+```
+conversation_
+```
+
+Responsibilities:
+
+* Conversation state machine
+* Multi-turn context management
+* Turn-taking model
+* Token budget management
+* SLA management
+* Real-time sentiment tracking
+* Conversation branching
+* GDPR deletion/export
+
+---
+
+## 7.13 STT Module (NEW)
+
+Name:
+
+```
+stt (src/modules/stt/)
+```
+
+Schema:
+
+```
+stt_
+```
+
+Responsibilities:
+
+* Real-time speech-to-text transcription
+* Batch audio transcription
+* Multi-language support
+* Speaker diarization
+* Confidence threshold configuration
+* PII redaction
+* Anti-injection protection
+
+---
+
+## 7.14 TTS Module (NEW)
+
+Name:
+
+```
+tts (src/modules/tts/)
+```
+
+Schema:
+
+```
+tts_
+```
+
+Responsibilities:
+
+* Real-time text-to-speech synthesis
+* Multiple voice options
+* SSML support
+* Voice cloning (with authorization)
+* Multi-language synthesis
+* Sentiment-aware voice adaptation
+* Post-call survey playback
+
+---
+
+## 7.15 Analytics Module (NEW)
+
+Name:
+
+```
+analytics (src/modules/analytics/)
+```
+
+Schema:
+
+```
+analytics_
+```
+
+Responsibilities:
+
+* Real-time conversation metrics
+* Call center metrics (AHT, ASA, FCR, etc.)
+* Agent performance scoring
+* Cost allocation and tracking
+* Custom report generation
+* Dashboard data APIs
+* Sentiment tracking across calls
+
+---
+
+## 7.16 Webhook Module (NEW)
+
+Name:
+
+```
+webhook (src/modules/webhook/)
+```
+
+Schema:
+
+```
+webhook_
+```
+
+Responsibilities:
+
+* Outbound webhook management
+* Event subscription management
+* HMAC signature verification
+* Guaranteed delivery with retry
+* IP whitelisting
+* Rate limiting per webhook
+
+---
+
+## 7.17 Outbound Module (NEW)
+
+Name:
+
+```
+outbound (src/modules/outbound/)
+```
+
+Schema:
+
+```
+outbound_
+```
+
+Responsibilities:
+
+* Outbound voice campaigns
+* Proactive chat messages
+* Callback scheduling
+* DNC (Do-Not-Call) compliance
+* Campaign execution and tracking
+* Business hours enforcement
+
+---
+
+## 7.18 Billing Module (NEW)
+
+Name:
+
+```
+billing (src/modules/billing/)
+```
+
+Schema:
+
+```
+billing_
+```
+
+Responsibilities:
+
+* Subscription plan management
+* Usage metering (tokens, calls, minutes)
+* Invoice generation
+* Payment processing (Stripe/Razorpay)
+* Dunning management
+* Credit/debit notes
+* Financial reporting
+
+---
+
+## 7.19 Infrastructure Module (NEW)
+
+Name:
+
+```
+infrastructure (src/modules/infrastructure/)
+```
+
+Schema:
+
+```
+outbox_, distributed_locks_, distributed_cache_
+```
+
+Responsibilities:
+
+* Transactional Outbox (reliable event delivery)
+* Distributed Locking (Redlock)
+* Distributed Caching (multi-tier)
+* Circuit Breaker
+* Retry with exponential backoff
+* Bulkhead pattern
+
+---
+
+## 7.20 Audit Module
+
+Name:
+
+```
+audit (src/modules/audit/)
+```
+
+Schema:
+
+```
+audit_
+```
+
+Responsibilities:
+
+* Complete AI activity tracking
+* Compliance logging
+* Audit trail queries
+
+---
+
+## 7.21 Notification Module
+
+Name:
+
+```
+notification (src/modules/notification/)
+```
+
+Schema:
+
+```
+notif_
+```
+
+Responsibilities:
+
+* Email notifications
+* WhatsApp notifications
+* Push notifications
+* SMS notifications
+
+---
+
+## 7.22 Model Registry Module
+
+Name:
+
+```
+model-registry (src/modules/model-registry/)
+```
+
+Schema:
+
+```
+models_
+```
+
+Responsibilities:
+
+* Ollama model lifecycle
+* Model availability tracking
+* Usage statistics
+
+---
+
+## 7.23 Config Module
+
+Name:
+
+```
+config (src/modules/config/)
+```
+
+Schema:
+
+```
+config_
+```
+
+Responsibilities:
+
+* Dynamic configuration
+* Feature flags
+* Tenant-specific settings
+
+---
+
+## 7.24 Ecosystem Module
+
+Name:
+
+```
+ecosystem (src/modules/ecosystem/)
+```
+
+Schema:
+
+```
+eco_
+```
+
+Responsibilities:
+
+* AeroXe product connectors
+* Business integration
+* Data synchronization
+
+---
+
 # 8. Module Communication
 
 ## Synchronous (In-Process Trait Interfaces)

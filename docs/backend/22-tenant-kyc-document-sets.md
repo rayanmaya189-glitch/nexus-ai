@@ -147,7 +147,7 @@ User Creates Document Set
 | POST | `/api/v1/document-sets` | Create document set |
 | GET | `/api/v1/document-sets` | List all sets for tenant |
 | GET | `/api/v1/document-sets/:id` | Get set details |
-| PUT | `/api/v1/document-sets/:id` | Update set metadata |
+| PATCH | `/api/v1/document-sets/:id` | Update set metadata |
 | DELETE | `/api/v1/document-sets/:id` | Delete set (soft) |
 | POST | `/api/v1/document-sets/:id/activate` | Activate set |
 | POST | `/api/v1/document-sets/:id/archive` | Archive set |
@@ -221,7 +221,7 @@ Admin Opens Agent Configuration
 |---|---|---|
 | POST | `/api/v1/agents/:id/document-sets` | Bind agent to document sets |
 | GET | `/api/v1/agents/:id/document-sets` | List bound document sets |
-| PUT | `/api/v1/agents/:id/document-sets/:set_id` | Update binding permissions |
+| PATCH | `/api/v1/agents/:id/document-sets/:set_id` | Update binding permissions |
 | DELETE | `/api/v1/agents/:id/document-sets/:set_id` | Unbind agent from set |
 | GET | `/api/v1/document-sets/:id/agents` | List agents bound to set |
 

@@ -88,7 +88,7 @@ WebSocket (/ws/v1/*)
 
 ## Internal Synchronous Communication
 
-Modules communicate through **Rust trait interfaces** — no gRPC, no network.
+**Modular Monolith:** Modules communicate through **Rust trait interfaces** — no gRPC, no network.
 
 ```rust
 // Example: agent module calls rag module
@@ -118,12 +118,24 @@ Used for:
 * Notifications
 * AI workflow
 * Data synchronization
+* **Reliable delivery via Outbox Pattern**
 
 Protocol:
 
 ```
 NATS JetStream (versioned subjects: aeroxe.v1.*)
 ```
+
+---
+
+# 3. Trait Interface Architecture
+
+**Key Difference:** In the modular monolith, all modules are in the same binary. They communicate through Rust trait interfaces, not gRPC. This eliminates:
+
+- Network latency
+- Serialization overhead
+- mTLS complexity (not needed in-process)
+- Service discovery (not needed in-process)
 
 ---
 

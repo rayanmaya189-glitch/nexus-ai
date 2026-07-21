@@ -293,8 +293,8 @@ for event in client.agents.stream_execution("exec-abc123"):
 
 ```python
 agents = client.agents.list(
-    page=1,
-    page_size=20,
+    limit=10,
+    offset=0,
 )
 
 for agent in agents.data:
@@ -347,8 +347,8 @@ print(status.size)     # 1024000
 
 ```python
 docs = client.rag.list_documents(
-    page=1,
-    page_size=20,
+    limit=10,
+    offset=0,
     status="completed",
 )
 
@@ -503,8 +503,8 @@ for step in status.steps:
 
 ```python
 workflows = client.workflow.list(
-    page=1,
-    page_size=20,
+    limit=10,
+    offset=0,
 )
 ```
 

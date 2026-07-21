@@ -226,7 +226,7 @@ impl ActiveModelBehavior for ActiveModel {}
 pub trait CustomerRepository: Send + Sync {
     async fn find_by_id(&self, id: i64, tenant_id: i64) -> Result<Option<Customer>, RepositoryError>;
     async fn find_by_email(&self, email: &str, tenant_id: i64) -> Result<Option<Customer>, RepositoryError>;
-    async fn find_by_tenant(&self, tenant_id: i64, page: u32, per_page: u32) -> Result<Vec<Customer>, RepositoryError>;
+    async fn find_by_tenant(&self, tenant_id: i64, limit: u32, offset: u32) -> Result<Vec<Customer>, RepositoryError>;
     async fn search(&self, query: CustomerSearchQuery) -> Result<Vec<Customer>, RepositoryError>;
     async fn save(&self, customer: &Customer) -> Result<Customer, RepositoryError>;
     async fn update(&self, customer: &Customer) -> Result<Customer, RepositoryError>;

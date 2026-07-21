@@ -386,62 +386,16 @@ tenant_c_database
 
 # 9. Service-to-Service Security
 
-Internal communication:
+> **Modular Monolith:** In the modular monolith, modules communicate via Rust trait methods **within the same process**. There is no network between modules, so mTLS is not needed internally.
 
-```text
-Microservice
+### Security Enforcement
 
-      |
-
-      |
-
-     gRPC
-
-      |
-
-Microservice
-
-```
-
----
-
-Security:
-
-## Mutual TLS (mTLS)
-
-Each service has:
-
-```text
-Service Certificate
-
-Private Key
-
-Identity
-
-```
-
----
-
-Example:
-
-```text
-agent-service
-
-
-Certificate:
-
-agent.aeroxe.internal
-
-
-calls
-
-
-rag-service
-
-
-Certificate:
-
-rag.aeroxe.internal
+| Layer | Mechanism |
+|---|---|
+| API Boundary | `nexus-gateway` validates JWT + tenant before trait dispatch |
+| Module Entry | Modules receive pre-validated `RequestContext` (no re-validation needed) |
+| Permission Check | Modules call `nexus-identity::check_permission()` trait method |
+| Tenant Isolation | All queries include `tenant_id` — enforced at database level |
 
 ```
 
