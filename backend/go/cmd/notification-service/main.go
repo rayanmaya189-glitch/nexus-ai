@@ -5,54 +5,14 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"sync"
-	"time"
+	"strconv"
 
 	"github.com/aeroxe/nexus-backend/internal/config"
+	"github.com/aeroxe/nexus-backend/internal/domain/entities"
+	"github.com/aeroxe/nexus-backend/internal/infrastructure/database"
 	"github.com/aeroxe/nexus-backend/internal/middleware"
 	"github.com/aeroxe/nexus-backend/pkg/logger"
 )
-
-type Notification struct {
-	ID        string                 `json:"id"`
-	TenantID  int64                  `json:"tenant_id"`
-	UserID    int64                  `json:"user_id"`
-	Type      string                 `json:"type"`
-	Title     string                 `json:"title"`
-	Message   string                 `json:"message"`
-	Channel   string                 `json:"channel"`
-	Priority  string                 `json:"priority"`
-	Metadata  map[string]interface{} `json:"metadata,omitempty"`
-	Read      bool                   `json:"read"`
-	CreatedAt string                 `json:"created_at"`
-}
-
-type NotificationPreference struct {
-	UserID          int64    `json:"user_id"`
-	Channels        []string `json:"channels"`
-	Types           []string `json:"types"`
-	QuietHoursStart *int     `json:"quiet_hours_start,omitempty"`
-	QuietHoursEnd   *int     `json:"quiet_hours_end,omitempty"`
-	Enabled         bool     `json:"enabled"`
-}
-
-type NotificationStore struct {
-	notifications []Notification
-	preferences   map[int64]*NotificationPreference
-	mu            sync.RWMutex
-}
-
-var store = &NotificationStore{
-	notifications: make([]Notification, 0),
-	preferences:   make(map[int64]*NotificationPreference),
-}
-
-func init() {
-	store.notifications = append(store.notifications,
-		Notification{ID: "notif-001", TenantID: 1, UserID: 1, Type: "system", Title: "Welcome", Message: "Welcome to AeroXe Nexus AI", Channel: "in_app", Priority: "normal", Read: false, CreatedAt: time.Now().Add(-1 * time.Hour).Format(time.RFC3339)},
-		Notification{ID: "notif-002", TenantID: 1, UserID: 1, Type: "security", Title: "New Login", Message: "New login from IP 192.168.1.100", Channel: "email", Priority: "high", Read: false, CreatedAt: time.Now().Add(-30 * time.Minute).Format(time.RFC3339)},
-	)
-}
 
 func main() {
 	svcLogger := logger.New("notification-service")
@@ -62,14 +22,37 @@ func main() {
 	if err != nil {
 		svcLogger.Fatal(fmt.Sprintf("Failed to load config: %v", err))
 	}
-	_ = cfg
+
+	dbHost := getEnv("DB_HOST", cfg.Database.Host)
+	dbPort := getEnvInt("DB_PORT", cfg.Database.Port)
+	dbUser := getEnv("DB_USER", cfg.Database.User)
+	dbPass := getEnv("DB_PASSWORD", cfg.Database.Password)
+	dbName := getEnv("DB_NAME", cfg.Database.DBName)
+	dbSSL := getEnv("DB_SSLMODE", cfg.Database.SSLMode)
+
+	db, err := database.NewDB(dbHost, dbPort, dbUser, dbPass, dbName, dbSSL)
+	if err != nil {
+		svcLogger.Fatal(fmt.Sprintf("Failed to connect to database: %v", err))
+	}
+	defer db.Close()
+	svcLogger.Info("Connected to PostgreSQL database")
+
+	notifRepo := database.NewPostgresNotificationRepository(db.Pool)
+	prefRepo := database.NewPostgresNotificationPreferenceRepository(db.Pool)
+	tmplRepo := database.NewPostgresNotificationTemplateRepository(db.Pool)
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/health", healthHandler)
-	mux.HandleFunc("/api/v1/notifications", listHandler)
-	mux.HandleFunc("/api/v1/notifications/create", createHandler)
-	mux.HandleFunc("/api/v1/notifications/preferences", preferencesHandler)
-	mux.HandleFunc("/api/v1/notifications/read/", readHandler)
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"status": "healthy", "service": "notification-service", "version": "1.0.0",
+		})
+	})
+	mux.HandleFunc("/api/v1/notifications", listNotificationsHandler(notifRepo))
+	mux.HandleFunc("/api/v1/notifications/create", createNotificationHandler(notifRepo))
+	mux.HandleFunc("/api/v1/notifications/preferences", preferencesHandler(prefRepo))
+	mux.HandleFunc("/api/v1/notifications/read/", readNotificationHandler(notifRepo))
+	mux.HandleFunc("/api/v1/notifications/templates", listTemplatesHandler(tmplRepo))
+	mux.HandleFunc("/api/v1/notifications/unread-count", unreadCountHandler(notifRepo))
 
 	handler := middleware.RequestIDMiddleware(mux)
 
@@ -82,85 +65,185 @@ func main() {
 	}
 }
 
-func healthHandler(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"status": "healthy", "service": "notification-service", "version": "1.0.0",
-	})
-}
+func listNotificationsHandler(repo *database.PostgresNotificationRepository) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+		tenantID := r.URL.Query().Get("tenant_id")
+		userID := r.URL.Query().Get("user_id")
 
-func listHandler(w http.ResponseWriter, r *http.Request) {
-	store.mu.RLock()
-	defer store.mu.RUnlock()
-	writeJSON(w, http.StatusOK, map[string]interface{}{"data": store.notifications})
-}
+		var notifications []*entities.Notification
+		var err error
 
-func createHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "Only POST allowed")
-		return
-	}
+		switch {
+		case userID != "":
+			uid, e := strconv.ParseInt(userID, 10, 64)
+			if e != nil {
+				writeError(w, http.StatusBadRequest, "INVALID_PARAM", "Invalid user_id")
+				return
+			}
+			notifications, err = repo.FindByUserID(ctx, uid)
+		case tenantID != "":
+			tid, e := strconv.ParseInt(tenantID, 10, 64)
+			if e != nil {
+				writeError(w, http.StatusBadRequest, "INVALID_PARAM", "Invalid tenant_id")
+				return
+			}
+			notifications, err = repo.FindByTenantID(ctx, tid)
+		default:
+			notifications = make([]*entities.Notification, 0)
+		}
 
-	var notif Notification
-	if err := json.NewDecoder(r.Body).Decode(&notif); err != nil {
-		writeError(w, http.StatusBadRequest, "INVALID_JSON", err.Error())
-		return
-	}
-
-	notif.ID = fmt.Sprintf("notif-%d", time.Now().UnixNano())
-	notif.CreatedAt = time.Now().Format(time.RFC3339)
-	notif.Read = false
-
-	store.mu.Lock()
-	store.notifications = append(store.notifications, notif)
-	store.mu.Unlock()
-
-	writeJSON(w, http.StatusCreated, map[string]interface{}{"data": notif})
-}
-
-func readHandler(w http.ResponseWriter, r *http.Request) {
-	id := r.URL.Path[len("/api/v1/notifications/read/"):]
-
-	store.mu.Lock()
-	defer store.mu.Unlock()
-
-	for i, n := range store.notifications {
-		if n.ID == id {
-			store.notifications[i].Read = true
-			writeJSON(w, http.StatusOK, map[string]interface{}{"data": store.notifications[i]})
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "DB_ERROR", err.Error())
 			return
 		}
+		if notifications == nil {
+			notifications = make([]*entities.Notification, 0)
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{"data": notifications})
 	}
-
-	writeError(w, http.StatusNotFound, "NOT_FOUND", "Notification not found")
 }
 
-func preferencesHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method == http.MethodGet {
-		store.mu.RLock()
-		defer store.mu.RUnlock()
-		prefs := make([]*NotificationPreference, 0)
-		for _, p := range store.preferences {
-			prefs = append(prefs, p)
+func createNotificationHandler(repo *database.PostgresNotificationRepository) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "Only POST allowed")
+			return
 		}
-		writeJSON(w, http.StatusOK, map[string]interface{}{"data": prefs})
-		return
-	}
 
-	if r.Method == http.MethodPost {
-		var pref NotificationPreference
-		if err := json.NewDecoder(r.Body).Decode(&pref); err != nil {
+		var notif entities.Notification
+		if err := json.NewDecoder(r.Body).Decode(&notif); err != nil {
 			writeError(w, http.StatusBadRequest, "INVALID_JSON", err.Error())
 			return
 		}
-		pref.Enabled = true
-		store.mu.Lock()
-		store.preferences[pref.UserID] = &pref
-		store.mu.Unlock()
-		writeJSON(w, http.StatusOK, map[string]interface{}{"data": pref})
-		return
-	}
+		notif.Status = "unread"
+		notif.IsRead = false
 
-	writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "GET or POST only")
+		if err := repo.Create(r.Context(), &notif); err != nil {
+			writeError(w, http.StatusInternalServerError, "DB_ERROR", err.Error())
+			return
+		}
+
+		writeJSON(w, http.StatusCreated, map[string]interface{}{"data": notif})
+	}
+}
+
+func readNotificationHandler(repo *database.PostgresNotificationRepository) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		idStr := r.URL.Path[len("/api/v1/notifications/read/"):]
+		id, err := strconv.ParseInt(idStr, 10, 64)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "INVALID_PARAM", "Invalid notification ID")
+			return
+		}
+
+		if err := repo.MarkAsRead(r.Context(), id); err != nil {
+			writeError(w, http.StatusNotFound, "NOT_FOUND", "Notification not found")
+			return
+		}
+
+		notif, err := repo.FindByID(r.Context(), id)
+		if err != nil {
+			writeError(w, http.StatusNotFound, "NOT_FOUND", "Notification not found")
+			return
+		}
+
+		writeJSON(w, http.StatusOK, map[string]interface{}{"data": notif})
+	}
+}
+
+func preferencesHandler(repo *database.PostgresNotificationPreferenceRepository) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		ctx := r.Context()
+
+		if r.Method == http.MethodGet {
+			tenantID := r.URL.Query().Get("tenant_id")
+			userID := r.URL.Query().Get("user_id")
+
+			if tenantID != "" && userID != "" {
+				tid, _ := strconv.ParseInt(tenantID, 10, 64)
+				uid, _ := strconv.ParseInt(userID, 10, 64)
+				pref, err := repo.FindByTenantAndUser(ctx, tid, uid)
+				if err != nil {
+					writeJSON(w, http.StatusOK, map[string]interface{}{"data": map[string]interface{}{}})
+					return
+				}
+				writeJSON(w, http.StatusOK, map[string]interface{}{"data": pref})
+				return
+			}
+			writeJSON(w, http.StatusOK, map[string]interface{}{"data": []interface{}{}})
+			return
+		}
+
+		if r.Method == http.MethodPost {
+			var pref entities.NotificationPreference
+			if err := json.NewDecoder(r.Body).Decode(&pref); err != nil {
+				writeError(w, http.StatusBadRequest, "INVALID_JSON", err.Error())
+				return
+			}
+			pref.EmailEnabled = true
+			pref.PushEnabled = true
+
+			if err := repo.Create(ctx, &pref); err != nil {
+				writeError(w, http.StatusInternalServerError, "DB_ERROR", err.Error())
+				return
+			}
+			writeJSON(w, http.StatusOK, map[string]interface{}{"data": pref})
+			return
+		}
+
+		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "GET or POST only")
+	}
+}
+
+func listTemplatesHandler(repo *database.PostgresNotificationTemplateRepository) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		tenantID := r.URL.Query().Get("tenant_id")
+		if tenantID == "" {
+			writeJSON(w, http.StatusOK, map[string]interface{}{"data": []interface{}{}})
+			return
+		}
+
+		tid, err := strconv.ParseInt(tenantID, 10, 64)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "INVALID_PARAM", "Invalid tenant_id")
+			return
+		}
+
+		templates, err := repo.FindByTenantID(r.Context(), tid)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "DB_ERROR", err.Error())
+			return
+		}
+		if templates == nil {
+			templates = make([]*entities.NotificationTemplate, 0)
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{"data": templates})
+	}
+}
+
+func unreadCountHandler(repo *database.PostgresNotificationRepository) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		userID := r.URL.Query().Get("user_id")
+		if userID == "" {
+			writeError(w, http.StatusBadRequest, "INVALID_PARAM", "user_id is required")
+			return
+		}
+
+		uid, err := strconv.ParseInt(userID, 10, 64)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "INVALID_PARAM", "Invalid user_id")
+			return
+		}
+
+		count, err := repo.GetUnreadCount(r.Context(), uid)
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "DB_ERROR", err.Error())
+			return
+		}
+
+		writeJSON(w, http.StatusOK, map[string]interface{}{"data": map[string]interface{}{"count": count}})
+	}
 }
 
 func writeJSON(w http.ResponseWriter, status int, data interface{}) {
@@ -180,4 +263,15 @@ func getEnv(key, def string) string {
 		return v
 	}
 	return def
+}
+
+func getEnvInt(key string, defaultVal int) int {
+	if val := os.Getenv(key); val != "" {
+		var n int
+		fmt.Sscanf(val, "%d", &n)
+		if n > 0 {
+			return n
+		}
+	}
+	return defaultVal
 }

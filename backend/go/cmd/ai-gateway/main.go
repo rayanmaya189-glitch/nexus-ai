@@ -119,8 +119,9 @@ func main() {
 	mux.HandleFunc("/api/v1/ai/sessions/", sessionHandler)
 	mux.HandleFunc("/api/v1/ai/models", modelsHandler)
 	mux.HandleFunc("/api/v1/ai/completions", completionsHandler)
+	mux.Handle("/ws", handleWebSocket(gateway.config.OllamaURL))
 
-	handler := middleware.RequestIDMiddleware(mux)
+	handler := wsCORSMiddleware(middleware.RequestIDMiddleware(mux))
 
 	port := getEnv("PORT", "8080")
 	addr := fmt.Sprintf(":%s", port)

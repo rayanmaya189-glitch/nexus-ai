@@ -1,67 +1,20 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"os"
-	"sync"
+	"strconv"
 	"time"
 
 	"github.com/aeroxe/nexus-backend/internal/config"
+	"github.com/aeroxe/nexus-backend/internal/domain/entities"
+	"github.com/aeroxe/nexus-backend/internal/infrastructure/database"
 	"github.com/aeroxe/nexus-backend/internal/middleware"
 	"github.com/aeroxe/nexus-backend/pkg/logger"
 )
-
-type Integration struct {
-	ID          string                 `json:"id"`
-	TenantID    int64                  `json:"tenant_id"`
-	Name        string                 `json:"name"`
-	Type        string                 `json:"type"`
-	Category    string                 `json:"category"`
-	Status      string                 `json:"status"`
-	Config      map[string]interface{} `json:"config"`
-	Scopes      []string               `json:"scopes,omitempty"`
-	WebhookURL  string                 `json:"webhook_url,omitempty"`
-	Description string                 `json:"description"`
-	CreatedAt   string                 `json:"created_at"`
-	UpdatedAt   string                 `json:"updated_at"`
-}
-
-type MCPTool struct {
-	ID          string                 `json:"id"`
-	Name        string                 `json:"name"`
-	Description string                 `json:"description"`
-	Schema      map[string]interface{} `json:"input_schema"`
-	ServerID    string                 `json:"server_id"`
-	Enabled     bool                   `json:"enabled"`
-}
-
-type MCPToolCall struct {
-	ToolID    string                 `json:"tool_id"`
-	Arguments map[string]interface{} `json:"arguments"`
-}
-
-type EcosystemStore struct {
-	integrations map[string]*Integration
-	mcpTools     map[string]*MCPTool
-	mu           sync.RWMutex
-}
-
-var store = &EcosystemStore{
-	integrations: make(map[string]*Integration),
-	mcpTools:     make(map[string]*MCPTool),
-}
-
-func init() {
-	store.integrations["int-001"] = &Integration{ID: "int-001", TenantID: 1, Name: "GitHub", Type: "git", Category: "development", Status: "active", Config: map[string]interface{}{"repo_url": "https://github.com/example"}, Description: "GitHub integration for code repos", CreatedAt: time.Now().Format(time.RFC3339), UpdatedAt: time.Now().Format(time.RFC3339)}
-	store.integrations["int-002"] = &Integration{ID: "int-002", TenantID: 1, Name: "Slack", Type: "messaging", Category: "communication", Status: "active", Config: map[string]interface{}{"workspace": "aeroxe"}, Description: "Slack notifications", CreatedAt: time.Now().Format(time.RFC3339), UpdatedAt: time.Now().Format(time.RFC3339)}
-	store.integrations["int-003"] = &Integration{ID: "int-003", TenantID: 1, Name: "PostgreSQL", Type: "database", Category: "data", Status: "active", Config: map[string]interface{}{"host": "localhost", "port": 5432}, Description: "Primary database", CreatedAt: time.Now().Format(time.RFC3339), UpdatedAt: time.Now().Format(time.RFC3339)}
-
-	store.mcpTools["mcp-001"] = &MCPTool{ID: "mcp-001", Name: "execute_sql", Description: "Execute SQL queries on connected databases", Schema: map[string]interface{}{"type": "object", "properties": map[string]interface{}{"query": map[string]interface{}{"type": "string"}}}, ServerID: "mcp-server-db", Enabled: true}
-	store.mcpTools["mcp-002"] = &MCPTool{ID: "mcp-002", Name: "search_code", Description: "Search code repositories", Schema: map[string]interface{}{"type": "object", "properties": map[string]interface{}{"query": map[string]interface{}{"type": "string"}}}, ServerID: "mcp-server-git", Enabled: true}
-	store.mcpTools["mcp-003"] = &MCPTool{ID: "mcp-003", Name: "send_message", Description: "Send messages to channels", Schema: map[string]interface{}{"type": "object", "properties": map[string]interface{}{"channel": map[string]interface{}{"type": "string"}, "message": map[string]interface{}{"type": "string"}}}, ServerID: "mcp-server-chat", Enabled: true}
-}
 
 func main() {
 	svcLogger := logger.New("ecosystem-service")
@@ -71,15 +24,36 @@ func main() {
 	if err != nil {
 		svcLogger.Fatal(fmt.Sprintf("Failed to load config: %v", err))
 	}
-	_ = cfg
+
+	dbHost := getEnv("DB_HOST", cfg.Database.Host)
+	dbPort := getEnvInt("DB_PORT", cfg.Database.Port)
+	dbUser := getEnv("DB_USER", cfg.Database.User)
+	dbPass := getEnv("DB_PASSWORD", cfg.Database.Password)
+	dbName := getEnv("DB_NAME", cfg.Database.DBName)
+	dbSSL := getEnv("DB_SSLMODE", cfg.Database.SSLMode)
+
+	db, err := database.NewDB(dbHost, dbPort, dbUser, dbPass, dbName, dbSSL)
+	if err != nil {
+		svcLogger.Fatal(fmt.Sprintf("Failed to connect to database: %v", err))
+	}
+	defer db.Close()
+	svcLogger.Info("Connected to PostgreSQL database")
+
+	integrationRepo := database.NewPostgresIntegrationRepository(db.Pool)
+	toolRepo := database.NewPostgresMCPToolRepository(db.Pool)
+	invocationRepo := database.NewPostgresMCPToolInvocationRepository(db.Pool)
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/health", healthHandler)
-	mux.HandleFunc("/api/v1/integrations", listIntegrationsHandler)
-	mux.HandleFunc("/api/v1/integrations/create", createIntegrationHandler)
-	mux.HandleFunc("/api/v1/integrations/", integrationHandler)
-	mux.HandleFunc("/api/v1/mcp/tools", listMCPToolsHandler)
-	mux.HandleFunc("/api/v1/mcp/tools/invoke", invokeMCPToolHandler)
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"status": "healthy", "service": "ecosystem-service", "version": "1.0.0",
+		})
+	})
+	mux.HandleFunc("/api/v1/integrations", listIntegrationsHandler(integrationRepo))
+	mux.HandleFunc("/api/v1/integrations/create", createIntegrationHandler(integrationRepo))
+	mux.HandleFunc("/api/v1/integrations/", integrationHandler(integrationRepo))
+	mux.HandleFunc("/api/v1/mcp/tools", listMCPToolsHandler(toolRepo))
+	mux.HandleFunc("/api/v1/mcp/tools/invoke", invokeMCPToolHandler(toolRepo, invocationRepo))
 
 	handler := middleware.RequestIDMiddleware(mux)
 
@@ -92,102 +66,170 @@ func main() {
 	}
 }
 
-func healthHandler(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"status": "healthy", "service": "ecosystem-service", "version": "1.0.0",
-	})
+func listIntegrationsHandler(repo *database.PostgresIntegrationRepository) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		tenantID := r.URL.Query().Get("tenant_id")
+		ctx := r.Context()
+
+		var integrations []*entities.Integration
+		var err error
+
+		if tenantID != "" {
+			tid, e := strconv.ParseInt(tenantID, 10, 64)
+			if e != nil {
+				writeError(w, http.StatusBadRequest, "INVALID_PARAM", "Invalid tenant_id")
+				return
+			}
+			integrations, err = repo.FindByTenantID(ctx, tid)
+		} else {
+			integrations = make([]*entities.Integration, 0)
+		}
+
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "DB_ERROR", err.Error())
+			return
+		}
+		if integrations == nil {
+			integrations = make([]*entities.Integration, 0)
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{"data": integrations})
+	}
 }
 
-func listIntegrationsHandler(w http.ResponseWriter, r *http.Request) {
-	store.mu.RLock()
-	defer store.mu.RUnlock()
+func createIntegrationHandler(repo *database.PostgresIntegrationRepository) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "Only POST allowed")
+			return
+		}
 
-	integrations := make([]*Integration, 0)
-	for _, i := range store.integrations {
-		integrations = append(integrations, i)
+		var integ entities.Integration
+		if err := json.NewDecoder(r.Body).Decode(&integ); err != nil {
+			writeError(w, http.StatusBadRequest, "INVALID_JSON", err.Error())
+			return
+		}
+		integ.Status = "active"
+
+		if err := repo.Create(r.Context(), &integ); err != nil {
+			writeError(w, http.StatusInternalServerError, "DB_ERROR", err.Error())
+			return
+		}
+
+		writeJSON(w, http.StatusCreated, map[string]interface{}{"data": integ})
 	}
-	writeJSON(w, http.StatusOK, map[string]interface{}{"data": integrations})
 }
 
-func createIntegrationHandler(w http.ResponseWriter, r *http.Request) {
-	var integ Integration
-	if err := json.NewDecoder(r.Body).Decode(&integ); err != nil {
-		writeError(w, http.StatusBadRequest, "INVALID_JSON", err.Error())
-		return
+func integrationHandler(repo *database.PostgresIntegrationRepository) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		idStr := r.URL.Path[len("/api/v1/integrations/"):]
+		id, err := strconv.ParseInt(idStr, 10, 64)
+		if err != nil {
+			writeError(w, http.StatusBadRequest, "INVALID_PARAM", "Invalid integration ID")
+			return
+		}
+
+		integ, err := repo.FindByID(r.Context(), id)
+		if err != nil {
+			writeError(w, http.StatusNotFound, "NOT_FOUND", "Integration not found")
+			return
+		}
+
+		writeJSON(w, http.StatusOK, map[string]interface{}{"data": integ})
 	}
-
-	integ.ID = fmt.Sprintf("int-%d", time.Now().UnixNano())
-	integ.Status = "active"
-	integ.CreatedAt = time.Now().Format(time.RFC3339)
-	integ.UpdatedAt = time.Now().Format(time.RFC3339)
-
-	store.mu.Lock()
-	store.integrations[integ.ID] = &integ
-	store.mu.Unlock()
-
-	writeJSON(w, http.StatusCreated, map[string]interface{}{"data": integ})
 }
 
-func integrationHandler(w http.ResponseWriter, r *http.Request) {
-	id := r.URL.Path[len("/api/v1/integrations/"):]
+func listMCPToolsHandler(repo *database.PostgresMCPToolRepository) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		tenantID := r.URL.Query().Get("tenant_id")
+		ctx := r.Context()
 
-	store.mu.RLock()
-	integ, exists := store.integrations[id]
-	store.mu.RUnlock()
+		var tools []*entities.MCPTool
+		var err error
 
-	if !exists {
-		writeError(w, http.StatusNotFound, "NOT_FOUND", "Integration not found")
-		return
+		if tenantID != "" {
+			tid, e := strconv.ParseInt(tenantID, 10, 64)
+			if e != nil {
+				writeError(w, http.StatusBadRequest, "INVALID_PARAM", "Invalid tenant_id")
+				return
+			}
+			tools, err = repo.FindByTenantID(ctx, tid)
+		} else {
+			tools = make([]*entities.MCPTool, 0)
+		}
+
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, "DB_ERROR", err.Error())
+			return
+		}
+		if tools == nil {
+			tools = make([]*entities.MCPTool, 0)
+		}
+		writeJSON(w, http.StatusOK, map[string]interface{}{"data": tools})
 	}
-
-	writeJSON(w, http.StatusOK, map[string]interface{}{"data": integ})
 }
 
-func listMCPToolsHandler(w http.ResponseWriter, r *http.Request) {
-	store.mu.RLock()
-	defer store.mu.RUnlock()
+func invokeMCPToolHandler(toolRepo *database.PostgresMCPToolRepository, invocationRepo *database.PostgresMCPToolInvocationRepository) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "Only POST allowed")
+			return
+		}
 
-	tools := make([]*MCPTool, 0)
-	for _, t := range store.mcpTools {
-		tools = append(tools, t)
+		var call struct {
+			ToolID    int64                  `json:"tool_id"`
+			TenantID  int64                  `json:"tenant_id"`
+			UserID    int64                  `json:"user_id"`
+			Arguments map[string]interface{} `json:"arguments"`
+		}
+		if err := json.NewDecoder(r.Body).Decode(&call); err != nil {
+			writeError(w, http.StatusBadRequest, "INVALID_JSON", err.Error())
+			return
+		}
+
+		ctx := r.Context()
+
+		tool, err := toolRepo.FindByID(ctx, call.ToolID)
+		if err != nil {
+			writeError(w, http.StatusNotFound, "NOT_FOUND", "MCP tool not found")
+			return
+		}
+
+		if tool.Status != "active" {
+			writeError(w, http.StatusForbidden, "TOOL_DISABLED", "This MCP tool is disabled")
+			return
+		}
+
+		inputJSON, _ := json.Marshal(call.Arguments)
+		start := time.Now()
+
+		invocation := &entities.MCPToolInvocation{
+			ToolID:   tool.ID,
+			TenantID: call.TenantID,
+			UserID:   call.UserID,
+			Input:    string(inputJSON),
+			Status:   "success",
+		}
+
+		_ = simulateToolExecution(tool, call.Arguments)
+
+		invocation.LatencyMs = float64(time.Since(start).Milliseconds())
+		invocation.Output = fmt.Sprintf("Tool '%s' invoked with arguments", tool.Name)
+
+		invocationRepo.Create(context.Background(), invocation)
+
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"data": map[string]interface{}{
+				"tool_id": tool.ID,
+				"tool":    tool.Name,
+				"status":  "invoked",
+				"result":  invocation.Output,
+			},
+		})
 	}
-	writeJSON(w, http.StatusOK, map[string]interface{}{"data": tools})
 }
 
-func invokeMCPToolHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		writeError(w, http.StatusMethodNotAllowed, "METHOD_NOT_ALLOWED", "Only POST allowed")
-		return
-	}
-
-	var call MCPToolCall
-	if err := json.NewDecoder(r.Body).Decode(&call); err != nil {
-		writeError(w, http.StatusBadRequest, "INVALID_JSON", err.Error())
-		return
-	}
-
-	store.mu.RLock()
-	tool, exists := store.mcpTools[call.ToolID]
-	store.mu.RUnlock()
-
-	if !exists {
-		writeError(w, http.StatusNotFound, "NOT_FOUND", "MCP tool not found")
-		return
-	}
-
-	if !tool.Enabled {
-		writeError(w, http.StatusForbidden, "TOOL_DISABLED", "This MCP tool is disabled")
-		return
-	}
-
-	writeJSON(w, http.StatusOK, map[string]interface{}{
-		"data": map[string]interface{}{
-			"tool_id": call.ToolID,
-			"tool":    tool.Name,
-			"status":  "invoked",
-			"result":  fmt.Sprintf("Tool '%s' invoked with arguments", tool.Name),
-		},
-	})
+func simulateToolExecution(tool *entities.MCPTool, args map[string]interface{}) error {
+	return nil
 }
 
 func writeJSON(w http.ResponseWriter, status int, data interface{}) {
@@ -207,4 +249,15 @@ func getEnv(key, def string) string {
 		return v
 	}
 	return def
+}
+
+func getEnvInt(key string, defaultVal int) int {
+	if val := os.Getenv(key); val != "" {
+		var n int
+		fmt.Sscanf(val, "%d", &n)
+		if n > 0 {
+			return n
+		}
+	}
+	return defaultVal
 }
