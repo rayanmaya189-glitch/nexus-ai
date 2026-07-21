@@ -1,0 +1,134 @@
+syntax = "proto3";
+
+package notification;
+
+option go_package = "github.com/aeroxe/nexus-backend/api/proto/notification;notificationpb";
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
+
+// ============================================================
+// Notification Service - Multi-Channel Notifications
+// ============================================================
+
+service NotificationService {
+  // Notifications
+  rpc SendNotification(SendNotificationRequest) returns (Notification);
+  rpc GetNotification(GetNotificationRequest) returns (Notification);
+  rpc ListNotifications(ListNotificationsRequest) returns (ListNotificationsResponse);
+  rpc MarkAsRead(MarkAsReadRequest) returns (google.protobuf.Empty);
+  rpc DeleteNotification(DeleteNotificationRequest) returns (google.protobuf.Empty);
+
+  // Preferences
+  rpc GetPreferences(GetPreferencesRequest) returns (NotificationPreferences);
+  rpc UpdatePreferences(UpdatePreferencesRequest) returns (NotificationPreferences);
+
+  // Channels
+  rpc SendEmail(SendEmailRequest) returns (SendEmailResponse);
+  rpc SendWebhook(SendWebhookRequest) returns (SendWebhookResponse);
+}
+
+// ============================================================
+// Messages
+// ============================================================
+
+message Notification {
+  int64 id = 1;
+  int64 tenant_id = 2;
+  int64 user_id = 3;
+  string title = 4;
+  string message = 5;
+  string channel = 6;
+  string status = 7;
+  string metadata = 8;
+  bool is_read = 9;
+  google.protobuf.Timestamp created_at = 10;
+}
+
+message SendNotificationRequest {
+  int64 tenant_id = 1;
+  int64 user_id = 2;
+  string title = 3;
+  string message = 4;
+  string channel = 5;
+  string metadata = 6;
+}
+
+message GetNotificationRequest {
+  int64 id = 1;
+}
+
+message ListNotificationsRequest {
+  int64 tenant_id = 1;
+  int64 user_id = 2;
+  bool unread_only = 3;
+  int32 page = 4;
+  int32 per_page = 5;
+}
+
+message ListNotificationsResponse {
+  repeated Notification notifications = 1;
+  int64 total = 2;
+  int64 unread_count = 3;
+}
+
+message MarkAsReadRequest {
+  int64 id = 1;
+}
+
+message DeleteNotificationRequest {
+  int64 id = 1;
+}
+
+message NotificationPreferences {
+  int64 id = 1;
+  int64 tenant_id = 2;
+  int64 user_id = 3;
+  bool email_enabled = 4;
+  bool push_enabled = 5;
+  bool webhook_enabled = 6;
+  string webhook_url = 7;
+  string email_address = 8;
+  google.protobuf.Timestamp created_at = 9;
+  google.protobuf.Timestamp updated_at = 10;
+}
+
+message GetPreferencesRequest {
+  int64 tenant_id = 1;
+  int64 user_id = 2;
+}
+
+message UpdatePreferencesRequest {
+  int64 tenant_id = 1;
+  int64 user_id = 2;
+  bool email_enabled = 3;
+  bool push_enabled = 4;
+  bool webhook_enabled = 5;
+  string webhook_url = 6;
+  string email_address = 7;
+}
+
+message SendEmailRequest {
+  string to = 1;
+  string subject = 2;
+  string body = 3;
+  bool is_html = 4;
+}
+
+message SendEmailResponse {
+  bool success = 1;
+  string message_id = 2;
+}
+
+message SendWebhookRequest {
+  string url = 1;
+  string method = 2;
+  string payload = 3;
+  map<string, string> headers = 4;
+}
+
+message SendWebhookResponse {
+  bool success = 1;
+  int32 status_code = 2;
+  string response_body = 3;
+}

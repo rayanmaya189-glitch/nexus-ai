@@ -1,0 +1,107 @@
+syntax = "proto3";
+
+package config;
+
+option go_package = "github.com/aeroxe/nexus-backend/api/proto/config;configpb";
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
+
+// ============================================================
+// Configuration Service - Platform Configuration Management
+// ============================================================
+
+service ConfigurationService {
+  // Configurations
+  rpc GetConfig(GetConfigRequest) returns (Configuration);
+  rpc ListConfigs(ListConfigsRequest) returns (ListConfigsResponse);
+  rpc CreateConfig(CreateConfigRequest) returns (Configuration);
+  rpc UpdateConfig(UpdateConfigRequest) returns (Configuration);
+  rpc DeleteConfig(DeleteConfigRequest) returns (google.protobuf.Empty);
+
+  // Tenant Configs
+  rpc GetTenantConfig(GetTenantConfigRequest) returns (TenantConfiguration);
+  rpc UpdateTenantConfig(UpdateTenantConfigRequest) returns (TenantConfiguration);
+
+  // Bulk
+  rpc GetConfigsByCategory(GetConfigsByCategoryRequest) returns (ListConfigsResponse);
+  rpc GetConfigsByTenant(GetConfigsByTenantRequest) returns (ListConfigsResponse);
+}
+
+// ============================================================
+// Messages
+// ============================================================
+
+message Configuration {
+  int64 id = 1;
+  string key = 2;
+  string value = 3;
+  string category = 4;
+  string description = 5;
+  string data_type = 6;
+  bool is_sensitive = 7;
+  string default_value = 8;
+  google.protobuf.Timestamp created_at = 9;
+  google.protobuf.Timestamp updated_at = 10;
+}
+
+message GetConfigRequest {
+  int64 id = 1;
+}
+
+message ListConfigsRequest {
+  string category = 1;
+  int64 tenant_id = 2;
+}
+
+message ListConfigsResponse {
+  repeated Configuration configs = 1;
+}
+
+message CreateConfigRequest {
+  string key = 1;
+  string value = 2;
+  string category = 3;
+  string description = 4;
+  string data_type = 5;
+  bool is_sensitive = 6;
+  string default_value = 7;
+}
+
+message UpdateConfigRequest {
+  int64 id = 1;
+  string value = 2;
+  string description = 3;
+}
+
+message DeleteConfigRequest {
+  int64 id = 1;
+}
+
+message TenantConfiguration {
+  int64 id = 1;
+  int64 tenant_id = 2;
+  string config_key = 3;
+  string config_value = 4;
+  google.protobuf.Timestamp created_at = 5;
+  google.protobuf.Timestamp updated_at = 6;
+}
+
+message GetTenantConfigRequest {
+  int64 tenant_id = 1;
+  string config_key = 2;
+}
+
+message UpdateTenantConfigRequest {
+  int64 tenant_id = 1;
+  string config_key = 2;
+  string config_value = 3;
+}
+
+message GetConfigsByCategoryRequest {
+  string category = 1;
+}
+
+message GetConfigsByTenantRequest {
+  int64 tenant_id = 1;
+}

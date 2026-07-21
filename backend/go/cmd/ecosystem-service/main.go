@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 )
@@ -199,4 +200,7 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
 	})
 }
 
-func getEnv(key, def string) string { return def }
+func getEnv(key, def string) string {
+	if v := os.Getenv(key); v != "" { return v }
+	return def
+}

@@ -1,0 +1,146 @@
+syntax = "proto3";
+
+package model_registry;
+
+option go_package = "github.com/aeroxe/nexus-backend/api/proto/model_registry;modelregistrypb";
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
+
+// ============================================================
+// Model Registry - AI Model Management, Metrics
+// ============================================================
+
+service ModelRegistryService {
+  // Models
+  rpc GetModel(GetModelRequest) returns (AIModel);
+  rpc ListModels(ListModelsRequest) returns (ListModelsResponse);
+  rpc CreateModel(CreateModelRequest) returns (AIModel);
+  rpc UpdateModel(UpdateModelRequest) returns (AIModel);
+  rpc DeleteModel(DeleteModelRequest) returns (google.protobuf.Empty);
+
+  // Model Operations
+  rpc PullModel(PullModelRequest) returns (PullModelResponse);
+  rpc GetModelStatus(GetModelStatusRequest) returns (ModelStatus);
+
+  // Metrics
+  rpc GetModelMetrics(GetModelMetricsRequest) returns (ModelMetrics);
+  rpc ListModelMetrics(ListModelMetricsRequest) returns (ListModelMetricsResponse);
+
+  // Categories
+  rpc ListCategories(google.protobuf.Empty) returns (ListCategoriesResponse);
+}
+
+// ============================================================
+// Messages
+// ============================================================
+
+message AIModel {
+  int64 id = 1;
+  string name = 2;
+  string model_id = 3;
+  string category = 4;
+  int64 size_bytes = 5;
+  string parameters = 6;
+  int32 context_length = 7;
+  string capabilities = 8;
+  string status = 9;
+  int32 max_concurrency = 10;
+  google.protobuf.Timestamp created_at = 11;
+}
+
+message GetModelRequest {
+  int64 id = 1;
+}
+
+message ListModelsRequest {
+  string category = 1;
+}
+
+message ListModelsResponse {
+  repeated AIModel models = 1;
+}
+
+message CreateModelRequest {
+  string name = 1;
+  string model_id = 2;
+  string category = 3;
+  int64 size_bytes = 4;
+  string parameters = 5;
+  int32 context_length = 6;
+  string capabilities = 7;
+  int32 max_concurrency = 8;
+}
+
+message UpdateModelRequest {
+  int64 id = 1;
+  string name = 2;
+  string category = 3;
+  string capabilities = 4;
+  string status = 5;
+  int32 max_concurrency = 6;
+}
+
+message DeleteModelRequest {
+  int64 id = 1;
+}
+
+message PullModelRequest {
+  int64 model_id = 1;
+  string model_tag = 2;
+}
+
+message PullModelResponse {
+  string status = 1;
+  string message = 2;
+  double progress = 3;
+}
+
+message GetModelStatusRequest {
+  int64 model_id = 1;
+}
+
+message ModelStatus {
+  int64 model_id = 1;
+  string status = 2;
+  bool is_available = 3;
+  int32 active_requests = 4;
+  int32 max_concurrent = 5;
+}
+
+message GetModelMetricsRequest {
+  int64 model_id = 1;
+  google.protobuf.Timestamp start_time = 2;
+  google.protobuf.Timestamp end_time = 3;
+}
+
+message ModelMetrics {
+  int64 model_id = 1;
+  int64 total_requests = 2;
+  int64 total_tokens = 3;
+  double avg_latency_ms = 4;
+  double p95_latency_ms = 5;
+  double p99_latency_ms = 6;
+  double error_rate = 7;
+  map<string, int64> requests_by_hour = 8;
+}
+
+message ListModelMetricsRequest {
+  string category = 1;
+  google.protobuf.Timestamp start_time = 2;
+  google.protobuf.Timestamp end_time = 3;
+}
+
+message ListModelMetricsResponse {
+  repeated ModelMetrics metrics = 1;
+}
+
+message ListCategoriesResponse {
+  repeated ModelCategory categories = 1;
+}
+
+message ModelCategory {
+  string name = 1;
+  string description = 2;
+  int32 model_count = 3;
+}

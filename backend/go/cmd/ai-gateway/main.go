@@ -1,13 +1,13 @@
 package main
 
 import (
-	"context"
 	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 
@@ -444,15 +444,10 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
 }
 
 func getEnv(key, defaultVal string) string {
-	if v := getEnvRaw(key); v != "" {
+	if v := os.Getenv(key); v != "" {
 		return v
 	}
 	return defaultVal
-}
-
-func getEnvRaw(key string) string {
-	v, _ := context.Background().Value(key).(string)
-	return v
 }
 
 func generateID() string {

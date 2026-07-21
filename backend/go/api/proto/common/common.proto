@@ -1,0 +1,76 @@
+syntax = "proto3";
+
+package common;
+
+option go_package = "github.com/aeroxe/nexus-backend/api/proto/common;commonpb";
+
+import "google/protobuf/timestamp.proto";
+
+// ============================================================
+// Common Types - Shared across all services
+// ============================================================
+
+// Pagination
+message PaginationRequest {
+  int32 page = 1;
+  int32 per_page = 2;
+}
+
+message PaginationResponse {
+  int64 total = 1;
+  int32 page = 2;
+  int32 per_page = 3;
+  int32 total_pages = 4;
+}
+
+// Standard responses
+message Empty {}
+
+message StatusResponse {
+  string status = 1;
+  string message = 2;
+}
+
+// Error
+message Error {
+  string code = 1;
+  string message = 2;
+  string details = 3;
+  string timestamp = 4;
+}
+
+// Health
+message HealthCheck {
+  string service = 1;
+  string status = 2;
+  string version = 3;
+  google.protobuf.Timestamp timestamp = 4;
+  map<string, string> dependencies = 5;
+}
+
+// ID response
+message IDResponse {
+  int64 id = 1;
+}
+
+// Batch operations
+message BatchDeleteRequest {
+  repeated int64 ids = 1;
+}
+
+message BatchDeleteResponse {
+  int64 deleted_count = 1;
+}
+
+// Search
+message SearchRequest {
+  string query = 1;
+  int32 limit = 2;
+  int32 offset = 3;
+}
+
+// Sort
+message SortField {
+  string field = 1;
+  bool ascending = 2;
+}
