@@ -26,7 +26,7 @@ func (h *AuditHandler) CreateAuditLog(w http.ResponseWriter, r *http.Request) {
 		httputil.WriteError(w, http.StatusBadRequest, "INVALID_JSON", err.Error())
 		return
 	}
-	log, err := h.useCase.CreateAuditLog(r.Context(), cmd)
+	entry, err := h.useCase.CreateAuditLog(r.Context(), cmd)
 	if err != nil {
 		if apiErr, ok := err.(*nexuserrors.APIError); ok {
 			apiErr.WriteJSON(w)
@@ -35,13 +35,13 @@ func (h *AuditHandler) CreateAuditLog(w http.ResponseWriter, r *http.Request) {
 		httputil.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		return
 	}
-	httputil.WriteCreated(w, log)
+	httputil.WriteCreated(w, entry)
 }
 
 func (h *AuditHandler) GetAuditLog(w http.ResponseWriter, r *http.Request) {
 	id, _ := strconv.ParseInt(r.URL.Query().Get("id"), 10, 64)
 	q := queries.GetAuditLogQuery{ID: id}
-	log, err := h.useCase.GetAuditLog(r.Context(), q)
+	entry, err := h.useCase.GetAuditLog(r.Context(), q)
 	if err != nil {
 		if apiErr, ok := err.(*nexuserrors.APIError); ok {
 			apiErr.WriteJSON(w)
@@ -50,7 +50,7 @@ func (h *AuditHandler) GetAuditLog(w http.ResponseWriter, r *http.Request) {
 		httputil.WriteError(w, http.StatusInternalServerError, "INTERNAL_ERROR", err.Error())
 		return
 	}
-	httputil.WriteSuccess(w, log)
+	httputil.WriteSuccess(w, entry)
 }
 
 func (h *AuditHandler) ListAuditLogs(w http.ResponseWriter, r *http.Request) {

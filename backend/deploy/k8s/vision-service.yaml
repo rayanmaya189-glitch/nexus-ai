@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vision-service
+  namespace: nexus-ai
+  labels:
+    app: vision-service
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: vision-service
+  template:
+    metadata:
+      labels:
+        app: vision-service
+    spec:
+      containers:
+        - name: vision-service
+          image: nexus-go/vision-service:latest
+          ports:
+            - containerPort: 8092
+          env:
+            - name: PORT
+              value: "8092"
+            - name: OLLAMA_BASE_URL
+              value: "http://ollama:11434"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8092
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "256Mi"
+              cpu: "500m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vision-service
+  namespace: nexus-ai
+spec:
+  selector:
+    app: vision-service
+  ports:
+    - port: 8092
+      targetPort: 8092
+  type: ClusterIP

@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sql-agent-service
+  namespace: nexus-ai
+  labels:
+    app: sql-agent-service
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: sql-agent-service
+  template:
+    metadata:
+      labels:
+        app: sql-agent-service
+    spec:
+      containers:
+        - name: sql-agent-service
+          image: nexus-go/sql-agent-service:latest
+          ports:
+            - containerPort: 8090
+          env:
+            - name: PORT
+              value: "8090"
+            - name: OLLAMA_BASE_URL
+              value: "http://ollama:11434"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8090
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "50m"
+            limits:
+              memory: "256Mi"
+              cpu: "500m"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sql-agent-service
+  namespace: nexus-ai
+spec:
+  selector:
+    app: sql-agent-service
+  ports:
+    - port: 8090
+      targetPort: 8090
+  type: ClusterIP

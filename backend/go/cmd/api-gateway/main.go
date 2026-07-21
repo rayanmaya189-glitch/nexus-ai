@@ -2,12 +2,14 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 	"os"
 	"strings"
+
+	"github.com/aeroxe/nexus-backend/internal/config"
+	"github.com/aeroxe/nexus-backend/pkg/logger"
 )
 
 type ServiceConfig struct {
@@ -15,27 +17,36 @@ type ServiceConfig struct {
 	BaseURL string
 }
 
-var services = map[string]ServiceConfig{
-	"identity":     {Name: "identity-service", BaseURL: getEnv("IDENTITY_SERVICE_URL", "http://localhost:8081")},
-	"ai-gateway":   {Name: "ai-gateway", BaseURL: getEnv("AI_GATEWAY_URL", "http://localhost:8082")},
-	"agent":        {Name: "agent-orchestrator", BaseURL: getEnv("AGENT_ORCHESTRATOR_URL", "http://localhost:8091")},
-	"rag":          {Name: "rag-service", BaseURL: getEnv("RAG_SERVICE_URL", "http://localhost:8092")},
-	"vision":       {Name: "vision-service", BaseURL: getEnv("VISION_SERVICE_URL", "http://localhost:8093")},
-	"memory":       {Name: "memory-service", BaseURL: getEnv("MEMORY_SERVICE_URL", "http://localhost:8094")},
-	"security":     {Name: "security-ai", BaseURL: getEnv("SECURITY_AI_URL", "http://localhost:8095")},
-	"workflow":     {Name: "workflow-service", BaseURL: getEnv("WORKFLOW_SERVICE_URL", "http://localhost:8084")},
-	"audit":        {Name: "audit-service", BaseURL: getEnv("AUDIT_SERVICE_URL", "http://localhost:8085")},
-	"model":        {Name: "model-registry", BaseURL: getEnv("MODEL_REGISTRY_URL", "http://localhost:8086")},
-	"notification": {Name: "notification-service", BaseURL: getEnv("NOTIFICATION_SERVICE_URL", "http://localhost:8087")},
-	"config":       {Name: "configuration-service", BaseURL: getEnv("CONFIGURATION_SERVICE_URL", "http://localhost:8088")},
-	"ecosystem":    {Name: "ecosystem-service", BaseURL: getEnv("ECOSYSTEM_SERVICE_URL", "http://localhost:8089")},
-	"sql-agent":    {Name: "sql-agent-service", BaseURL: getEnv("SQL_AGENT_SERVICE_URL", "http://localhost:8090")},
+var (
+	services map[string]ServiceConfig
+	gwLogger *logger.Logger
+)
+
+func init() {
+	services = map[string]ServiceConfig{
+		"identity":     {Name: "identity-service", BaseURL: getEnv("IDENTITY_SERVICE_URL", fmt.Sprintf("http://localhost:%d", 8081))},
+		"ai-gateway":   {Name: "ai-gateway", BaseURL: getEnv("AI_GATEWAY_URL", fmt.Sprintf("http://localhost:%d", 8082))},
+		"agent":        {Name: "agent-orchestrator", BaseURL: getEnv("AGENT_ORCHESTRATOR_URL", fmt.Sprintf("http://localhost:%d", 8091))},
+		"rag":          {Name: "rag-service", BaseURL: getEnv("RAG_SERVICE_URL", fmt.Sprintf("http://localhost:%d", 8093))},
+		"vision":       {Name: "vision-service", BaseURL: getEnv("VISION_SERVICE_URL", fmt.Sprintf("http://localhost:%d", 8092))},
+		"memory":       {Name: "memory-service", BaseURL: getEnv("MEMORY_SERVICE_URL", fmt.Sprintf("http://localhost:%d", 8091))},
+		"security":     {Name: "security-service", BaseURL: getEnv("SECURITY_SERVICE_URL", fmt.Sprintf("http://localhost:%d", 8094))},
+		"workflow":     {Name: "workflow-service", BaseURL: getEnv("WORKFLOW_SERVICE_URL", fmt.Sprintf("http://localhost:%d", 8084))},
+		"audit":        {Name: "audit-service", BaseURL: getEnv("AUDIT_SERVICE_URL", fmt.Sprintf("http://localhost:%d", 8085))},
+		"model":        {Name: "model-registry", BaseURL: getEnv("MODEL_REGISTRY_URL", fmt.Sprintf("http://localhost:%d", 8086))},
+		"notification": {Name: "notification-service", BaseURL: getEnv("NOTIFICATION_SERVICE_URL", fmt.Sprintf("http://localhost:%d", 8087))},
+		"config":       {Name: "configuration-service", BaseURL: getEnv("CONFIGURATION_SERVICE_URL", fmt.Sprintf("http://localhost:%d", 8088))},
+		"ecosystem":    {Name: "ecosystem-service", BaseURL: getEnv("ECOSYSTEM_SERVICE_URL", fmt.Sprintf("http://localhost:%d", 8089))},
+		"sql-agent":    {Name: "sql-agent-service", BaseURL: getEnv("SQL_AGENT_SERVICE_URL", fmt.Sprintf("http://localhost:%d", 8090))},
+	}
+
+	gwLogger = logger.New("api-gateway")
 }
 
 func main() {
-	log.Println("Starting API Gateway")
+	gwLogger.Info("Starting API Gateway")
 
-	jwtSecret := getEnv("JWT_SECRET", "nexus-jwt-secret-2026")
+	jwtSecret := getEnv("JWT_SECRET", cfg().JWT.Secret)
 
 	mux := http.NewServeMux()
 
@@ -69,11 +80,16 @@ func main() {
 
 	port := getEnv("PORT", "8000")
 	addr := fmt.Sprintf(":%s", port)
-	log.Printf("API Gateway listening on %s", addr)
+	gwLogger.Info(fmt.Sprintf("API Gateway listening on %s", addr))
 
 	if err := http.ListenAndServe(addr, handler); err != nil {
-		log.Fatalf("Server failed: %v", err)
+		gwLogger.Fatal(fmt.Sprintf("Server failed: %v", err))
 	}
+}
+
+func cfg() *config.Config {
+	c, _ := config.LoadConfig("")
+	return c
 }
 
 func resolveService(path string) string {

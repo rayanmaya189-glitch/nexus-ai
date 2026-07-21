@@ -60,3 +60,7 @@ func (l *Logger) Warn(msg string, fields ...zap.Field) {
 func (l *Logger) Fatal(msg string, fields ...zap.Field) {
 	l.Logger.Fatal(msg, fields...)
 }
+
+func (l *Logger) Sync() error {
+	return l.Logger.Sync()
+}

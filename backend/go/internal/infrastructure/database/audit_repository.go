@@ -16,20 +16,20 @@ func NewPostgresAuditLogRepository(pool *pgxpool.Pool) *PostgresAuditLogReposito
 }
 
 func (r *PostgresAuditLogRepository) FindByID(ctx context.Context, id int64) (*entities.AuditLog, error) {
-	log := &entities.AuditLog{}
+	entry := &entities.AuditLog{}
 	err := r.pool.QueryRow(ctx,
 		`SELECT id, tenant_id, user_id, action, resource_type, resource_id, details,
 		        ip_address, user_agent, status, created_at
 		 FROM audit_logs WHERE id = $1`, id,
 	).Scan(
-		&log.ID, &log.TenantID, &log.UserID, &log.Action, &log.ResourceType,
-		&log.ResourceID, &log.Details, &log.IPAddress, &log.UserAgent,
-		&log.Status, &log.CreatedAt,
+		&entry.ID, &entry.TenantID, &entry.UserID, &entry.Action, &entry.ResourceType,
+		&entry.ResourceID, &entry.Details, &entry.IPAddress, &entry.UserAgent,
+		&entry.Status, &entry.CreatedAt,
 	)
 	if err != nil {
 		return nil, err
 	}
-	return log, nil
+	return entry, nil
 }
 
 func (r *PostgresAuditLogRepository) FindByTenantID(ctx context.Context, tenantID int64, limit, offset int) ([]*entities.AuditLog, int64, error) {
@@ -44,18 +44,18 @@ func (r *PostgresAuditLogRepository) FindByTenantID(ctx context.Context, tenantI
 	}
 	defer rows.Close()
 
-	var logs []*entities.AuditLog
+	var entries []*entities.AuditLog
 	for rows.Next() {
-		log := &entities.AuditLog{}
+		entry := &entities.AuditLog{}
 		err := rows.Scan(
-			&log.ID, &log.TenantID, &log.UserID, &log.Action, &log.ResourceType,
-			&log.ResourceID, &log.Details, &log.IPAddress, &log.UserAgent,
-			&log.Status, &log.CreatedAt,
+			&entry.ID, &entry.TenantID, &entry.UserID, &entry.Action, &entry.ResourceType,
+			&entry.ResourceID, &entry.Details, &entry.IPAddress, &entry.UserAgent,
+			&entry.Status, &entry.CreatedAt,
 		)
 		if err != nil {
 			return nil, 0, err
 		}
-		logs = append(logs, log)
+		entries = append(entries, entry)
 	}
 
 	var count int64
@@ -66,18 +66,18 @@ func (r *PostgresAuditLogRepository) FindByTenantID(ctx context.Context, tenantI
 		return nil, 0, err
 	}
 
-	return logs, count, nil
+	return entries, count, nil
 }
 
-func (r *PostgresAuditLogRepository) Create(ctx context.Context, log *entities.AuditLog) error {
+func (r *PostgresAuditLogRepository) Create(ctx context.Context, entry *entities.AuditLog) error {
 	return r.pool.QueryRow(ctx,
 		`INSERT INTO audit_logs (tenant_id, user_id, action, resource_type, resource_id, details,
 		        ip_address, user_agent, status)
 		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		 RETURNING id, created_at`,
-		log.TenantID, log.UserID, log.Action, log.ResourceType, log.ResourceID,
-		log.Details, log.IPAddress, log.UserAgent, log.Status,
-	).Scan(&log.ID, &log.CreatedAt)
+		entry.TenantID, entry.UserID, entry.Action, entry.ResourceType, entry.ResourceID,
+		entry.Details, entry.IPAddress, entry.UserAgent, entry.Status,
+	).Scan(&entry.ID, &entry.CreatedAt)
 }
 
 func (r *PostgresAuditLogRepository) Count(ctx context.Context, tenantID int64) (int64, error) {
