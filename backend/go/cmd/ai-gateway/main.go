@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -459,5 +460,5 @@ func generateID() string {
 }
 
 func bytesReader(data []byte) io.Reader {
-	return io.NopCloser(io.Reader(nil))
+	return bytes.NewReader(data)
 }

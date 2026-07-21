@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"runtime/debug"
+	"time"
 )
 
 type APIError struct {
@@ -90,5 +91,5 @@ func ValidationError(message string) *APIError {
 }
 
 func currentTimestamp() string {
-	return fmt.Sprintf("%d", 0)
+	return time.Now().UTC().Format(time.RFC3339)
 }

@@ -8,6 +8,7 @@ import (
 
 	"github.com/aeroxe/nexus-backend/internal/application/usecases"
 	"github.com/aeroxe/nexus-backend/internal/config"
+	"github.com/aeroxe/nexus-backend/internal/infrastructure/database"
 	"github.com/aeroxe/nexus-backend/internal/interfaces/rest"
 	"github.com/aeroxe/nexus-backend/internal/middleware"
 	"github.com/aeroxe/nexus-backend/pkg/auth"
@@ -23,6 +24,24 @@ func main() {
 		svcLogger.Fatal(fmt.Sprintf("Failed to load config: %v", err))
 	}
 
+	dbHost := getEnv("DB_HOST", cfg.Database.Host)
+	dbPort := getEnvInt("DB_PORT", cfg.Database.Port)
+	dbUser := getEnv("DB_USER", cfg.Database.User)
+	dbPass := getEnv("DB_PASSWORD", cfg.Database.Password)
+	dbName := getEnv("DB_NAME", cfg.Database.DBName)
+	dbSSL := getEnv("DB_SSLMODE", cfg.Database.SSLMode)
+
+	db, err := database.NewDB(dbHost, dbPort, dbUser, dbPass, dbName, dbSSL)
+	if err != nil {
+		svcLogger.Fatal(fmt.Sprintf("Failed to connect to database: %v", err))
+	}
+	defer db.Close()
+	svcLogger.Info("Connected to PostgreSQL database")
+
+	userRepo := database.NewPostgresUserRepository(db.Pool)
+	tenantRepo := database.NewPostgresTenantRepository(db.Pool)
+	roleRepo := database.NewPostgresRoleRepository(db.Pool)
+
 	jwtManager := auth.NewJWTManager(
 		cfg.JWT.Secret,
 		cfg.JWT.Issuer,
@@ -30,9 +49,8 @@ func main() {
 		cfg.JWT.RefreshTokenTTL,
 	)
 
-	_ = usecases.NewAuthUseCase(nil, nil, nil, jwtManager)
-
-	authHandler := rest.NewAuthHandler(nil)
+	authUseCase := usecases.NewAuthUseCase(userRepo, tenantRepo, roleRepo, jwtManager)
+	authHandler := rest.NewAuthHandler(authUseCase)
 
 	mux := http.NewServeMux()
 
@@ -62,15 +80,29 @@ func main() {
 
 	handler := middleware.RequestIDMiddleware(mux)
 
-	port := os.Getenv("PORT")
-	if port == "" {
-		port = "8081"
-	}
-
+	port := getEnv("PORT", "8081")
 	addr := fmt.Sprintf(":%s", port)
 	svcLogger.Info(fmt.Sprintf("Identity Service listening on %s", addr))
 
 	if err := http.ListenAndServe(addr, handler); err != nil {
 		svcLogger.Fatal(fmt.Sprintf("Server failed: %v", err))
 	}
+}
+
+func getEnv(key, defaultVal string) string {
+	if val := os.Getenv(key); val != "" {
+		return val
+	}
+	return defaultVal
+}
+
+func getEnvInt(key string, defaultVal int) int {
+	if val := os.Getenv(key); val != "" {
+		var n int
+		fmt.Sscanf(val, "%d", &n)
+		if n > 0 {
+			return n
+		}
+	}
+	return defaultVal
 }

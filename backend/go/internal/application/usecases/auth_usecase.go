@@ -39,6 +39,10 @@ func (uc *AuthUseCase) Login(ctx context.Context, cmd commands.LoginCommand) (*a
 		return nil, errors.Unauthorized("Invalid credentials")
 	}
 
+	if user.PasswordHash == "" || !auth.CheckPassword(cmd.Password, user.PasswordHash) {
+		return nil, errors.Unauthorized("Invalid credentials")
+	}
+
 	if user.Status != "active" {
 		return nil, errors.Forbidden("Account is not active")
 	}
@@ -60,11 +64,17 @@ func (uc *AuthUseCase) Register(ctx context.Context, cmd commands.RegisterComman
 		return nil, errors.Conflict("Email already registered")
 	}
 
+	hashedPassword, err := auth.HashPassword(cmd.Password)
+	if err != nil {
+		return nil, errors.Internal("Failed to hash password")
+	}
+
 	user := &entities.User{
-		TenantID: cmd.TenantID,
-		Email:    cmd.Email,
-		Name:     cmd.Name,
-		Status:   "active",
+		TenantID:     cmd.TenantID,
+		Email:        cmd.Email,
+		PasswordHash: hashedPassword,
+		Name:         cmd.Name,
+		Status:       "active",
 	}
 
 	if err := uc.userRepo.Create(ctx, user); err != nil {
@@ -110,11 +120,17 @@ func (uc *AuthUseCase) ListUsers(ctx context.Context, q queries.ListUsersQuery) 
 }
 
 func (uc *AuthUseCase) CreateUser(ctx context.Context, cmd commands.CreateUserCommand) (*entities.User, error) {
+	hashedPassword, err := auth.HashPassword(cmd.Password)
+	if err != nil {
+		return nil, errors.Internal("Failed to hash password")
+	}
+
 	user := &entities.User{
-		TenantID: cmd.TenantID,
-		Email:    cmd.Email,
-		Name:     cmd.Name,
-		Status:   "active",
+		TenantID:     cmd.TenantID,
+		Email:        cmd.Email,
+		PasswordHash: hashedPassword,
+		Name:         cmd.Name,
+		Status:       "active",
 	}
 
 	if err := uc.userRepo.Create(ctx, user); err != nil {
