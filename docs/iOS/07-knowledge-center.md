@@ -1584,13 +1584,13 @@ final class DefaultDocumentAPIService: DocumentAPIService {
     init(client: NetworkClient = .shared) { self.client = client }
 
     func fetchDocuments() async throws -> [Document] {
-        let req = try URLRequest(url: URL(string: "\(APIConfig.baseURL)/api/v1/documents")!, method: .get)
+        let req = try URLRequest(url: URL(string: "\(APIConfig.baseURL)/api/v1/documents")!, method: .post)
         let (data, _) = try await client.execute(req)
         return try JSONDecoder().decode([Document].self, from: data)
     }
 
     func fetchDocument(id: String) async throws -> Document {
-        let req = try URLRequest(url: URL(string: "\(APIConfig.baseURL)/api/v1/documents/\(id)")!, method: .get)
+        let req = try URLRequest(url: URL(string: "\(APIConfig.baseURL)/api/v1/documents/\(id)")!, method: .post)
         let (data, _) = try await client.execute(req)
         return try JSONDecoder().decode(Document.self, from: data)
     }
@@ -1625,13 +1625,13 @@ final class DefaultDocumentAPIService: DocumentAPIService {
     }
 
     func fetchChunks(documentId: String) async throws -> [DocumentChunk] {
-        let req = try URLRequest(url: URL(string: "\(APIConfig.baseURL)/api/v1/documents/\(documentId)/chunks")!, method: .get)
+        let req = try URLRequest(url: URL(string: "\(APIConfig.baseURL)/api/v1/documents/\(documentId)/chunks")!, method: .post)
         let (data, _) = try await client.execute(req)
         return try JSONDecoder().decode([DocumentChunk].self, from: data)
     }
 
     func fetchDocumentSets() async throws -> [DocumentSet] {
-        let req = try URLRequest(url: URL(string: "\(APIConfig.baseURL)/api/v1/document-sets")!, method: .get)
+        let req = try URLRequest(url: URL(string: "\(APIConfig.baseURL)/api/v1/document-sets")!, method: .post)
         let (data, _) = try await client.execute(req)
         return try JSONDecoder().decode([DocumentSet].self, from: data)
     }
@@ -1651,13 +1651,13 @@ final class DefaultDocumentAPIService: DocumentAPIService {
     }
 
     func fetchDocumentsInSet(setId: String) async throws -> [Document] {
-        let req = try URLRequest(url: URL(string: "\(APIConfig.baseURL)/api/v1/document-sets/\(setId)/documents")!, method: .get)
+        let req = try URLRequest(url: URL(string: "\(APIConfig.baseURL)/api/v1/document-sets/\(setId)/documents")!, method: .post)
         let (data, _) = try await client.execute(req)
         return try JSONDecoder().decode([Document].self, from: data)
     }
 
     func fetchPermissions(documentId: String) async throws -> [DocumentPermission] {
-        let req = try URLRequest(url: URL(string: "\(APIConfig.baseURL)/api/v1/documents/\(documentId)/permissions")!, method: .get)
+        let req = try URLRequest(url: URL(string: "\(APIConfig.baseURL)/api/v1/documents/\(documentId)/permissions")!, method: .post)
         let (data, _) = try await client.execute(req)
         return try JSONDecoder().decode([DocumentPermission].self, from: data)
     }

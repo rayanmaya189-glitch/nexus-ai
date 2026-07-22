@@ -803,7 +803,7 @@ function DatabaseConnectionCard({ connection, agentId }: {
 │  └──────────────────────────────────────────────────┘    │
 │                                                            │
 │  Status: Connected ✅                                      │
-│  Server Version: PostgreSQL 18.0                           │
+│  Server Version: PostgreSQL 16.0                           │
 │  Total Tables: 47                                         │
 │  Response Time: 42ms                                      │
 │                                                            │
@@ -1248,10 +1248,10 @@ export const useAgentStore = create<AgentState>((set) => ({
 
 | Method | Endpoint | Description |
 |---|---|---|
-| `GET` | `/api/v1/agents` | List agents |
-| `GET` | `/api/v1/agents/:id` | Get agent details |
+| `POST` | `/api/v1/agents` | List agents |
+| `POST` | `/api/v1/agents/:id` | Get agent details |
 | `POST` | `/api/v1/agents` | Create agent |
-| `PUT` | `/api/v1/agents/:id` | Update agent |
+| `PATCH` | `/api/v1/agents/:id` | Update agent |
 | `DELETE` | `/api/v1/agents/:id` | Delete agent |
 
 ### 13.2 Execution Endpoints
@@ -1259,16 +1259,16 @@ export const useAgentStore = create<AgentState>((set) => ({
 | Method | Endpoint | Description |
 |---|---|---|
 | `POST` | `/api/v1/agents/:id/execute` | Start execution |
-| `GET` | `/api/v1/agents/execution/:execId` | Get execution status |
+| `POST` | `/api/v1/agents/execution/:execId` | Get execution status |
 | `DELETE` | `/api/v1/agents/execution/:execId` | Cancel execution |
-| `GET` | `/api/v1/agents/:id/history` | Get execution history |
+| `POST` | `/api/v1/agents/:id/history` | Get execution history |
 
 ### 13.3 Document Set Binding Endpoints
 
 | Method | Endpoint | Description |
 |---|---|---|
 | `POST` | `/api/v1/agents/:id/document-sets` | Bind document sets |
-| `GET` | `/api/v1/agents/:id/document-sets` | List bound sets |
+| `POST` | `/api/v1/agents/:id/document-sets` | List bound sets |
 | `DELETE` | `/api/v1/agents/:id/document-sets/:setId` | Unbind set |
 
 ### 13.4 Database Binding Endpoints
@@ -1279,7 +1279,7 @@ export const useAgentStore = create<AgentState>((set) => ({
 | `POST` | `/api/v1/agents/:id/sql-connections/test` | Test connection |
 | `POST` | `/api/v1/agents/:id/sql-connections/discover` | Discover schema |
 | `POST` | `/api/v1/agents/:id/sql-connections/:connId/tables` | Bind tables |
-| `GET` | `/api/v1/agents/:id/sql-connections` | List connections |
+| `POST` | `/api/v1/agents/:id/sql-connections` | List connections |
 | `DELETE` | `/api/v1/agents/:id/sql-connections/:connId` | Remove connection |
 
 ---

@@ -615,7 +615,7 @@ export function DashboardFilters() {
 export function useMetrics(filters: DashboardFilters) {
   const queryClient = useQueryClient();
 
-  // REST query for initial data
+  // API query for initial data
   const { data: metrics, isLoading } = useQuery({
     queryKey: ["dashboard", "metrics", filters],
     queryFn: () => dashboardApi.getMetrics(filters),
@@ -648,7 +648,7 @@ export function useMetrics(filters: DashboardFilters) {
 
 ### 9.2 Refresh Strategy
 
-| Data | REST Poll | WebSocket | Manual Refresh |
+| Data | API Poll | WebSocket | Manual Refresh |
 |---|---|---|---|
 | KPI values | 30s interval | ✅ Live | ✅ |
 | Charts | 60s interval | ✅ Live | ✅ |
@@ -712,14 +712,14 @@ const defaultWidgets: WidgetConfig[] = [
 
 | Method | Endpoint | Description |
 |---|---|---|
-| `GET` | `/api/v1/dashboard/metrics` | Main dashboard metrics |
-| `GET` | `/api/v1/dashboard/metrics/requests` | Request count over time |
-| `GET` | `/api/v1/dashboard/metrics/tokens` | Token consumption over time |
-| `GET` | `/api/v1/dashboard/metrics/models` | Model performance data |
-| `GET` | `/api/v1/dashboard/agents/status` | Agent status overview |
-| `GET` | `/api/v1/dashboard/health` | System health metrics |
-| `GET` | `/api/v1/dashboard/activity` | Recent activity feed |
-| `GET` | `/api/v1/dashboard/costs` | Cost breakdown data |
+| `POST` | `/api/v1/dashboard/metrics` | Main dashboard metrics |
+| `POST` | `/api/v1/dashboard/metrics/requests` | Request count over time |
+| `POST` | `/api/v1/dashboard/metrics/tokens` | Token consumption over time |
+| `POST` | `/api/v1/dashboard/metrics/models` | Model performance data |
+| `POST` | `/api/v1/dashboard/agents/status` | Agent status overview |
+| `POST` | `/api/v1/dashboard/health` | System health metrics |
+| `POST` | `/api/v1/dashboard/activity` | Recent activity feed |
+| `POST` | `/api/v1/dashboard/costs` | Cost breakdown data |
 
 ### 11.2 Response Types
 

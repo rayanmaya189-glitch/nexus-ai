@@ -1265,24 +1265,24 @@ export function WorkflowImportExport() {
 
 | Method   | Endpoint                        | Description                  |
 |----------|---------------------------------|------------------------------|
-| `GET`    | `/api/workflows`                | List workflows               |
+| `POST`   | `/api/workflows`                | List workflows               |
 | `POST`   | `/api/workflows`                | Create workflow              |
-| `GET`    | `/api/workflows/:id`            | Get workflow details         |
+| `POST`   | `/api/workflows/:id`            | Get workflow details         |
 | `PATCH`  | `/api/workflows/:id`            | Update workflow              |
 | `DELETE` | `/api/workflows/:id`            | Delete workflow              |
 | `POST`   | `/api/workflows/:id/run`        | Start workflow execution     |
-| `GET`    | `/api/workflows/:id/versions`   | List workflow versions       |
+| `POST`   | `/api/workflows/:id/versions`   | List workflow versions       |
 | `POST`   | `/api/workflows/:id/versions`   | Save new version             |
 | `POST`   | `/api/workflows/:id/rollback`   | Rollback to version          |
-| `GET`    | `/api/workflows/executions`     | List all executions          |
-| `GET`    | `/api/workflows/executions/:id` | Get execution details        |
+| `POST`   | `/api/workflows/executions`     | List all executions          |
+| `POST`   | `/api/workflows/executions/:id` | Get execution details        |
 | `POST`   | `/api/workflows/executions/:id/approve` | Approve step    |
 | `POST`   | `/api/workflows/executions/:id/reject`  | Reject step     |
 | `POST`   | `/api/workflows/executions/:id/cancel`  | Cancel execution|
 | `POST`   | `/api/workflows/:id/test`       | Run in test mode             |
 | `POST`   | `/api/workflows/import`         | Import workflow from JSON    |
-| `GET`    | `/api/workflows/:id/export`     | Export workflow as JSON      |
-| `GET`    | `/api/workflows/templates`      | List workflow templates      |
+| `POST`   | `/api/workflows/:id/export`     | Export workflow as JSON      |
+| `POST`   | `/api/workflows/templates`      | List workflow templates      |
 
 ---
 
@@ -1297,7 +1297,7 @@ export function useWorkflows(filters?: WorkflowFilters) {
 
   const workflows = useQuery({
     queryKey: ['workflows', filters],
-    queryFn: () => api.get('/workflows', { params: filters }),
+    queryFn: () => api.post('/workflows', filters),
   });
 
   const createWorkflow = useMutation({
@@ -1327,7 +1327,7 @@ export function useWorkflows(filters?: WorkflowFilters) {
 export function useWorkflowExecution(workflowId: string) {
   const executions = useQuery({
     queryKey: ['workflow-executions', workflowId],
-    queryFn: () => api.get(`/workflows/${workflowId}/executions`),
+    queryFn: () => api.post(`/workflows/${workflowId}/executions`, {}),
   });
 
   const runWorkflow = useMutation({
@@ -1351,7 +1351,7 @@ export function useWorkflowBuilder() {
 
   const { data: workflow } = useQuery({
     queryKey: ['workflow', workflowId],
-    queryFn: () => api.get(`/workflows/${workflowId}`),
+    queryFn: () => api.post(`/workflows/${workflowId}`, {}),
     enabled: !!workflowId,
   });
 

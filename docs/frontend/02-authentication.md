@@ -1007,12 +1007,12 @@ function KYCUploadForm() {
 | `POST` | `/api/v1/auth/register` | User registration |
 | `POST` | `/api/v1/auth/refresh` | Token refresh |
 | `POST` | `/api/v1/auth/logout` | User logout |
-| `GET` | `/api/v1/auth/me` | Get current user |
+| `POST` | `/api/v1/auth/me` | Get current user |
 | `POST` | `/api/v1/auth/change-password` | Change password |
 | `POST` | `/api/v1/auth/forgot-password` | Request password reset |
 | `POST` | `/api/v1/auth/reset-password` | Reset with token |
 | `POST` | `/api/v1/auth/verify-otp` | Verify OTP code |
-| `GET` | `/api/v1/kyc/status` | Get KYC status |
+| `POST` | `/api/v1/kyc/status` | Get KYC status |
 | `POST` | `/api/v1/kyc/documents` | Upload KYC document |
 | `POST` | `/api/v1/kyc/submit` | Submit KYC for review |
 
@@ -1034,7 +1034,7 @@ export const authApi = {
     apiClient.post("/api/v1/auth/logout"),
 
   getMe: () =>
-    apiClient.get<User>("/api/v1/auth/me"),
+    apiClient.post<User>("/api/v1/auth/me"),
 
   changePassword: (data: ChangePasswordRequest) =>
     apiClient.post("/api/v1/auth/change-password", data),

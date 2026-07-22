@@ -1360,9 +1360,7 @@ protocol Endpoint {
 
 // HTTP Method
 enum HTTPMethod: String {
-    case get = "GET"
     case post = "POST"
-    case put = "PUT"
     case patch = "PATCH"
     case delete = "DELETE"
 }
@@ -1377,25 +1375,25 @@ enum APIEndpoint: Endpoint {
 
     // Chat
     case sendMessage(conversationId: String, message: String, agentId: String?)
-    case getConversations(limit: Int, offset: Int)
-    case getMessages(conversationId: String, limit: Int)
+    case listConversations(limit: Int, offset: Int)
+    case listMessages(conversationId: String, limit: Int)
     case createConversation(title: String, agentId: String?)
     case deleteConversation(id: String)
 
     // Agents
-    case getAgents
+    case listAgents
     case getAgent(id: String)
     case createAgent(name: String, systemPrompt: String, modelId: String)
     case updateAgent(id: String, name: String, systemPrompt: String)
     case deleteAgent(id: String)
 
     // Knowledge
-    case getKnowledge
+    case listKnowledge
     case uploadKnowledge(data: Data, filename: String)
     case deleteKnowledge(id: String)
 
     // Models
-    case getModels
+    case listModels
     case getModel(id: String)
 
     var baseURL: URL {
@@ -1410,22 +1408,22 @@ enum APIEndpoint: Endpoint {
         case .logout: return "/api/v1/auth/logout"
 
         case .sendMessage: return "/api/v1/chat/send"
-        case .getConversations: return "/api/v1/conversations"
-        case .getMessages(let id, _): return "/api/v1/conversations/\(id)/messages"
+        case .listConversations: return "/api/v1/conversations"
+        case .listMessages(let id, _): return "/api/v1/conversations/\(id)/messages"
         case .createConversation: return "/api/v1/conversations"
         case .deleteConversation(let id): return "/api/v1/conversations/\(id)"
 
-        case .getAgents: return "/api/v1/agents"
+        case .listAgents: return "/api/v1/agents"
         case .getAgent(let id): return "/api/v1/agents/\(id)"
         case .createAgent: return "/api/v1/agents"
         case .updateAgent(let id, _, _): return "/api/v1/agents/\(id)"
         case .deleteAgent(let id): return "/api/v1/agents/\(id)"
 
-        case .getKnowledge: return "/api/v1/knowledge"
+        case .listKnowledge: return "/api/v1/knowledge"
         case .uploadKnowledge: return "/api/v1/knowledge"
         case .deleteKnowledge(let id): return "/api/v1/knowledge/\(id)"
 
-        case .getModels: return "/api/v1/models"
+        case .listModels: return "/api/v1/models"
         case .getModel(let id): return "/api/v1/models/\(id)"
         }
     }
@@ -1435,9 +1433,9 @@ enum APIEndpoint: Endpoint {
         case .login, .register, .refreshToken, .sendMessage, .createConversation,
              .createAgent, .uploadKnowledge:
             return .post
-        case .getConversations, .getMessages, .getAgents, .getAgent,
-             .getKnowledge, .getModels, .getModel:
-            return .get
+        case .listConversations, .listMessages, .listAgents, .getAgent,
+             .listKnowledge, .listModels, .getModel:
+            return .post
         case .updateAgent:
             return .patch
         case .logout, .deleteConversation, .deleteAgent, .deleteKnowledge:
@@ -1463,12 +1461,12 @@ enum APIEndpoint: Endpoint {
 
     var queryItems: [URLQueryItem] {
         switch self {
-        case .getConversations(let limit, let offset):
+        case .listConversations(let limit, let offset):
             return [
                 URLQueryItem(name: "limit", value: "\(limit)"),
                 URLQueryItem(name: "offset", value: "\(offset)")
             ]
-        case .getMessages(_, let limit):
+        case .listMessages(_, let limit):
             return [URLQueryItem(name: "limit", value: "\(limit)")]
         default:
             return []
@@ -1499,6 +1497,13 @@ enum APIEndpoint: Endpoint {
             params = ["name": name, "system_prompt": systemPrompt, "model_id": modelId]
         case .updateAgent(_, let name, let systemPrompt):
             params = ["name": name, "system_prompt": systemPrompt]
+        case .listConversations(let limit, let offset):
+            params = ["limit": limit, "offset": offset]
+        case .listMessages(let id, let limit):
+            params = ["conversation_id": id, "limit": limit]
+        case .listAgents, .getAgent, .listKnowledge, .uploadKnowledge,
+             .listModels, .getModel:
+            return nil
         default:
             return nil
         }
@@ -1528,14 +1533,14 @@ enum APIEndpoint: Endpoint {
 | Refresh Token | POST | /api/v1/auth/refresh | No | 10s |
 | Logout | DELETE | /api/v1/auth/logout | Yes | 10s |
 | Send Message | POST | /api/v1/chat/send | Yes | 30s |
-| Get Conversations | GET | /api/v1/conversations | Yes | 15s |
-| Get Messages | GET | /api/v1/conversations/{id}/messages | Yes | 15s |
+| List Conversations | POST | /api/v1/conversations | Yes | 15s |
+| List Messages | POST | /api/v1/conversations/{id}/messages | Yes | 15s |
 | Create Conversation | POST | /api/v1/conversations | Yes | 15s |
 | Delete Conversation | DELETE | /api/v1/conversations/{id} | Yes | 10s |
-| Get Agents | GET | /api/v1/agents | Yes | 15s |
+| List Agents | POST | /api/v1/agents | Yes | 15s |
 | Create Agent | POST | /api/v1/agents | Yes | 15s |
 | Upload Knowledge | POST | /api/v1/knowledge | Yes | 120s |
-| Get Models | GET | /api/v1/models | Yes | 15s |
+| List Models | POST | /api/v1/models | Yes | 15s |
 
 ---
 

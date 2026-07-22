@@ -1104,17 +1104,17 @@ export function MetadataEditor({ document }: { document: Document }) {
 | Method   | Endpoint                               | Description              |
 |----------|----------------------------------------|--------------------------|
 | `POST`   | `/api/v1/rag/documents`                | Upload a document        |
-| `GET`    | `/api/v1/rag/documents`                | List documents           |
-| `GET`    | `/api/v1/rag/documents/:id`            | Get document details     |
+| `POST`    | `/api/v1/rag/documents`                | List documents           |
+| `POST`    | `/api/v1/rag/documents/:id`            | Get document details     |
 | `PATCH`  | `/api/v1/rag/documents/:id`            | Update metadata          |
 | `DELETE` | `/api/v1/rag/documents/:id`            | Delete document          |
 | `POST`   | `/api/v1/rag/documents/:id/reprocess`  | Reprocess document       |
-| `GET`    | `/api/v1/rag/documents/:id/status`     | Get processing status    |
-| `GET`    | `/api/v1/rag/documents/:id/chunks`     | Get document chunks      |
+| `POST`    | `/api/v1/rag/documents/:id/status`     | Get processing status    |
+| `POST`    | `/api/v1/rag/documents/:id/chunks`     | Get document chunks      |
 | `PATCH`  | `/api/v1/rag/documents/:id/chunks/:chunkId` | Edit chunk         |
 | `POST`   | `/api/v1/rag/search`                   | Search documents         |
 | `POST`   | `/api/v1/rag/documents/bulk`           | Bulk operations          |
-| `GET`    | `/api/v1/document-sets`                | List document sets       |
+| `POST`    | `/api/v1/document-sets`                | List document sets       |
 | `POST`   | `/api/v1/document-sets`                | Create a document set    |
 | `PATCH`  | `/api/v1/document-sets/:id`            | Update a document set    |
 | `DELETE` | `/api/v1/document-sets/:id`            | Delete a document set    |
@@ -1172,7 +1172,7 @@ interface SearchResult {
 export function useDocuments(filters?: DocumentFilters) {
   return useQuery({
     queryKey: ['documents', filters],
-    queryFn: () => api.get('/documents', { params: filters }),
+    queryFn: () => api.post('/documents', filters),
     staleTime: 30_000,
   });
 }
@@ -1219,7 +1219,7 @@ export function useDocumentSets() {
 
   const sets = useQuery({
     queryKey: ['document-sets'],
-    queryFn: () => api.get('/document-sets'),
+    queryFn: () => api.post('/document-sets', {}),
   });
 
   const createSet = useMutation({

@@ -982,7 +982,7 @@ export const handlers = [
     );
   }),
 
-  http.get('/api/v1/agents', () => {
+  http.post('/api/v1/agents', () => {
     return HttpResponse.json({
       agents: [
         {

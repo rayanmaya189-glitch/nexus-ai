@@ -339,7 +339,7 @@ export function useRestockPredictions() {
   return useQuery({
     queryKey: ['erp', 'restock-predictions'],
     queryFn: async () => {
-      const { data } = await apiClient.get('/api/v1/erp/restock-predictions');
+      const { data } = await apiClient.post('/api/v1/erp/restock-predictions', {});
       return data.predictions as RestockPrediction[];
     },
     refetchInterval: 15 * 60 * 1000, // Refresh every 15 min
@@ -734,17 +734,17 @@ export function ProductionChart({ data }: { data: ProductionData[] }) {
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/api/v1/dashboard/stats` | GET | Central dashboard stats |
-| `/api/v1/dashboard/broadband` | GET | Broadband network metrics |
-| `/api/v1/dashboard/erp` | GET | ERP intelligence data |
-| `/api/v1/dashboard/crm` | GET | CRM intelligence data |
-| `/api/v1/dashboard/billing` | GET | Billing metrics |
-| `/api/v1/dashboard/payments` | GET | Payment monitoring data |
-| `/api/v1/dashboard/exchange` | GET | Exchange/blockchain data |
-| `/api/v1/dashboard/cibil` | GET | Credit intelligence data |
-| `/api/v1/dashboard/hr` | GET | HR intelligence data |
-| `/api/v1/dashboard/solar` | GET | Solar/energy data |
-| `/api/v1/dashboard/ai-insights` | GET | AI-generated insights |
+| `/api/v1/dashboard/stats` | POST | Central dashboard stats |
+| `/api/v1/dashboard/broadband` | POST | Broadband network metrics |
+| `/api/v1/dashboard/erp` | POST | ERP intelligence data |
+| `/api/v1/dashboard/crm` | POST | CRM intelligence data |
+| `/api/v1/dashboard/billing` | POST | Billing metrics |
+| `/api/v1/dashboard/payments` | POST | Payment monitoring data |
+| `/api/v1/dashboard/exchange` | POST | Exchange/blockchain data |
+| `/api/v1/dashboard/cibil` | POST | Credit intelligence data |
+| `/api/v1/dashboard/hr` | POST | HR intelligence data |
+| `/api/v1/dashboard/solar` | POST | Solar/energy data |
+| `/api/v1/dashboard/ai-insights` | POST | AI-generated insights |
 
 ---
 

@@ -768,12 +768,12 @@ export function ConversationSidebar() {
 
 | Operation | Method | Endpoint |
 |---|---|---|
-| List conversations | `GET` | `/api/v1/chat/conversations` |
-| Get conversation | `GET` | `/api/v1/chat/conversations/:id` |
+| List conversations | `POST` | `/api/v1/chat/conversations` |
+| Get conversation | `POST` | `/api/v1/chat/conversations/:id` |
 | Create conversation | `POST` | `/api/v1/chat/conversations` |
-| Update title | `PUT` | `/api/v1/chat/conversations/:id` |
+| Update title | `PATCH` | `/api/v1/chat/conversations/:id` |
 | Delete conversation | `DELETE` | `/api/v1/chat/conversations/:id` |
-| Get messages | `GET` | `/api/v1/chat/conversations/:id/messages` |
+| Get messages | `POST` | `/api/v1/chat/conversations/:id/messages` |
 
 ### 7.3 Auto-Title Generation
 
@@ -1006,14 +1006,14 @@ export function AgentSelector({ agents, selected, onSelect }: {
 
 ## 11. Chat API Integration
 
-### 11.1 REST Endpoints
+### 11.1 API Endpoints (Protobuf over HTTP)
 
 | Method | Endpoint | Description |
 |---|---|---|
 | `POST` | `/api/v1/ai/chat` | Submit chat (non-streaming) |
-| `GET` | `/api/v1/chat/conversations` | List conversations |
+| `POST` | `/api/v1/chat/conversations` | List conversations |
 | `POST` | `/api/v1/chat/conversations` | Create conversation |
-| `GET` | `/api/v1/chat/conversations/:id/messages` | Get messages |
+| `POST` | `/api/v1/chat/conversations/:id/messages` | Get messages |
 | `DELETE` | `/api/v1/chat/conversations/:id` | Delete conversation |
 | `POST` | `/api/v1/rag/search` | Search knowledge (in-chat) |
 | `POST` | `/api/v1/vision/analyze` | Analyze uploaded image |

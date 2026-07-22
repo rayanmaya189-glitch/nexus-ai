@@ -566,7 +566,7 @@ class ApiClientTest {
 
         val request = server.takeRequest()
         assertEquals("/wallet", request.path)
-        assertEquals("GET", request.method)
+        assertEquals("POST", request.method)
     }
 
     @Test

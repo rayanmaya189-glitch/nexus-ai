@@ -970,7 +970,7 @@ final class DefaultNotificationAPIService: NotificationAPIService {
     func fetchNotifications() async throws -> [AppNotification] {
         let req = try URLRequest(
             url: URL(string: "\(APIConfig.baseURL)/api/v1/notifications")!,
-            method: .get
+            method: .post
         )
         let (data, _) = try await client.execute(req)
         return try JSONDecoder().decode([AppNotification].self, from: data)
@@ -979,7 +979,7 @@ final class DefaultNotificationAPIService: NotificationAPIService {
     func markAsRead(id: String) async throws {
         let req = try URLRequest(
             url: URL(string: "\(APIConfig.baseURL)/api/v1/notifications/\(id)/read")!,
-            method: .put
+            method: .patch
         )
         _ = try await client.execute(req)
     }
@@ -987,7 +987,7 @@ final class DefaultNotificationAPIService: NotificationAPIService {
     func markAllAsRead() async throws {
         let req = try URLRequest(
             url: URL(string: "\(APIConfig.baseURL)/api/v1/notifications/read-all")!,
-            method: .put
+            method: .patch
         )
         _ = try await client.execute(req)
     }
@@ -1011,7 +1011,7 @@ final class DefaultNotificationAPIService: NotificationAPIService {
     func fetchPreferences() async throws -> NotificationPreferences {
         let req = try URLRequest(
             url: URL(string: "\(APIConfig.baseURL)/api/v1/notifications/preferences")!,
-            method: .get
+            method: .post
         )
         let (data, _) = try await client.execute(req)
         return try JSONDecoder().decode(NotificationPreferences.self, from: data)
@@ -1020,7 +1020,7 @@ final class DefaultNotificationAPIService: NotificationAPIService {
     func updatePreferences(_ preferences: NotificationPreferences) async throws {
         var req = try URLRequest(
             url: URL(string: "\(APIConfig.baseURL)/api/v1/notifications/preferences")!,
-            method: .put
+            method: .patch
         )
         req.httpBody = try JSONEncoder().encode(preferences)
         req.setValue("application/json", forHTTPHeaderField: "Content-Type")

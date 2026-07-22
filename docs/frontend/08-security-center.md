@@ -898,7 +898,7 @@ interface InjectionEvent {
 export function PromptInjectionLog() {
   const { data: events, isLoading } = useQuery({
     queryKey: ['security', 'injection-log'],
-    queryFn: () => api.get('/security/injection-log'),
+    queryFn: () => api.post('/security/injection-log', {}),
     refetchInterval: 10_000,
   });
 
@@ -1200,7 +1200,7 @@ interface Session {
 export function SessionManager() {
   const { data: sessions, isLoading } = useQuery({
     queryKey: ['security', 'sessions'],
-    queryFn: () => api.get('/security/sessions'),
+    queryFn: () => api.post('/security/sessions', {}),
   });
 
   const revokeSession = useMutation({
@@ -1323,34 +1323,34 @@ Step 3: Save Recovery Codes
 
 | Method   | Endpoint                           | Description                    |
 |----------|------------------------------------|--------------------------------|
-| `GET`    | `/api/security/alerts`             | List security alerts           |
-| `GET`    | `/api/security/alerts/:id`         | Get alert details              |
+| `POST`   | `/api/security/alerts`             | List security alerts           |
+| `POST`   | `/api/security/alerts/:id`         | Get alert details              |
 | `PATCH`  | `/api/security/alerts/:id`         | Update alert status            |
 | `DELETE` | `/api/security/alerts/:id`         | Dismiss/delete alert           |
 | `POST`   | `/api/security/alerts/:id/block`   | Block IP from alert            |
-| `GET`    | `/api/security/audit`              | List audit logs                |
-| `GET`    | `/api/security/audit/:id`          | Get audit event detail         |
-| `GET`    | `/api/security/audit/export`       | Export audit logs              |
-| `GET`    | `/api/security/roles`              | List roles                     |
+| `POST`   | `/api/security/audit`              | List audit logs                |
+| `POST`   | `/api/security/audit/:id`          | Get audit event detail         |
+| `POST`   | `/api/security/audit/export`       | Export audit logs              |
+| `POST`   | `/api/security/roles`              | List roles                     |
 | `POST`   | `/api/security/roles`              | Create role                    |
 | `PATCH`  | `/api/security/roles/:id`          | Update role                    |
 | `DELETE` | `/api/security/roles/:id`          | Delete role                    |
-| `GET`    | `/api/security/permissions`        | Get permission matrix          |
-| `GET`    | `/api/security/user-access/:uid`   | Get user access review         |
-| `GET`    | `/api/security/threats`            | Get threat dashboard data      |
-| `GET`    | `/api/security/injection-log`      | Get injection detection log    |
-| `GET`    | `/api/security/sensitive-words`    | Get word filter config         |
-| `PUT`    | `/api/security/sensitive-words`    | Update word filter config      |
-| `GET`    | `/api/security/ip-list`            | Get IP whitelist/blacklist     |
+| `POST`   | `/api/security/permissions`        | Get permission matrix          |
+| `POST`   | `/api/security/user-access/:uid`   | Get user access review         |
+| `POST`   | `/api/security/threats`            | Get threat dashboard data      |
+| `POST`   | `/api/security/injection-log`      | Get injection detection log    |
+| `POST`   | `/api/security/sensitive-words`    | Get word filter config         |
+| `PATCH`  | `/api/security/sensitive-words`    | Update word filter config      |
+| `POST`   | `/api/security/ip-list`            | Get IP whitelist/blacklist     |
 | `POST`   | `/api/security/ip-list`            | Add IP to list                 |
 | `DELETE` | `/api/security/ip-list/:id`        | Remove IP from list            |
-| `GET`    | `/api/security/sessions`           | List active sessions           |
+| `POST`   | `/api/security/sessions`           | List active sessions           |
 | `DELETE` | `/api/security/sessions/:id`       | Revoke a session               |
 | `DELETE` | `/api/security/sessions`           | Revoke multiple sessions       |
 | `POST`   | `/api/security/2fa/enable`         | Enable 2FA                     |
 | `POST`   | `/api/security/2fa/verify`         | Verify 2FA code                |
 | `DELETE` | `/api/security/2fa/disable`        | Disable 2FA                    |
-| `GET`    | `/api/security/2fa/recovery-codes` | Get recovery codes             |
+| `POST`   | `/api/security/2fa/recovery-codes` | Get recovery codes             |
 
 ---
 
@@ -1365,7 +1365,7 @@ export function useSecurityAlerts(filters?: AlertFilters) {
 
   const alerts = useQuery({
     queryKey: ['security-alerts', filters],
-    queryFn: () => api.get('/security/alerts', { params: filters }),
+    queryFn: () => api.post('/security/alerts', filters),
     refetchInterval: 15_000,
   });
 
@@ -1392,13 +1392,13 @@ export function useSecurityAlerts(filters?: AlertFilters) {
 export function useAuditLogs(filters?: AuditFilters) {
   const logs = useQuery({
     queryKey: ['audit-logs', filters],
-    queryFn: () => api.get('/security/audit', { params: filters }),
+    queryFn: () => api.post('/security/audit', filters),
     staleTime: 5_000,
   });
 
   const exportLogs = useMutation({
     mutationFn: (options: ExportOptions) =>
-      api.get('/security/audit/export', { params: options, responseType: 'blob' }),
+      api.post('/security/audit/export', { ...options, responseType: 'blob' }),
   });
 
   return { logs, exportLogs };
@@ -1414,7 +1414,7 @@ export function useAccessControl() {
 
   const roles = useQuery({
     queryKey: ['roles'],
-    queryFn: () => api.get('/security/roles'),
+    queryFn: () => api.post('/security/roles', {}),
   });
 
   const createRole = useMutation({

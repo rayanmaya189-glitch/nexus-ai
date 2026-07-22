@@ -921,7 +921,9 @@ export const options = {
 };
 
 export default function () {
-  const res = http.get("https://api.nexus-ai.com/api/agents");
+  const res = http.post("https://api.nexus-ai.com/api/agents", JSON.stringify({}), {
+    headers: { 'Content-Type': 'application/json' },
+  });
   check(res, {
     "status is 200": (r) => r.status === 200,
     "response time < 500ms": (r) => r.timings.duration < 500,

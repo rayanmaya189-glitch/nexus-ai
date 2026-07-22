@@ -243,7 +243,7 @@ services:
       - redis_data:/data
 
   postgres:
-    image: postgres:18-alpine
+    image: postgres:16-alpine
     ports:
       - "5432:5432"
     environment:

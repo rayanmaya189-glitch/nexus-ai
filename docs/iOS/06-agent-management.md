@@ -28,7 +28,8 @@ Agent management is the core feature for creating, configuring, monitoring, and 
 ```
 ┌────────────┐     ┌──────────────┐     ┌────────────────┐
 │ API Layer  │────▶│ ViewModel    │────▶│ Views          │
-│ (REST)     │     │ (Published)  │     │ (SwiftUI)      │
+│ (REST +    │     │ (Published)  │     │ (SwiftUI)      │
+│ Protobuf)  │     │              │     │                │
 └────────────┘     └──────────────┘     └────────────────┘
        │                  │
        ▼                  ▼
@@ -2323,7 +2324,7 @@ final class DefaultAgentAPIService: AgentAPIService {
     func fetchAgents() async throws -> [Agent] {
         let request = try URLRequest(
             url: URL(string: "\(APIConfig.baseURL)/api/v1/agents")!,
-            method: .get
+            method: .post
         )
         let (data, _) = try await client.execute(request)
         return try JSONDecoder().decode([Agent].self, from: data)
@@ -2332,7 +2333,7 @@ final class DefaultAgentAPIService: AgentAPIService {
     func fetchAgent(id: String) async throws -> Agent {
         let request = try URLRequest(
             url: URL(string: "\(APIConfig.baseURL)/api/v1/agents/\(id)")!,
-            method: .get
+            method: .post
         )
         let (data, _) = try await client.execute(request)
         return try JSONDecoder().decode(Agent.self, from: data)
@@ -2352,7 +2353,7 @@ final class DefaultAgentAPIService: AgentAPIService {
     func updateAgent(_ agent: Agent) async throws -> Agent {
         var urlRequest = try URLRequest(
             url: URL(string: "\(APIConfig.baseURL)/api/v1/agents/\(agent.id)")!,
-            method: .put
+            method: .patch
         )
         urlRequest.httpBody = try JSONEncoder().encode(agent)
         urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -2383,7 +2384,7 @@ final class DefaultAgentAPIService: AgentAPIService {
     func getExecution(id: String) async throws -> AgentExecution {
         let request = try URLRequest(
             url: URL(string: "\(APIConfig.baseURL)/api/v1/executions/\(id)")!,
-            method: .get
+            method: .post
         )
         let (data, _) = try await client.execute(request)
         return try JSONDecoder().decode(AgentExecution.self, from: data)
@@ -2400,7 +2401,7 @@ final class DefaultAgentAPIService: AgentAPIService {
     func fetchExecutionHistory(agentId: String) async throws -> [AgentExecution] {
         let request = try URLRequest(
             url: URL(string: "\(APIConfig.baseURL)/api/v1/agents/\(agentId)/executions")!,
-            method: .get
+            method: .post
         )
         let (data, _) = try await client.execute(request)
         return try JSONDecoder().decode([AgentExecution].self, from: data)
@@ -2409,7 +2410,7 @@ final class DefaultAgentAPIService: AgentAPIService {
     func fetchAgentPerformance(agentId: String) async throws -> [AgentPerformance] {
         let request = try URLRequest(
             url: URL(string: "\(APIConfig.baseURL)/api/v1/agents/\(agentId)/performance")!,
-            method: .get
+            method: .post
         )
         let (data, _) = try await client.execute(request)
         return try JSONDecoder().decode([AgentPerformance].self, from: data)
@@ -2418,7 +2419,7 @@ final class DefaultAgentAPIService: AgentAPIService {
     func fetchAvailableModels() async throws -> [AIModel] {
         let request = try URLRequest(
             url: URL(string: "\(APIConfig.baseURL)/api/v1/models")!,
-            method: .get
+            method: .post
         )
         let (data, _) = try await client.execute(request)
         return try JSONDecoder().decode([AIModel].self, from: data)
@@ -2427,7 +2428,7 @@ final class DefaultAgentAPIService: AgentAPIService {
     func fetchAvailableTools() async throws -> [AITool] {
         let request = try URLRequest(
             url: URL(string: "\(APIConfig.baseURL)/api/v1/tools")!,
-            method: .get
+            method: .post
         )
         let (data, _) = try await client.execute(request)
         return try JSONDecoder().decode([AITool].self, from: data)
@@ -2451,7 +2452,7 @@ final class DefaultAgentAPIService: AgentAPIService {
     func discoverSchema(connectionId: String) async throws -> SchemaDiscoveryResult {
         let request = try URLRequest(
             url: URL(string: "\(APIConfig.baseURL)/api/v1/sql-connections/\(connectionId)/schema")!,
-            method: .get
+            method: .post
         )
         let (data, _) = try await client.execute(request)
         return try JSONDecoder().decode(SchemaDiscoveryResult.self, from: data)

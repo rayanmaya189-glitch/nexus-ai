@@ -1396,39 +1396,39 @@ export function APIKeysSection() {
 
 | Method   | Endpoint                        | Description                  |
 |----------|---------------------------------|------------------------------|
-| `GET`    | `/api/settings/profile`         | Get user profile             |
+| `POST`   | `/api/settings/profile`         | Get user profile             |
 | `PATCH`  | `/api/settings/profile`         | Update user profile          |
 | `POST`   | `/api/settings/avatar`          | Upload avatar                |
 | `DELETE` | `/api/settings/avatar`          | Remove avatar                |
 | `POST`   | `/api/settings/password`        | Change password              |
-| `GET`    | `/api/settings/notifications`   | Get notification preferences |
+| `POST`   | `/api/settings/notifications`   | Get notification preferences |
 | `PATCH`  | `/api/settings/notifications`   | Update notification prefs    |
-| `GET`    | `/api/settings/theme`           | Get theme preferences        |
+| `POST`   | `/api/settings/theme`           | Get theme preferences        |
 | `PATCH`  | `/api/settings/theme`           | Update theme preferences     |
-| `GET`    | `/api/settings/language`        | Get language preferences     |
+| `POST`   | `/api/settings/language`        | Get language preferences     |
 | `PATCH`  | `/api/settings/language`        | Update language preferences  |
-| `GET`    | `/api/settings/api-keys`        | List API keys                |
+| `POST`   | `/api/settings/api-keys`        | List API keys                |
 | `POST`   | `/api/settings/api-keys`        | Generate API key             |
 | `DELETE` | `/api/settings/api-keys/:id`    | Revoke API key               |
-| `GET`    | `/api/settings/webhooks`        | List webhooks                |
+| `POST`   | `/api/settings/webhooks`        | List webhooks                |
 | `POST`   | `/api/settings/webhooks`        | Create webhook               |
 | `PATCH`  | `/api/settings/webhooks/:id`    | Update webhook               |
 | `DELETE` | `/api/settings/webhooks/:id`    | Delete webhook               |
 | `POST`   | `/api/settings/webhooks/:id/test` | Test webhook               |
-| `GET`    | `/api/settings/security`        | Get security settings        |
+| `POST`   | `/api/settings/security`        | Get security settings        |
 | `PATCH`  | `/api/settings/security`        | Update security settings     |
-| `GET`    | `/api/settings/sessions`        | List active sessions         |
+| `POST`   | `/api/settings/sessions`        | List active sessions         |
 | `DELETE` | `/api/settings/sessions/:id`    | Revoke session               |
-| `GET`    | `/api/settings/retention`       | Get retention settings       |
+| `POST`   | `/api/settings/retention`       | Get retention settings       |
 | `PATCH`  | `/api/settings/retention`       | Update retention settings    |
-| `GET`    | `/api/settings/integrations`    | List integrations            |
+| `POST`   | `/api/settings/integrations`    | List integrations            |
 | `POST`   | `/api/settings/integrations/connect`    | Connect service    |
 | `DELETE` | `/api/settings/integrations/:id`        | Disconnect service  |
-| `GET`    | `/api/admin/tenant/settings`    | Get tenant settings (admin)  |
+| `POST`   | `/api/admin/tenant/settings`    | Get tenant settings (admin)  |
 | `PATCH`  | `/api/admin/tenant/settings`    | Update tenant settings       |
-| `GET`    | `/api/admin/tenant/ai-policy`   | Get AI policy (admin)        |
+| `POST`   | `/api/admin/tenant/ai-policy`   | Get AI policy (admin)        |
 | `PATCH`  | `/api/admin/tenant/ai-policy`   | Update AI policy             |
-| `GET`    | `/api/admin/tenant/branding`    | Get branding settings        |
+| `POST`   | `/api/admin/tenant/branding`    | Get branding settings        |
 | `PATCH`  | `/api/admin/tenant/branding`    | Update branding              |
 
 ---
@@ -1444,7 +1444,7 @@ export function useSettings() {
 
   const profile = useQuery({
     queryKey: ['settings', 'profile'],
-    queryFn: () => api.get('/settings/profile'),
+    queryFn: () => api.post('/settings/profile', {}),
   });
 
   const updateProfile = useMutation({
@@ -1474,7 +1474,7 @@ export function useProfile() {
 
   const profile = useQuery({
     queryKey: ['profile'],
-    queryFn: () => api.get('/settings/profile'),
+    queryFn: () => api.post('/settings/profile', {}),
   });
 
   const updateProfile = useMutation({
@@ -1512,7 +1512,7 @@ export function useProfile() {
 export function usePreferences() {
   const preferences = useQuery({
     queryKey: ['preferences'],
-    queryFn: () => api.get('/settings/preferences'),
+    queryFn: () => api.post('/settings/preferences', {}),
   });
 
   const updatePreferences = useMutation({

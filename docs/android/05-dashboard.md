@@ -1294,39 +1294,35 @@ fun DashboardFiltersSheet(
 ```kotlin
 interface DashboardApiService {
 
-    @GET("api/v1/metrics/dashboard")
+    @POST("api/v1/metrics/dashboard")
     suspend fun getDashboardMetrics(
-        @Query("dateRange") dateRange: String,
-        @Query("tenantId") tenantId: String? = null,
-        @Query("userId") userId: String? = null,
-        @Query("modelId") modelId: String? = null
+        @Body request: GetDashboardMetricsRequest
     ): DashboardMetricsResponse
 
-    @GET("api/v1/metrics/ai-usage")
+    @POST("api/v1/metrics/ai-usage")
     suspend fun getAiUsage(
-        @Query("dateRange") dateRange: String,
-        @Query("granularity") granularity: String = "hourly"
+        @Body request: GetAiUsageRequest
     ): AiUsageResponse
 
-    @GET("api/v1/metrics/tokens")
+    @POST("api/v1/metrics/tokens")
     suspend fun getTokenConsumption(
-        @Query("dateRange") dateRange: String
+        @Body request: GetTokenConsumptionRequest
     ): TokenConsumptionResponse
 
-    @GET("api/v1/metrics/model-performance")
+    @POST("api/v1/metrics/model-performance")
     suspend fun getModelPerformance(
-        @Query("dateRange") dateRange: String
+        @Body request: GetModelPerformanceRequest
     ): ModelPerformanceResponse
 
-    @GET("api/v1/health")
-    suspend fun getSystemHealth(): SystemHealthResponse
+    @POST("api/v1/health")
+    suspend fun getSystemHealth(@Body request: GetSystemHealthRequest): SystemHealthResponse
 
-    @GET("api/v1/agents/active")
-    suspend fun getActiveAgents(): List<AgentStatusResponse>
+    @POST("api/v1/agents/active")
+    suspend fun getActiveAgents(@Body request: GetActiveAgentsRequest): List<AgentStatusResponse>
 
-    @GET("api/v1/activity/recent")
+    @POST("api/v1/activity/recent")
     suspend fun getRecentActivity(
-        @Query("limit") limit: Int = 20
+        @Body request: GetRecentActivityRequest
     ): List<ActivityEventResponse>
 }
 ```

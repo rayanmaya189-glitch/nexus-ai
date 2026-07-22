@@ -6,7 +6,7 @@
 
 ## 1. Overview
 
-AeroXe Nexus AI frontend integrates with the backend via REST APIs, WebSocket connections, and event-driven systems. This guide covers every integration point.
+AeroXe Nexus AI frontend integrates with the backend via REST + Protobuf APIs, WebSocket connections, and event-driven systems. This guide covers every integration point.
 
 ```
 ┌─────────────────────────────────────────────────────┐
@@ -148,19 +148,19 @@ export const authApi = {
   refreshToken: (refreshToken: string) =>
     apiClient.post('/api/v1/auth/refresh', { refresh_token: refreshToken }),
 
-  getProfile: () => apiClient.get('/api/v1/auth/profile'),
+  getProfile: () => apiClient.post('/api/v1/auth/profile', {}),
 };
 
 export const agentApi = {
-  list: () => apiClient.get<{ agents: Agent[] }>('/api/v1/agents'),
+  list: () => apiClient.post<{ agents: Agent[] }>('/api/v1/agents', {}),
 
-  get: (id: string) => apiClient.get<Agent>(`/api/v1/agents/${id}`),
+  get: (id: string) => apiClient.post<Agent>(`/api/v1/agents/${id}`, {}),
 
   create: (data: Partial<Agent>) =>
     apiClient.post<Agent>('/api/v1/agents', data),
 
   update: (id: string, data: Partial<Agent>) =>
-    apiClient.put<Agent>(`/api/v1/agents/${id}`, data),
+    apiClient.patch<Agent>(`/api/v1/agents/${id}`, data),
 
   delete: (id: string) => apiClient.delete(`/api/v1/agents/${id}`),
 };
@@ -170,11 +170,12 @@ export const chatApi = {
     apiClient.post<Message>('/api/v1/ai/chat', data),
 
   getConversations: () =>
-    apiClient.get<{ conversations: Conversation[] }>('/api/v1/ai/conversations'),
+    apiClient.post<{ conversations: Conversation[] }>('/api/v1/ai/conversations', {}),
 
   getMessages: (conversationId: string) =>
-    apiClient.get<{ messages: Message[] }>(
-      `/api/v1/ai/conversations/${conversationId}/messages`
+    apiClient.post<{ messages: Message[] }>(
+      `/api/v1/ai/conversations/${conversationId}/messages`,
+      {}
     ),
 
   deleteConversation: (id: string) =>
@@ -182,16 +183,16 @@ export const chatApi = {
 };
 
 export const dashboardApi = {
-  getStats: () => apiClient.get<DashboardStats>('/api/v1/dashboard/stats'),
+  getStats: () => apiClient.post<DashboardStats>('/api/v1/dashboard/stats', {}),
 
   getBroadbandMetrics: () =>
-    apiClient.get('/api/v1/dashboard/broadband'),
+    apiClient.post('/api/v1/dashboard/broadband', {}),
 
   getERPMetrics: () =>
-    apiClient.get('/api/v1/dashboard/erp'),
+    apiClient.post('/api/v1/dashboard/erp', {}),
 
   getCRMMetrics: () =>
-    apiClient.get('/api/v1/dashboard/crm'),
+    apiClient.post('/api/v1/dashboard/crm', {}),
 };
 
 export const fileApi = {
@@ -210,7 +211,7 @@ export const fileApi = {
   },
 
   download: (fileId: string) =>
-    apiClient.get(`/api/v1/rag/documents/${fileId}`, { responseType: 'blob' }),
+    apiClient.post(`/api/v1/rag/documents/${fileId}`, {}, { responseType: 'blob' }),
 };
 ```
 

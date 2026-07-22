@@ -952,24 +952,24 @@ interface HealthStatus {
 
 | Method   | Endpoint                       | Description                  |
 |----------|--------------------------------|------------------------------|
-| `GET`    | `/api/models`                  | List all models              |
-| `GET`    | `/api/models/:id`              | Get model details            |
+| `POST`   | `/api/models`                  | List all models              |
+| `POST`   | `/api/models/:id`              | Get model details            |
 | `POST`   | `/api/models/download`         | Start model download         |
 | `DELETE` | `/api/models/:id`              | Remove model                 |
 | `POST`   | `/api/models/:id/start`        | Start/load model             |
 | `POST`   | `/api/models/:id/stop`         | Stop/unload model            |
 | `PATCH`  | `/api/models/:id/config`       | Update model configuration   |
-| `GET`    | `/api/models/:id/performance`  | Get performance metrics      |
-| `GET`    | `/api/models/:id/logs`         | Get model logs               |
-| `GET`    | `/api/gpu`                     | Get GPU status               |
-| `GET`    | `/api/gpu/usage`               | Get GPU usage history        |
-| `GET`    | `/api/models/routing`          | Get routing rules            |
-| `PUT`    | `/api/models/routing`          | Update routing rules         |
-| `GET`    | `/api/models/health`           | Get health status            |
+| `POST`   | `/api/models/:id/performance`  | Get performance metrics      |
+| `POST`   | `/api/models/:id/logs`         | Get model logs               |
+| `POST`   | `/api/gpu`                     | Get GPU status               |
+| `POST`   | `/api/gpu/usage`               | Get GPU usage history        |
+| `POST`   | `/api/models/routing`          | Get routing rules            |
+| `PATCH`  | `/api/models/routing`          | Update routing rules         |
+| `POST`   | `/api/models/health`           | Get health status            |
 | `POST`   | `/api/models/:id/health-check` | Trigger health check         |
-| `GET`    | `/api/models/compare`          | Compare models               |
-| `GET`    | `/api/models/analytics`        | Get usage analytics          |
-| `GET`    | `/api/models/costs`            | Get cost data                |
+| `POST`   | `/api/models/compare`          | Compare models               |
+| `POST`   | `/api/models/analytics`        | Get usage analytics          |
+| `POST`   | `/api/models/costs`            | Get cost data                |
 
 ---
 
@@ -984,7 +984,7 @@ export function useModels(filters?: ModelFilters) {
 
   const models = useQuery({
     queryKey: ['models', filters],
-    queryFn: () => api.get('/models', { params: filters }),
+    queryFn: () => api.post('/models', filters),
     staleTime: 10_000,
   });
 
@@ -1014,7 +1014,7 @@ export function useModels(filters?: ModelFilters) {
 export function useModelPerformance(modelId: string, timeRange: TimeRange) {
   return useQuery({
     queryKey: ['model-performance', modelId, timeRange],
-    queryFn: () => api.get(`/models/${modelId}/performance`, { params: { range: timeRange } }),
+    queryFn: () => api.post(`/models/${modelId}/performance`, { range: timeRange }),
     refetchInterval: 30_000,
   });
 }
@@ -1027,13 +1027,13 @@ export function useModelPerformance(modelId: string, timeRange: TimeRange) {
 export function useGPU() {
   const gpuStatus = useQuery({
     queryKey: ['gpu'],
-    queryFn: () => api.get('/gpu'),
+    queryFn: () => api.post('/gpu', {}),
     refetchInterval: 5_000,
   });
 
   const gpuHistory = useQuery({
     queryKey: ['gpu-history'],
-    queryFn: () => api.get('/gpu/usage'),
+    queryFn: () => api.post('/gpu/usage', {}),
   });
 
   return { gpuStatus, gpuHistory };

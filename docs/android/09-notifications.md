@@ -1433,26 +1433,24 @@ interface NotificationApiService {
     @HTTP(method = "DELETE", path = "api/v1/notifications/fcm-token")
     suspend fun unregisterFcmToken(@Body request: FcmTokenRequest): Response<Unit>
 
-    @GET("api/v1/notifications")
+    @POST("api/v1/notifications")
     suspend fun getNotifications(
-        @Query("page") page: Int = 1,
-        @Query("limit") limit: Int = 50,
-        @Query("unreadOnly") unreadOnly: Boolean = false
+        @Body request: GetNotificationsRequest
     ): PaginatedResponse<NotificationDto>
 
-    @PUT("api/v1/notifications/{id}/read")
+    @PATCH("api/v1/notifications/{id}/read")
     suspend fun markRead(@Path("id") notificationId: String): Response<Unit>
 
-    @PUT("api/v1/notifications/read-all")
+    @PATCH("api/v1/notifications/read-all")
     suspend fun markAllRead(): Response<Unit>
 
     @DELETE("api/v1/notifications/{id}")
     suspend fun deleteNotification(@Path("id") notificationId: String): Response<Unit>
 
-    @GET("api/v1/notifications/preferences")
-    suspend fun getPreferences(): NotificationPreferencesDto
+    @POST("api/v1/notifications/preferences")
+    suspend fun getPreferences(@Body request: GetPreferencesRequest): NotificationPreferencesDto
 
-    @PUT("api/v1/notifications/preferences")
+    @PATCH("api/v1/notifications/preferences")
     suspend fun updatePreferences(@Body request: UpdatePreferencesRequest): NotificationPreferencesDto
 
     @POST("api/v1/notifications/{id}/action")

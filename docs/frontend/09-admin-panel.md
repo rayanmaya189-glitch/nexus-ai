@@ -968,7 +968,7 @@ interface TenantOverride {
 export function FeatureFlags() {
   const { data: flags, isLoading } = useQuery({
     queryKey: ['admin', 'feature-flags'],
-    queryFn: () => api.get('/admin/feature-flags'),
+    queryFn: () => api.post('/admin/feature-flags', {}),
   });
 
   const updateFlag = useMutation({
@@ -1031,32 +1031,32 @@ export function FeatureFlags() {
 
 | Method   | Endpoint                         | Description              |
 |----------|----------------------------------|--------------------------|
-| `GET`    | `/api/admin/users`               | List all users           |
+| `POST`   | `/api/admin/users`               | List all users           |
 | `POST`   | `/api/admin/users`               | Create user              |
-| `GET`    | `/api/admin/users/:id`           | Get user details         |
+| `POST`   | `/api/admin/users/:id`           | Get user details         |
 | `PATCH`  | `/api/admin/users/:id`           | Update user              |
 | `DELETE` | `/api/admin/users/:id`           | Delete user              |
 | `POST`   | `/api/admin/users/:id/ban`       | Ban user                 |
 | `POST`   | `/api/admin/users/:id/unban`     | Unban user               |
-| `GET`    | `/api/admin/tenants`             | List tenants             |
+| `POST`   | `/api/admin/tenants`             | List tenants             |
 | `POST`   | `/api/admin/tenants`             | Create tenant            |
-| `GET`    | `/api/admin/tenants/:id`         | Get tenant details       |
+| `POST`   | `/api/admin/tenants/:id`         | Get tenant details       |
 | `PATCH`  | `/api/admin/tenants/:id`         | Update tenant            |
 | `DELETE` | `/api/admin/tenants/:id`         | Delete tenant            |
-| `GET`    | `/api/admin/kyc`                 | List KYC applications    |
-| `GET`    | `/api/admin/kyc/:id`             | Get KYC details          |
+| `POST`   | `/api/admin/kyc`                 | List KYC applications    |
+| `POST`   | `/api/admin/kyc/:id`             | Get KYC details          |
 | `PATCH`  | `/api/admin/kyc/:id/approve`     | Approve KYC              |
 | `PATCH`  | `/api/admin/kyc/:id/reject`      | Reject KYC               |
-| `GET`    | `/api/admin/billing`             | Get billing overview     |
-| `GET`    | `/api/admin/billing/invoices`    | List invoices            |
+| `POST`   | `/api/admin/billing`             | Get billing overview     |
+| `POST`   | `/api/admin/billing/invoices`    | List invoices            |
 | `POST`   | `/api/admin/billing/invoices/:id/send` | Resend invoice  |
-| `GET`    | `/api/admin/plans`               | List plans               |
+| `POST`   | `/api/admin/plans`               | List plans               |
 | `POST`   | `/api/admin/plans`               | Create plan              |
 | `PATCH`  | `/api/admin/plans/:id`           | Update plan              |
-| `GET`    | `/api/admin/usage`               | Get usage analytics      |
-| `GET`    | `/api/admin/settings`            | Get system settings      |
+| `POST`   | `/api/admin/usage`               | Get usage analytics      |
+| `POST`   | `/api/admin/settings`            | Get system settings      |
 | `PATCH`  | `/api/admin/settings`            | Update system settings   |
-| `GET`    | `/api/admin/feature-flags`       | List feature flags       |
+| `POST`   | `/api/admin/feature-flags`       | List feature flags       |
 | `PATCH`  | `/api/admin/feature-flags/:id`   | Update feature flag      |
 
 ---
@@ -1072,7 +1072,7 @@ export function useUsers(filters?: UserFilters) {
 
   const users = useQuery({
     queryKey: ['admin-users', filters],
-    queryFn: () => api.get('/admin/users', { params: filters }),
+    queryFn: () => api.post('/admin/users', filters),
   });
 
   const createUser = useMutation({
@@ -1109,7 +1109,7 @@ export function useTenants(filters?: TenantFilters) {
 
   const tenants = useQuery({
     queryKey: ['admin-tenants', filters],
-    queryFn: () => api.get('/admin/tenants', { params: filters }),
+    queryFn: () => api.post('/admin/tenants', filters),
   });
 
   const createTenant = useMutation({
@@ -1136,7 +1136,7 @@ export function useKYC(filters?: KYCFilters) {
 
   const applications = useQuery({
     queryKey: ['admin-kyc', filters],
-    queryFn: () => api.get('/admin/kyc', { params: filters }),
+    queryFn: () => api.post('/admin/kyc', filters),
   });
 
   const approveKYC = useMutation({
@@ -1162,12 +1162,12 @@ export function useKYC(filters?: KYCFilters) {
 export function useBilling() {
   const overview = useQuery({
     queryKey: ['admin-billing'],
-    queryFn: () => api.get('/admin/billing'),
+    queryFn: () => api.post('/admin/billing', {}),
   });
 
   const invoices = useQuery({
     queryKey: ['admin-invoices'],
-    queryFn: () => api.get('/admin/billing/invoices'),
+    queryFn: () => api.post('/admin/billing/invoices', {}),
   });
 
   const sendInvoice = useMutation({

@@ -663,7 +663,7 @@ enum APIEndpoint: Endpoint {
         case .login, .refreshToken, .chat:
             return .post
         case .conversations, .agents, .knowledge:
-            return .get
+            return .post
         }
     }
 }
@@ -1267,7 +1267,7 @@ struct AppLogger {
 let networkLogger = AppLogger(category: .network)
 let chatLogger = AppLogger(category: .chat)
 
-networkLogger.info("GET /api/v1/conversations - 200 OK")
+networkLogger.info("POST /api/v1/conversations - 200 OK")
 chatLogger.error("WebSocket connection failed", error: connectionError)
 ```
 

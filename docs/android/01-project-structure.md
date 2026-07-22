@@ -741,20 +741,19 @@ interface ApiService {
     @POST("api/v1/auth/refresh")
     suspend fun refreshToken(@Body request: RefreshTokenRequest): RefreshTokenResponse
 
-    @GET("api/v1/agents")
-    suspend fun getAgents(): ApiResponse<List<AgentDto>>
+    @POST("api/v1/agents")
+    suspend fun getAgents(@Body request: GetAgentsRequest): ApiResponse<List<AgentDto>>
 
-    @GET("api/v1/models")
-    suspend fun getModels(): ApiResponse<List<ModelDto>>
+    @POST("api/v1/models")
+    suspend fun getModels(@Body request: GetModelsRequest): ApiResponse<List<ModelDto>>
 
-    @GET("api/v1/conversations")
-    suspend fun getConversations(): ApiResponse<List<ConversationDto>>
+    @POST("api/v1/conversations")
+    suspend fun getConversations(@Body request: GetConversationsRequest): ApiResponse<List<ConversationDto>>
 
-    @GET("api/v1/conversations/{id}/messages")
+    @POST("api/v1/conversations/{id}/messages")
     suspend fun getMessages(
         @Path("id") conversationId: String,
-        @Query("limit") limit: Int = 50,
-        @Query("offset") offset: Int = 0
+        @Body request: GetMessagesRequest
     ): ApiResponse<List<MessageDto>>
 
     @POST("api/v1/conversations")

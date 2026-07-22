@@ -210,7 +210,7 @@ export interface NotificationAction {
   label: string;
   variant: "primary" | "danger" | "ghost";
   endpoint?: string;
-  method?: "POST" | "PUT" | "DELETE";
+  method?: "POST" | "PATCH" | "DELETE";
 }
 
 export interface NotificationPreference {
@@ -747,13 +747,13 @@ export function NotificationAction({ action }: { action: NotificationAction }) {
 
 | Endpoint | Method | Description |
 |---|---|---|
-| `GET /api/notifications` | `GET` | List notifications (paginated) |
-| `GET /api/notifications/unread-count` | `GET` | Get unread count |
-| `PUT /api/notifications/:id/read` | `PUT` | Mark single as read |
-| `PUT /api/notifications/read-all` | `PUT` | Mark all as read |
+| `POST /api/notifications` | `POST` | List notifications (paginated) |
+| `POST /api/notifications/unread-count` | `POST` | Get unread count |
+| `PATCH /api/notifications/:id/read` | `PATCH` | Mark single as read |
+| `PATCH /api/notifications/read-all` | `PATCH` | Mark all as read |
 | `DELETE /api/notifications` | `DELETE` | Clear all notifications |
-| `GET /api/notifications/preferences` | `GET` | Get preferences |
-| `PUT /api/notifications/preferences` | `PUT` | Update preferences |
+| `POST /api/notifications/preferences` | `POST` | Get preferences |
+| `PATCH /api/notifications/preferences` | `PATCH` | Update preferences |
 | `POST /api/notifications/action/:id` | `POST` | Execute action |
 
 ## 15. Responsive Design
@@ -818,12 +818,12 @@ function NotificationLiveRegion() {
 export function useNotificationPreferences() {
   const { data: preferences, isLoading } = useQuery({
     queryKey: ["notification-preferences"],
-    queryFn: () => api.get("/api/notifications/preferences").then((r) => r.data),
+    queryFn: () => api.post("/api/notifications/preferences", {}).then((r) => r.data),
   });
 
   const updateMutation = useMutation({
     mutationFn: (prefs: Partial<NotificationPreference>[]) =>
-      api.put("/api/notifications/preferences", { preferences: prefs }),
+      api.patch("/api/notifications/preferences", { preferences: prefs }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["notification-preferences"] });
     },

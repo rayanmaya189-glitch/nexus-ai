@@ -1390,7 +1390,7 @@ final class DefaultDashboardAPIService: DashboardAPIService {
         }
         components.queryItems = queryItems
 
-        let request = try URLRequest(url: components.url!, method: .get)
+        let request = try URLRequest(url: components.url!, method: .post)
         let (data, response) = try await networkClient.execute(request)
 
         guard let httpResponse = response as? HTTPURLResponse else {
@@ -1412,7 +1412,7 @@ final class DefaultDashboardAPIService: DashboardAPIService {
             URLQueryItem(name: "date_range", value: filters.dateRange.rawValue)
         ]
 
-        let request = try URLRequest(url: components.url!, method: .get)
+        let request = try URLRequest(url: components.url!, method: .post)
         let (data, _) = try await networkClient.execute(request)
         return try JSONDecoder().decode([MetricPoint].self, from: data)
     }

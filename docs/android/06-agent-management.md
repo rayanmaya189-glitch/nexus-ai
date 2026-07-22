@@ -2341,22 +2341,18 @@ when (val status = step.status) {
 ```kotlin
 interface AgentApiService {
 
-    @GET("api/v1/agents")
+    @POST("api/v1/agents")
     suspend fun getAgents(
-        @Query("search") search: String? = null,
-        @Query("status") status: String? = null,
-        @Query("sort") sort: String = "name",
-        @Query("page") page: Int = 1,
-        @Query("limit") limit: Int = 20
+        @Body request: GetAgentsRequest
     ): PaginatedResponse<AgentDto>
 
-    @GET("api/v1/agents/{id}")
-    suspend fun getAgent(@Path("id") agentId: String): AgentDto
+    @POST("api/v1/agents/{id}")
+    suspend fun getAgent(@Path("id") agentId: String, @Body request: GetAgentRequest): AgentDto
 
-    @POST("api/v1/agents")
+    @POST("api/v1/agents/create")
     suspend fun createAgent(@Body request: CreateAgentRequest): AgentDto
 
-    @PUT("api/v1/agents/{id}")
+    @PATCH("api/v1/agents/{id}")
     suspend fun updateAgent(@Path("id") agentId: String, @Body request: UpdateAgentRequest): AgentDto
 
     @DELETE("api/v1/agents/{id}")
@@ -2371,11 +2367,10 @@ interface AgentApiService {
     @POST("api/v1/agents/{id}/sql-connections")
     suspend fun bindSqlConnections(@Path("id") agentId: String, @Body request: BindSqlConnectionsRequest): AgentDto
 
-    @GET("api/v1/agents/{id}/executions")
+    @POST("api/v1/agents/{id}/executions")
     suspend fun getExecutionHistory(
         @Path("id") agentId: String,
-        @Query("page") page: Int = 1,
-        @Query("limit") limit: Int = 20
+        @Body request: GetExecutionHistoryRequest
     ): PaginatedResponse<ExecutionDto>
 
     @POST("api/v1/sql-connections/{id}/test")

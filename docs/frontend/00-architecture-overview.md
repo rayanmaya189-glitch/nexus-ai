@@ -43,7 +43,7 @@
               │                    │                     │
     ┌─────────▼──────┐  ┌─────────▼──────┐  ┌─────────▼──────┐
     │  Nexus API GW  │  │  WebSocket GW  │  │  Static Assets │
-    │  (REST + gRPC) │  │  (Real-time)   │  │  (CDN / S3)    │
+    │  (Protobuf over HTTP) │  │  (Real-time)   │  │  (CDN / S3)    │
     └────────────────┘  └────────────────┘  └────────────────┘
               │                    │
     ┌─────────▼────────────────────▼────────────────────┐
@@ -558,7 +558,7 @@ interface ChatStore {
 │  API Client (Axios + JWT interceptors)               │
 │     │                                                │
 │     ▼                                                │
-│  Backend API (REST + WebSocket)                      │
+│  Backend API (Protobuf over HTTP + WebSocket)         │
 │                                                       │
 └─────────────────────────────────────────────────────┘
 ```
@@ -964,17 +964,17 @@ PR Review:   Visual regression + Lighthouse score
 
 | Frontend Feature | Backend Service | Protocol |
 |---|---|---|
-| Login / Register | identity-service | REST |
+| Login / Register | identity-service | Protobuf over HTTP |
 | Chat Streaming | ai-gateway-service | WebSocket |
-| Agent Management | agent-orchestrator-service | REST + gRPC |
-| Document Upload | rag-service | REST (multipart) |
-| Knowledge Search | rag-service | REST |
-| Vision Analysis | vision-service | REST (multipart) |
-| SQL Queries | sql-agent-service | REST |
-| Dashboard Metrics | ai-gateway-service | REST |
-| System Health | All services | REST (aggregated) |
-| Audit Logs | audit-service | REST |
-| KYC Management | identity-service | REST |
+| Agent Management | agent-orchestrator-service | Protobuf over HTTP |
+| Document Upload | rag-service | Protobuf over HTTP (multipart) |
+| Knowledge Search | rag-service | Protobuf over HTTP |
+| Vision Analysis | vision-service | Protobuf over HTTP (multipart) |
+| SQL Queries | sql-agent-service | Protobuf over HTTP |
+| Dashboard Metrics | ai-gateway-service | Protobuf over HTTP |
+| System Health | All services | Protobuf over HTTP (aggregated) |
+| Audit Logs | audit-service | Protobuf over HTTP |
+| KYC Management | identity-service | Protobuf over HTTP |
 
 ---
 

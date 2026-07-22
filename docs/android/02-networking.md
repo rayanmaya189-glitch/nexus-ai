@@ -961,29 +961,26 @@ interface ApiService {
     suspend fun resetPassword(@Body request: ResetPasswordRequest): Response<Unit>
 
     // ==================== Users ====================
-    @GET("api/v1/users/me")
-    suspend fun getCurrentUser(): Response<ApiResponse<UserDto>>
+    @POST("api/v1/users/me")
+    suspend fun getCurrentUser(@Body request: GetCurrentUserRequest): Response<ApiResponse<UserDto>>
 
-    @PUT("api/v1/users/me")
+    @PATCH("api/v1/users/me")
     suspend fun updateCurrentUser(@Body request: UpdateUserRequest): Response<ApiResponse<UserDto>>
 
-    @GET("api/v1/users/me/profile")
-    suspend fun getUserProfile(): Response<ApiResponse<UserProfileDto>>
+    @POST("api/v1/users/me/profile")
+    suspend fun getUserProfile(@Body request: GetUserProfileRequest): Response<ApiResponse<UserProfileDto>>
 
     // ==================== Agents ====================
-    @GET("api/v1/agents")
-    suspend fun getAgents(
-        @Query("page") page: Int = 1,
-        @Query("limit") limit: Int = 20
-    ): Response<ApiResponse<List<AgentDto>>>
-
-    @GET("api/v1/agents/{id}")
-    suspend fun getAgent(@Path("id") agentId: String): Response<ApiResponse<AgentDto>>
-
     @POST("api/v1/agents")
+    suspend fun getAgents(@Body request: GetAgentsRequest): Response<ApiResponse<List<AgentDto>>>
+
+    @POST("api/v1/agents/{id}")
+    suspend fun getAgent(@Path("id") agentId: String, @Body request: GetAgentRequest): Response<ApiResponse<AgentDto>>
+
+    @POST("api/v1/agents/create")
     suspend fun createAgent(@Body request: CreateAgentRequest): Response<ApiResponse<AgentDto>>
 
-    @PUT("api/v1/agents/{id}")
+    @PATCH("api/v1/agents/{id}")
     suspend fun updateAgent(
         @Path("id") agentId: String,
         @Body request: UpdateAgentRequest
@@ -993,26 +990,22 @@ interface ApiService {
     suspend fun deleteAgent(@Path("id") agentId: String): Response<Unit>
 
     // ==================== Conversations ====================
-    @GET("api/v1/ai/conversations")
-    suspend fun getConversations(
-        @Query("page") page: Int = 1,
-        @Query("limit") limit: Int = 20
-    ): Response<ApiResponse<List<ConversationDto>>>
-
-    @GET("api/v1/ai/conversations/{id}")
-    suspend fun getConversation(@Path("id") conversationId: String): Response<ApiResponse<ConversationDto>>
-
     @POST("api/v1/ai/conversations")
+    suspend fun getConversations(@Body request: GetConversationsRequest): Response<ApiResponse<List<ConversationDto>>>
+
+    @POST("api/v1/ai/conversations/{id}")
+    suspend fun getConversation(@Path("id") conversationId: String, @Body request: GetConversationRequest): Response<ApiResponse<ConversationDto>>
+
+    @POST("api/v1/ai/conversations/create")
     suspend fun createConversation(@Body request: CreateConversationRequest): Response<ApiResponse<ConversationDto>>
 
     @DELETE("api/v1/ai/conversations/{id}")
     suspend fun deleteConversation(@Path("id") conversationId: String): Response<Unit>
 
-    @GET("api/v1/ai/conversations/{id}/messages")
+    @POST("api/v1/ai/conversations/{id}/messages")
     suspend fun getMessages(
         @Path("id") conversationId: String,
-        @Query("limit") limit: Int = 50,
-        @Query("offset") offset: Int = 0
+        @Body request: GetMessagesRequest
     ): Response<ApiResponse<List<MessageDto>>>
 
     // ==================== AI Chat ====================
@@ -1020,25 +1013,19 @@ interface ApiService {
     suspend fun sendChatMessage(@Body request: ChatRequest): Response<ApiResponse<ChatResponse>>
 
     // ==================== Models ====================
-    @GET("api/v1/models")
-    suspend fun getModels(): Response<ApiResponse<List<ModelDto>>>
+    @POST("api/v1/models")
+    suspend fun getModels(@Body request: GetModelsRequest): Response<ApiResponse<List<ModelDto>>>
 
-    @GET("api/v1/models/{id}")
-    suspend fun getModel(@Path("id") modelId: String): Response<ApiResponse<ModelDto>>
+    @POST("api/v1/models/{id}")
+    suspend fun getModel(@Path("id") modelId: String, @Body request: GetModelRequest): Response<ApiResponse<ModelDto>>
 
     // ==================== Knowledge ====================
-    @GET("api/v1/knowledge")
-    suspend fun getKnowledge(
-        @Query("page") page: Int = 1,
-        @Query("limit") limit: Int = 20
-    ): Response<ApiResponse<List<KnowledgeDto>>>
+    @POST("api/v1/knowledge")
+    suspend fun getKnowledge(@Body request: GetKnowledgeRequest): Response<ApiResponse<List<KnowledgeDto>>>
 
     // ==================== RAG Knowledge ====================
-    @GET("api/v1/rag/documents")
-    suspend fun getDocuments(
-        @Query("page") page: Int = 1,
-        @Query("limit") limit: Int = 20
-    ): Response<ApiResponse<List<DocumentDto>>>
+    @POST("api/v1/rag/documents")
+    suspend fun getDocuments(@Body request: GetDocumentsRequest): Response<ApiResponse<List<DocumentDto>>>
 
     @Multipart
     @POST("api/v1/rag/documents")
@@ -1046,9 +1033,10 @@ interface ApiService {
         @Part file: MultipartBody.Part
     ): Response<ApiResponse<DocumentUploadResponse>>
 
-    @GET("api/v1/rag/documents/{id}/status")
+    @POST("api/v1/rag/documents/{id}/status")
     suspend fun getDocumentStatus(
-        @Path("id") documentId: String
+        @Path("id") documentId: String,
+        @Body request: GetDocumentStatusRequest
     ): Response<ApiResponse<DocumentStatusResponse>>
 
     @POST("api/v1/rag/search")
@@ -1081,10 +1069,9 @@ interface ApiService {
         @Body request: StoreMemoryRequest
     ): Response<Unit>
 
-    @GET("api/v1/memory/search")
+    @POST("api/v1/memory/search")
     suspend fun searchMemory(
-        @Query("q") query: String,
-        @Query("limit") limit: Int = 5
+        @Body request: SearchMemoryRequest
     ): Response<ApiResponse<List<MemoryDto>>>
 
     // ==================== Workflows ====================
@@ -1093,14 +1080,15 @@ interface ApiService {
         @Body request: StartWorkflowRequest
     ): Response<ApiResponse<WorkflowResponse>>
 
-    @GET("api/v1/workflows/{id}")
+    @POST("api/v1/workflows/{id}")
     suspend fun getWorkflow(
-        @Path("id") workflowId: String
+        @Path("id") workflowId: String,
+        @Body request: GetWorkflowRequest
     ): Response<ApiResponse<WorkflowStatusResponse>>
 
     // ==================== KYC ====================
-    @GET("api/v1/kyc/status")
-    suspend fun getKycStatus(): Response<ApiResponse<KycStatusResponse>>
+    @POST("api/v1/kyc/status")
+    suspend fun getKycStatus(@Body request: GetKycStatusRequest): Response<ApiResponse<KycStatusResponse>>
 
     @Multipart
     @POST("api/v1/kyc/documents")
@@ -1128,37 +1116,37 @@ interface ApiService {
 │  └── POST   /api/v1/auth/reset-password                 │
 │                                                          │
 │  Users                                                   │
-│  ├── GET    /api/v1/users/me                            │
-│  ├── PUT    /api/v1/users/me                            │
-│  └── GET    /api/v1/users/me/profile                    │
+│  ├── POST   /api/v1/users/me                            │
+│  ├── PATCH  /api/v1/users/me                            │
+│  └── POST   /api/v1/users/me/profile                    │
 │                                                          │
 │  Agents                                                  │
-│  ├── GET    /api/v1/agents                              │
-│  ├── GET    /api/v1/agents/{id}                         │
 │  ├── POST   /api/v1/agents                              │
-│  ├── PUT    /api/v1/agents/{id}                         │
+│  ├── POST   /api/v1/agents/{id}                         │
+│  ├── POST   /api/v1/agents/create                       │
+│  ├── PATCH  /api/v1/agents/{id}                         │
 │  └── DELETE /api/v1/agents/{id}                         │
 │                                                          │
 │  Conversations                                           │
-│  ├── GET    /api/v1/ai/conversations                       │
-│  ├── GET    /api/v1/ai/conversations/{id}                  │
-│  ├── POST   /api/v1/ai/conversations                       │
-│  ├── DELETE /api/v1/ai/conversations/{id}                  │
-│  └── GET    /api/v1/ai/conversations/{id}/messages         │
+│  ├── POST   /api/v1/ai/conversations                    │
+│  ├── POST   /api/v1/ai/conversations/{id}               │
+│  ├── POST   /api/v1/ai/conversations/create             │
+│  ├── DELETE /api/v1/ai/conversations/{id}               │
+│  └── POST   /api/v1/ai/conversations/{id}/messages      │
 │                                                          │
 │  AI Chat                                                 │
-│  └── POST   /api/v1/ai/chat                               │
+│  └── POST   /api/v1/ai/chat                             │
 │                                                          │
 │  Models                                                  │
-│  ├── GET    /api/v1/models                              │
-│  └── GET    /api/v1/models/{id}                         │
+│  ├── POST   /api/v1/models                              │
+│  └── POST   /api/v1/models/{id}                         │
 │                                                          │
 │  Knowledge                                               │
-│  ├── GET    /api/v1/rag/documents                        │
-│  ├── POST   /api/v1/rag/documents                        │
-│  ├── GET    /api/v1/rag/documents/{id}/status             │
-│  ├── POST   /api/v1/rag/search                           │
-│  └── DELETE /api/v1/rag/documents/{id}                    │
+│  ├── POST   /api/v1/rag/documents                       │
+│  ├── POST   /api/v1/rag/documents                       │
+│  ├── POST   /api/v1/rag/documents/{id}/status           │
+│  ├── POST   /api/v1/rag/search                          │
+│  └── DELETE /api/v1/rag/documents/{id}                  │
 │                                                          │
 │  Vision                                                  │
 │  ├── POST   /api/v1/vision/analyze                       │
@@ -1169,18 +1157,18 @@ interface ApiService {
 │  └── POST   /api/v1/sql/query                            │
 │                                                          │
 │  Memory                                                  │
-│  ├── POST   /api/v1/memory                               │
-│  ├── GET    /api/v1/memory/search                         │
-│  └── GET    /api/v1/memory/context/{session_id}           │
+│  ├── POST   /api/v1/memory                              │
+│  ├── POST   /api/v1/memory/search                       │
+│  └── POST   /api/v1/memory/context/{session_id}         │
 │                                                          │
 │  Workflows                                               │
-│  ├── POST   /api/v1/workflows/start                       │
-│  └── GET    /api/v1/workflows/{id}                        │
+│  ├── POST   /api/v1/workflows/start                     │
+│  └── POST   /api/v1/workflows/{id}                      │
 │                                                          │
 │  KYC                                                     │
-│  ├── GET    /api/v1/kyc/status                            │
-│  ├── POST   /api/v1/kyc/documents                         │
-│  └── POST   /api/v1/kyc/submit                            │
+│  ├── POST   /api/v1/kyc/status                          │
+│  ├── POST   /api/v1/kyc/documents                       │
+│  └── POST   /api/v1/kyc/submit                          │
 └─────────────────────────────────────────────────────────┘
 ```
 
@@ -1746,8 +1734,8 @@ class NetworkCallback @Inject constructor(
 │  └── firebase.googleapis.com:443 (push)                │
 │                                                          │
 │  Request Queue:                                          │
-│  ├── GET /api/v1/agents      [pending]    12ms          │
-│  ├── GET /api/v1/models      [completed]  45ms          │
+│  ├── POST /api/v1/agents     [pending]    12ms          │
+│  ├── POST /api/v1/models     [completed]  45ms          │
 │  └── POST /api/v1/ai/chat    [completed]  120ms         │
 │                                                          │
 │  Cache:                                                  │

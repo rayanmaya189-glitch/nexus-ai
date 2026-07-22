@@ -2053,45 +2053,40 @@ interface DocumentApiService {
         @Part("tags") tags: RequestBody? = null
     ): DocumentDto
 
-    @GET("api/v1/documents")
+    @POST("api/v1/documents")
     suspend fun getDocuments(
-        @Query("page") page: Int = 1,
-        @Query("limit") limit: Int = 50,
-        @Query("search") search: String? = null,
-        @Query("type") type: String? = null,
-        @Query("status") status: String? = null
+        @Body request: GetDocumentsRequest
     ): PaginatedResponse<DocumentDto>
 
-    @GET("api/v1/documents/{id}")
-    suspend fun getDocument(@Path("id") documentId: String): DocumentDto
+    @POST("api/v1/documents/{id}")
+    suspend fun getDocument(@Path("id") documentId: String, @Body request: GetDocumentRequest): DocumentDto
 
     @DELETE("api/v1/documents/{id}")
     suspend fun deleteDocument(@Path("id") documentId: String)
 
-    @PUT("api/v1/documents/{id}/metadata")
+    @PATCH("api/v1/documents/{id}/metadata")
     suspend fun updateMetadata(
         @Path("id") documentId: String,
         @Body request: UpdateMetadataRequest
     ): DocumentDto
 
-    @GET("api/v1/documents/{id}/chunks")
+    @POST("api/v1/documents/{id}/chunks")
     suspend fun getChunks(
         @Path("id") documentId: String,
-        @Query("page") page: Int = 1,
-        @Query("limit") limit: Int = 20
+        @Body request: GetChunksRequest
     ): PaginatedResponse<DocumentChunkDto>
 
-    @GET("api/v1/documents/{id}/processing-status")
-    suspend fun getProcessingStatus(@Path("id") documentId: String): ProcessingStatusDto
+    @POST("api/v1/documents/{id}/processing-status")
+    suspend fun getProcessingStatus(@Path("id") documentId: String, @Body request: GetProcessingStatusRequest): ProcessingStatusDto
 
     @POST("api/v1/documents/search")
     suspend fun searchDocuments(@Body request: DocumentSearchRequest): List<SearchResultDto>
 
     // Document Sets
-    @GET("api/v1/document-sets")
-    suspend fun getSets(): List<DocumentSetDto>
-
     @POST("api/v1/document-sets")
+    suspend fun getSets(@Body request: GetDocumentSetsRequest): List<DocumentSetDto>
+
+    @POST("api/v1/document-sets/create")
     suspend fun createSet(@Body request: CreateDocumentSetRequest): DocumentSetDto
 
     @DELETE("api/v1/document-sets/{id}")

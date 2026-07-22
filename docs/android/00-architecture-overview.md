@@ -32,7 +32,7 @@
 | Architecture | Clean Architecture + MVVM | Separation of concerns |
 | DI | Hilt (Dagger) | Dependency injection |
 | Local DB | Room | SQLite abstraction |
-| Networking | OkHttp + Retrofit | HTTP client + REST API |
+| Networking | OkHttp + Retrofit | HTTP client + REST + Protobuf API |
 | WebSocket | OkWs | Real-time streaming |
 | Serialization | Kotlinx.serialization | JSON parsing |
 | Image Loading | Coil | Compose image loading |

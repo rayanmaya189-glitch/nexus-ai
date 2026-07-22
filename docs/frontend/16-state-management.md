@@ -559,13 +559,13 @@ export const useSettingsStore = create<SettingsState & SettingsActions>()(
 
         loadSettings: async () => {
           set({ isLoading: true });
-          const response = await api.get("/api/user/settings");
+          const response = await api.post("/api/user/settings", {});
           set({ settings: response.data, isLoading: false });
         },
 
         saveSettings: async () => {
           const { settings } = get();
-          await api.put("/api/user/settings", settings);
+          await api.patch("/api/user/settings", settings);
         },
       })),
       { name: "nexus-settings" }
@@ -723,7 +723,7 @@ import { queryKeys } from "@/lib/queryKeys";
 export function useAgents(filters?: AgentFilters) {
   return useQuery({
     queryKey: queryKeys.agents.list(filters ?? {}),
-    queryFn: () => api.get("/api/agents", { params: filters }).then((r) => r.data),
+    queryFn: () => api.post("/api/agents", { filters }).then((r) => r.data),
     staleTime: 30_000,
     placeholderData: keepPreviousData,
   });
@@ -732,7 +732,7 @@ export function useAgents(filters?: AgentFilters) {
 export function useAgent(id: string) {
   return useQuery({
     queryKey: queryKeys.agents.detail(id),
-    queryFn: () => api.get(`/api/agents/${id}`).then((r) => r.data),
+    queryFn: () => api.post(`/api/agents/${id}`, {}).then((r) => r.data),
     enabled: !!id,
   });
 }
@@ -741,7 +741,7 @@ export function useAgentExecutions(agentId: string) {
   return useQuery({
     queryKey: queryKeys.agents.executions(agentId),
     queryFn: () =>
-      api.get(`/api/agents/${agentId}/executions`).then((r) => r.data),
+      api.post(`/api/agents/${agentId}/executions`, {}).then((r) => r.data),
     enabled: !!agentId,
   });
 }
@@ -769,7 +769,7 @@ export function useUpdateAgent() {
 
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdateAgentInput }) =>
-      api.put(`/api/agents/${id}`, data).then((r) => r.data),
+      api.patch(`/api/agents/${id}`, data).then((r) => r.data),
 
     // Optimistic update
     onMutate: async ({ id, data }) => {
@@ -808,7 +808,7 @@ export function useInfiniteDocuments(filters: DocFilters) {
     queryKey: [...queryKeys.documents.all, "infinite", filters],
     queryFn: ({ pageParam = 1 }) =>
       api
-        .get("/api/documents", { params: { ...filters, page: pageParam, limit: 20 } })
+        .post("/api/documents", { filters, page: pageParam, limit: 20 })
         .then((r) => r.data),
     getNextPageParam: (lastPage) =>
       lastPage.page < lastPage.totalPages ? lastPage.page + 1 : undefined,
@@ -851,7 +851,7 @@ export function useToggleDocumentFavorite() {
 
   return useMutation({
     mutationFn: (docId: string) =>
-      api.put(`/api/documents/${docId}/favorite`).then((r) => r.data),
+      api.patch(`/api/documents/${docId}/favorite`).then((r) => r.data),
 
     onMutate: async (docId) => {
       await queryClient.cancelQueries({ queryKey: queryKeys.documents.all });
@@ -922,7 +922,7 @@ const prefetchAgent = useCallback(
   (id: string) => {
     queryClient.prefetchQuery({
       queryKey: queryKeys.agents.detail(id),
-      queryFn: () => api.get(`/api/agents/${id}`).then((r) => r.data),
+      queryFn: () => api.post(`/api/agents/${id}`, {}).then((r) => r.data),
       staleTime: 60_000,
     });
   },

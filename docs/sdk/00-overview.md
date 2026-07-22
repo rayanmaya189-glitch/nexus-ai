@@ -26,13 +26,13 @@ The AeroXe Nexus AI SDK provides official client libraries for six programming l
 ```
 Client Applications
     |
-    | HTTPS / WebSocket / gRPC
+    | HTTPS / WebSocket (Protobuf over HTTP)
     v
-Nexus API Gateway (Axum + Tonic)
+Nexus API Gateway (Axum)
     |
     | Internal gRPC + NATS JetStream
     v
-Microservices:
+Microservices (modular monolith):
     - identity-service (Auth, Users, Tenants, RBAC)
     - ai-gateway-service (Chat, Streaming)
     - agent-orchestrator-service (Agent Execution)
@@ -50,7 +50,7 @@ Microservices:
 
 ## 3. SDK Feature Matrix
 
-| Feature | REST Protobuf | WebSocket | Go | Java | Python | Rust | Node.js | Elixir |
+| Feature | Protobuf over HTTP | WebSocket | Go | Java | Python | Rust | Node.js | Elixir |
 |---|---|---|---|---|---|---|---|---|
 | Authentication | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Token Refresh | ✓ | - | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
@@ -142,7 +142,7 @@ Each SDK manages token storage differently:
 
 ```http
 Authorization: Bearer <jwt>
-Content-Type: application/json
+Content-Type: application/json  # Protobuf (proto3) JSON-serialized
 X-Request-ID: <uuid>
 X-Tenant-ID: <tenant_id>
 User-Agent: nexus-sdk-<language>/<version>
@@ -259,7 +259,7 @@ wss://api.aeroxenexus.com/ws/chat/{conversation_id}
 
 ## 10. Pagination
 
-### REST Protobuf Pagination
+### Protobuf over HTTP Pagination
 
 All list operations use POST with pagination in the request body:
 
@@ -368,7 +368,7 @@ X-Rate-Limit-Reset: 1700000000
 | POST | `/api/v1/rag/upload-document` | Upload document |
 | POST | `/api/v1/rag/get-document-status` | Get processing status |
 | POST | `/api/v1/rag/list-documents` | List documents |
-| POST | `/api/v1/rag/delete-document` | Delete document |
+| DELETE | `/api/v1/rag/delete-document` | Delete document |
 | POST | `/api/v1/rag/search` | Search knowledge base |
 
 ### Vision
@@ -391,7 +391,7 @@ X-Rate-Limit-Reset: 1700000000
 |---|---|---|
 | POST | `/api/v1/memory/store` | Store memory |
 | POST | `/api/v1/memory/search` | Search memory |
-| POST | `/api/v1/memory/delete` | Delete memory |
+| DELETE | `/api/v1/memory/delete` | Delete memory |
 
 ### Workflow
 
@@ -413,8 +413,8 @@ X-Rate-Limit-Reset: 1700000000
 |---|---|---|
 | POST | `/api/v1/admin/list-users` | List users |
 | POST | `/api/v1/admin/create-user` | Create user |
-| POST | `/api/v1/admin/update-user` | Update user |
-| POST | `/api/v1/admin/delete-user` | Delete user |
+| PATCH | `/api/v1/admin/update-user` | Update user |
+| DELETE | `/api/v1/admin/delete-user` | Delete user |
 | POST | `/api/v1/admin/list-tenants` | List tenants |
 | POST | `/api/v1/admin/create-tenant` | Create tenant |
 
