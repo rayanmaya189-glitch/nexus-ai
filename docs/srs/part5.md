@@ -440,7 +440,7 @@ Validation:
 NATS communication:
 
 ```text
-Service
+Module
 
  |
 
@@ -448,7 +448,7 @@ NATS
 
  |
 
-Service
+Module
 
 ```
 
@@ -475,7 +475,7 @@ aeroxe.v1.ai.*
 
 ## Subject Permissions
 
-Agent Service:
+Agent Module:
 
 Allowed:
 
@@ -493,7 +493,7 @@ aeroxe.v1.rag.*
 
 ---
 
-RAG Service:
+RAG Module:
 
 Allowed:
 
@@ -890,7 +890,7 @@ Monitoring:
 * Failed login
 * Suspicious AI activity
 * Data access
-* Service failures
+* Module failures
 * Security alerts
 
 ---
