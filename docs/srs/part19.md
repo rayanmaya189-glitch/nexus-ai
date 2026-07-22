@@ -128,14 +128,14 @@ Payment Failed → Retry (3 attempts, 1/3/7 days)
 
 | Table | Purpose |
 |---|---|
-| `billing.plans` | Subscription plans |
-| `billing.subscriptions` | Tenant subscriptions |
-| `billing.usage_records` | Usage metering |
-| `billing.invoices` | Generated invoices |
-| `billing.invoice_line_items` | Invoice line items |
-| `billing.payments` | Payment records |
-| `billing.payment_methods` | Stored payment methods |
-| `billing.dunning_attempts` | Dunning retry attempts |
+| `billing_.plans` | Subscription plans |
+| `billing_.subscriptions` | Tenant subscriptions |
+| `billing_.usage_records` | Usage metering |
+| `billing_.invoices` | Generated invoices |
+| `billing_.invoice_line_items` | Invoice line items |
+| `billing_.payments` | Payment records |
+| `billing_.payment_methods` | Stored payment methods |
+| `billing_.dunning_attempts` | Dunning retry attempts |
 
 ---
 

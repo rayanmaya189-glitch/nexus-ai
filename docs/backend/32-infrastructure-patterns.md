@@ -31,7 +31,7 @@ Module → PostgreSQL (business data + outbox entry) → COMMIT
 ### 1.3 Outbox Table Schema
 
 ```sql
-CREATE TABLE outbox.events (
+CREATE TABLE outbox_.events (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     aggregate_type VARCHAR(100) NOT NULL,    -- e.g., 'customer', 'call', 'conversation'
     aggregate_id VARCHAR(100) NOT NULL,      -- e.g., customer_id, call_id
@@ -46,9 +46,9 @@ CREATE TABLE outbox.events (
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_outbox_pending ON outbox.events(status, created_at)
+CREATE INDEX idx_outbox_pending ON outbox_.events(status, created_at)
     WHERE status = 'pending';
-CREATE INDEX idx_outbox_retry ON outbox.events(status, next_retry_at)
+CREATE INDEX idx_outbox_retry ON outbox_.events(status, next_retry_at)
     WHERE status = 'failed';
 ```
 
@@ -162,7 +162,7 @@ Use Redis-based distributed locks to ensure only one instance processes a resour
 ### 2.3 Lock Table Schema
 
 ```sql
-CREATE TABLE distributed_locks.locks (
+CREATE TABLE distributed_locks_.locks (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     lock_key VARCHAR(200) NOT NULL UNIQUE,   -- e.g., 'callback:123', 'campaign:456'
     lock_owner VARCHAR(100) NOT NULL,        -- Instance ID + thread ID
@@ -172,8 +172,8 @@ CREATE TABLE distributed_locks.locks (
     metadata JSONB
 );
 
-CREATE INDEX idx_locks_key ON distributed_locks.locks(lock_key);
-CREATE INDEX idx_locks_expiry ON distributed_locks.locks(expires_at);
+CREATE INDEX idx_locks_key ON distributed_locks_.locks(lock_key);
+CREATE INDEX idx_locks_expiry ON distributed_locks_.locks(expires_at);
 ```
 
 ### 2.4 Lock Implementation
@@ -300,7 +300,7 @@ L3: PostgreSQL (source of truth, slow)
 ### 3.4 Cache Table Schema
 
 ```sql
-CREATE TABLE distributed_cache.cache_metadata (
+CREATE TABLE distributed_cache_.cache_metadata (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     cache_key VARCHAR(200) NOT NULL UNIQUE,
     cache_tier VARCHAR(20) NOT NULL,        -- l1 | l2
@@ -436,7 +436,7 @@ Every financial transaction has equal and opposite entries (debit + credit).
 ### 4.3 Ledger Schema
 
 ```sql
-CREATE TABLE ledger.accounts (
+CREATE TABLE ledger_.accounts (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     tenant_id BIGINT NOT NULL,
     account_code VARCHAR(50) NOT NULL,
@@ -448,7 +448,7 @@ CREATE TABLE ledger.accounts (
     UNIQUE(tenant_id, account_code)
 );
 
-CREATE TABLE ledger.transactions (
+CREATE TABLE ledger_.transactions (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     tenant_id BIGINT NOT NULL,
     transaction_id UUID NOT NULL UNIQUE,
@@ -464,11 +464,11 @@ CREATE TABLE ledger.transactions (
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE ledger.entries (
+CREATE TABLE ledger_.entries (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     tenant_id BIGINT NOT NULL,
-    transaction_id BIGINT NOT NULL REFERENCES ledger.transactions(id),
-    account_id BIGINT NOT NULL REFERENCES ledger.accounts(id),
+    transaction_id BIGINT NOT NULL REFERENCES ledger_.transactions(id),
+    account_id BIGINT NOT NULL REFERENCES ledger_.accounts(id),
     entry_type VARCHAR(10) NOT NULL,        -- debit | credit
     amount DECIMAL(18,4) NOT NULL CHECK (amount > 0),
     currency VARCHAR(3) NOT NULL DEFAULT 'INR',
@@ -478,10 +478,10 @@ CREATE TABLE ledger.entries (
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
-CREATE TABLE ledger.balances (
+CREATE TABLE ledger_.balances (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     tenant_id BIGINT NOT NULL,
-    account_id BIGINT NOT NULL REFERENCES ledger.accounts(id),
+    account_id BIGINT NOT NULL REFERENCES ledger_.accounts(id),
     period VARCHAR(7) NOT NULL,             -- YYYY-MM
     debit_total DECIMAL(18,4) NOT NULL DEFAULT 0,
     credit_total DECIMAL(18,4) NOT NULL DEFAULT 0,
@@ -608,25 +608,25 @@ impl LedgerService {
 
 ```sql
 -- Asset Accounts (Debit Normal)
-INSERT INTO ledger.accounts (tenant_id, account_code, account_name, account_type) VALUES
+INSERT INTO ledger_.accounts (tenant_id, account_code, account_name, account_type) VALUES
 (1, '1000', 'Cash', 'asset'),
 (1, '1100', 'Accounts Receivable', 'asset'),
 (1, '1200', 'Prepaid Expenses', 'asset');
 
 -- Liability Accounts (Credit Normal)
-INSERT INTO ledger.accounts (tenant_id, account_code, account_name, account_type) VALUES
+INSERT INTO ledger_.accounts (tenant_id, account_code, account_name, account_type) VALUES
 (1, '2000', 'Accounts Payable', 'liability'),
 (1, '2100', 'Deferred Revenue', 'liability'),
 (1, '2200', 'Tax Payable', 'liability');
 
 -- Revenue Accounts (Credit Normal)
-INSERT INTO ledger.accounts (tenant_id, account_code, account_name, account_type) VALUES
+INSERT INTO ledger_.accounts (tenant_id, account_code, account_name, account_type) VALUES
 (1, '4000', 'Subscription Revenue', 'revenue'),
 (1, '4100', 'Usage Revenue', 'revenue'),
 (1, '4200', 'API Revenue', 'revenue');
 
 -- Expense Accounts (Debit Normal)
-INSERT INTO ledger.accounts (tenant_id, account_code, account_name, account_type) VALUES
+INSERT INTO ledger_.accounts (tenant_id, account_code, account_name, account_type) VALUES
 (1, '5000', 'LLM Cost', 'expense'),
 (1, '5100', 'Telephony Cost', 'expense'),
 (1, '5200', 'Infrastructure Cost', 'expense');
@@ -688,15 +688,15 @@ INSERT INTO ledger.accounts (tenant_id, account_code, account_name, account_type
 
 | Schema | Purpose |
 |---|---|
-| `outbox` | Transactional outbox for reliable event delivery |
-| `distributed_locks` | Distributed lock management |
-| `distributed_cache` | Cache metadata tracking |
-| `ledger` | Double entry financial ledger |
+| `outbox_` | Transactional outbox for reliable event delivery |
+| `distributed_locks_` | Distributed lock management |
+| `distributed_cache_` | Cache metadata tracking |
+| `ledger_` | Double entry financial ledger |
 
 ### 6.2 Schema Map Update
 
 ```
-PostgreSQL 18 Cluster
+PostgreSQL 16 Cluster
 ├── identity_        (Identity module)
 ├── customer_        (Customer module)
 ├── ai_              (AI Gateway module)

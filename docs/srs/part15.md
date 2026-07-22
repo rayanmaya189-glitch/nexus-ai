@@ -166,10 +166,11 @@ Customer Requests Deletion → Verify Identity → Mark for Deletion
 
 | Table | Purpose |
 |---|---|
-| `conversation.conversations` | Conversation records |
-| `conversation.messages` | Conversation messages |
-| `conversation.entities` | Extracted entities |
-| `conversation.sentiment` | Per-message sentiment |
+| `conversation_.conversations` | Conversation records |
+| `conversation_.messages` | Conversation messages |
+| `conversation_.entities` | Extracted entities |
+| `conversation_.sentiment` | Per-message sentiment |
+| `conversation_.post_call_surveys` | Post-call satisfaction surveys |
 
 ---
 

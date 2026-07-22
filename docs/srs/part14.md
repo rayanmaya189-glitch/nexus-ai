@@ -192,7 +192,6 @@ CREATE TABLE tts.voice_clones (
 | `tts.voices` | Voice profiles |
 | `tts.voice_clones` | Voice clone authorizations |
 | `tts.synthesis_log` | Synthesis audit trail |
-| `tts.post_call_surveys` | Post-call satisfaction surveys |
 
 ---
 

@@ -29,7 +29,7 @@ It connects business applications within the `aeroxe-nexus` modular monolith and
 |  nexus-agent | nexus-rag |    |
 |  nexus-workflow | nexus-eco.. |
 +-------------------------------+
-         |  (REST / gRPC / NATS)
+         |  (REST / External gRPC / NATS)
 ================================================================
                     Business Intelligence Layer
 ================================================================
@@ -440,7 +440,7 @@ Users can install:
 | Protocol | Standard | Usage |
 |---|---|---|
 | Internal (Module) | Rust trait methods | Module-to-module within monolith |
-| Event (Async) | NATS JetStream `aeroxe.*` | Background processing |
+| Event (Async) | NATS JetStream `aeroxe.v1.*` | Background processing |
 | External API | REST `/api/v1/*` | Client applications (via `nexus-gateway`) |
 | External gRPC (opt.) | `tonic` service | Partner SDK integrations |
 

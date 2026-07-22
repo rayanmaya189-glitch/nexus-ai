@@ -108,7 +108,7 @@ src/
     │   │   └── security/          # JWT, hashing
     │   ├── api/
     │   │   ├── http/
-    │   │   └── grpc/
+    │   │   └── external/          # External adapters (gRPC, partner SDKs)
     │   └── migrations/            # SeaORM migration files
     │
     ├── customer/                  # Customer aggregate, KYC, addresses
@@ -125,7 +125,7 @@ src/
     │   │   └── messaging/         # NATS publishers/subscribers
     │   ├── api/
     │   │   ├── http/
-    │   │   └── grpc/
+    │   │   └── external/          # External adapters (gRPC, partner SDKs)
     │   └── migrations/            # SeaORM migration files
     │
     ├── ai-gateway/                # AI Gateway
@@ -170,10 +170,10 @@ Every module enforces:
 
 | Decision | Rationale |
 |---|---|
-| **Single binary** vs microservices | Eliminates gRPC overhead, simplifies deployment, enables stronger compile-time guarantees |
+| **Single binary** vs multiple services | Eliminates network overhead, simplifies deployment, enables stronger compile-time guarantees |
 | **SeaORM** over raw SQL | Type-safe queries, migration tooling, compile-time checked schemas |
 | **No raw SQL anywhere** | All DB access through SeaORM entity models — prevents SQL injection, enables schema migrations |
-| **Schema-per-BoundedContext** | Logical database isolation without physical separation — enables future extraction to microservices |
+| **Schema-per-BoundedContext** | Logical database isolation without physical separation — enables clear module boundaries |
 | **Trait-based module interfaces** | Modules communicate through Rust traits — type-safe, testable, mockable |
 | **NATS for async events only** | Background jobs, cross-module notifications, audit logging |
 | **Transactional Outbox Pattern** | Events stored in PostgreSQL within same transaction as business data — guarantees no event loss |
@@ -182,7 +182,7 @@ Every module enforces:
 | **Double Entry Ledger** | Financial transactions with balanced debits/credits for audit trail and compliance |
 | **API versioning in URL** | `/api/v1/` prefix — clear, cacheable, easy to route |
 | **NATS subject versioning** | `aeroxe.v1.module.event` — prevents event format conflicts |
-| **gRPC service versioning** | `package.v1.ServiceName` — supports multiple API versions |
+| **External gRPC versioning** | `package.v1.ServiceName` — supports multiple API versions for partner SDKs |
 | **TDD enforced at module boundaries** | Each module has a public API surface + comprehensive test suite |
 
 ---
@@ -216,8 +216,8 @@ Every module enforces:
 
 | Component | Technology |
 |---|---|
-| Primary Database | **PostgreSQL 18** (single cluster, schema-per-module) |
-| Vector Search | pgvector (PostgreSQL extension) |
+| Primary Database | **PostgreSQL 16** (single cluster, schema-per-module) |
+| Vector Search | pgvector (PostgreSQL extension) — nomic-embed-text (768 dimensions) |
 | Knowledge Graph | Apache AGE (PostgreSQL extension) |
 | Cache / STM | Redis |
 | Event Bus | NATS JetStream |
@@ -276,7 +276,7 @@ Every module enforces:
 | Module | Bounded Context | Schema Prefix | Purpose |
 |---|---|---|---|
 | `model-registry` | Model Management | `models_` | Ollama model lifecycle |
-| `notification` | Notifications | `notif_` | Email, WhatsApp, push |
+| `notification` | Notifications | `notification_` | Email, WhatsApp, push |
 | `config` | Configuration | `config_` | Dynamic config, feature flags |
 | `ecosystem` | Ecosystem Integration | `eco_` | AeroXe product connectors |
 
@@ -366,9 +366,9 @@ aeroxe.v1.customer.customer.created
 aeroxe.v2.customer.customer.created     # Future: different event schema
 ```
 
-### 6.3 gRPC Service Versioning
+### 6.3 External gRPC Versioning
 
-gRPC service names include the version:
+External gRPC service names include the version:
 
 ```protobuf
 package identity.v1;

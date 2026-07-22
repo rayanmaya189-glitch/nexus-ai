@@ -128,8 +128,8 @@ AeroXe Nexus AI requires:
 | Layer                 | Purpose                   |
 | --------------------- | ------------------------- |
 | Unit Testing          | Business logic validation |
-| Integration Testing   | Service communication     |
-| Contract Testing      | gRPC/NATS compatibility   |
+| Integration Testing   | Module communication     |
+| Contract Testing      | Trait/NATS compatibility |
 | API Testing           | External interfaces       |
 | AI Evaluation Testing | Model quality             |
 | Security Testing      | Vulnerability protection  |
@@ -282,7 +282,7 @@ No Docker Compose required for unit/integration tests. All tests run with `cargo
 
 ---
 
-# 9. Module Trait Contract Testing (Replaces gRPC Contract Tests)
+# 9. Module Trait Contract Testing
 
 In a modular monolith, trait interfaces replace gRPC contracts.
 
@@ -743,12 +743,12 @@ Target:
 
 ---
 
-## gRPC
+## Trait Interfaces
 
 Target:
 
 ```
-100,000 requests/sec
+100,000 calls/sec
 ```
 
 ---
@@ -1094,7 +1094,7 @@ Covered:
 ✅ Testing pyramid
 ✅ Unit testing
 ✅ Integration testing
-✅ gRPC contract testing
+✅ Trait contract testing
 ✅ NATS event testing
 ✅ RAG evaluation
 ✅ AI model evaluation

@@ -267,7 +267,7 @@ POST /api/v1/security/scan
       "severity": "HIGH",
       "category": "sql_injection",
       "description": "User input directly interpolated into SQL query",
-      "location": "services/sql-agent/main.go:142",
+      "location": "src/modules/sql-agent/src/application/sql_agent_service.rs:142",
       "recommendation": "Use parameterized queries instead of string concatenation"
     }
   ],
@@ -287,10 +287,10 @@ POST /api/v1/security/review
 
 | Subject | Event |
 |---|---|
-| `aeroxe.security.scan.started` | Scan initiated |
-| `aeroxe.security.threat.detected` | Threat found |
-| `aeroxe.security.report.generated` | Analysis complete |
-| `aeroxe.security.alert.triggered` | Critical alert |
+| `aeroxe.v1.security.scan.started` | Scan initiated |
+| `aeroxe.v1.security.threat.detected` | Threat found |
+| `aeroxe.v1.security.report.generated` | Analysis complete |
+| `aeroxe.v1.security.alert.triggered` | Critical alert |
 
 ---
 

@@ -59,8 +59,8 @@ src/modules/identity/
 │   ├── http/
 │   │   ├── auth_controller.rs  # Axum HTTP handlers
 │   │   └── tests/              # API integration tests
-│   └── grpc/
-│       └── auth_service.rs     # gRPC service (tonic)
+│   └── external/
+│       └── auth_grpc.rs        # External gRPC adapter (tonic, optional)
 └── migrations/               # SeaORM migration files
 ```
 
@@ -493,7 +493,7 @@ POST /api/v1/auth/change-password
 
 ---
 
-## 11. gRPC Service (Versioned)
+## 11. External gRPC Adapter (Versioned, Optional)
 
 ```protobuf
 // proto/identity/v1/auth_service.proto

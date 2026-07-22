@@ -53,7 +53,7 @@ AeroXe Nexus AI follows a **hybrid communication architecture** optimized for mo
 | REST API | `/api/v{version}/<resource>` | `/api/v1/auth/login` |
 | WebSocket | `/ws/v{version}/<channel>` | `/ws/v1/chat/{conv_id}` |
 | NATS Subject | `aeroxe.v{version}.<module>.<event>` | `aeroxe.v1.identity.user.created` |
-| gRPC Package | `<module>.v{version}` | `identity.v1.AuthService` |
+| External gRPC Package | `<module>.v{version}` | `identity.v1.AuthService` |
 | Event Envelope | `"api_version": "v{version}"` | `"api_version": "v1"` |
 
 ---
@@ -142,11 +142,11 @@ async fn main() {
 
 ### Performance Comparison
 
-| Aspect | Microservice (gRPC) | Modular Monolith (Trait) |
+| Aspect | External gRPC | Modular Monolith (Trait) |
 |---|---|---|
 | Latency per call | 2-5ms (network + serialization) | < 1μs (trait vtable dispatch) |
 | Overhead | Protobuf encode/decode | Zero — direct struct passing |
-| Error handling | gRPC status codes | Rust `Result<T, E>` |
+| Error handling | External gRPC status codes | Rust `Result<T, E>` |
 | Testing | Need running services | `Mockall` mocks |
 | Type safety | Protobuf codegen | Rust compiler |
 
@@ -204,7 +204,7 @@ async fn main() {
 
 ---
 
-## 6. Module API Trait Catalogue
+## 7. Module API Trait Catalogue
 
 ### nexus-identity
 
@@ -451,7 +451,7 @@ pub trait OutboundService: Send + Sync {
 
 ---
 
-## 7. NATS JetStream Architecture
+## 8. NATS JetStream Architecture
 
 ### Subject Naming Standard
 
@@ -498,7 +498,7 @@ Currently active version: **`v1`**
 
 ---
 
-## 8. Event Schema Standard (Versioned)
+## 9. Event Schema Standard (Versioned)
 
 Every NATS event includes the API version in the envelope:
 
@@ -523,7 +523,7 @@ Every NATS event includes the API version in the envelope:
 
 ---
 
-## 9. JetStream Stream Design
+## 10. JetStream Stream Design
 
 | Stream Name | Subjects | Retention | Replication |
 |---|---|---|---|
@@ -538,7 +538,7 @@ Every NATS event includes the API version in the envelope:
 
 ---
 
-## 10. Versioning Strategy Details
+## 11. Versioning Strategy Details
 
 ### 10.1 When to Bump NATS Subject Version
 
@@ -557,7 +557,7 @@ Multiple versions can coexist:
 aeroxe.v1.customer.customer.created   # Old consumers continue
 ```
 
-### 10.3 gRPC Versioning
+### 10.3 External gRPC Versioning
 
 ```protobuf
 // proto/identity/v1/auth_service.proto
@@ -579,7 +579,7 @@ service CustomerService {
 
 ---
 
-## 11. Request Flow Example
+## 12. Request Flow Example
 
 **User asks:** "Why is customer internet slow?"
 
@@ -601,7 +601,7 @@ Note: **Every arrow is an in-process Rust trait method call**, not a network hop
 
 ---
 
-## 12. Streaming Response Architecture
+## 13. Streaming Response Architecture
 
 ```
 Client WebSocket (/ws/v1/chat/{conversation_id})
@@ -626,7 +626,7 @@ All streams use **tokio channels** for zero-copy token relay between modules.
 
 ---
 
-## 13. Security Requirements
+## 14. Security Requirements
 
 ### Internal Trait Calls
 
@@ -648,7 +648,7 @@ All streams use **tokio channels** for zero-copy token relay between modules.
 
 ---
 
-## 14. Testing Communication Contracts
+## 15. Testing Communication Contracts
 
 ### Module Boundary Tests (TDD)
 

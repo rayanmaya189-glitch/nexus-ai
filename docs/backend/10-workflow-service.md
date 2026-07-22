@@ -199,10 +199,10 @@ Publish
 
 | Type | Description | Execution |
 |---|---|---|
-| `ai_task` | AI agent processes data | gRPC to agent-orchestrator |
+| `ai_task` | AI agent processes data | Trait call to agent module |
 | `approval` | Human approval required | Wait for human action |
-| `notification` | Send notification | gRPC to notification-service |
-| `api_call` | External API call | HTTP/gRPC to external service |
+| `notification` | Send notification | Trait call to notification module |
+| `api_call` | External API call | HTTP to external service |
 | `condition` | Branch based on result | Evaluate condition |
 | `delay` | Wait for specified time | Timer-based |
 | `parallel` | Execute multiple steps | Fan-out/fan-in |
@@ -329,12 +329,12 @@ GET /api/v1/workflows?status=running
 
 | Subject | Event |
 |---|---|
-| `aeroxe.workflow.started` | Workflow execution begins |
-| `aeroxe.workflow.step.completed` | Step finished |
-| `aeroxe.workflow.completed` | All steps complete |
-| `aeroxe.workflow.failed` | Workflow error |
-| `aeroxe.workflow.approval.requested` | Approval needed |
-| `aeroxe.workflow.approval.decided` | Approval given/denied |
+| `aeroxe.v1.workflow.started` | Workflow execution begins |
+| `aeroxe.v1.workflow.step.completed` | Step finished |
+| `aeroxe.v1.workflow.completed` | All steps complete |
+| `aeroxe.v1.workflow.failed` | Workflow error |
+| `aeroxe.v1.workflow.approval.requested` | Approval needed |
+| `aeroxe.v1.workflow.approval.decided` | Approval given/denied |
 
 ---
 

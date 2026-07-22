@@ -20,9 +20,9 @@ The communication model:
 
                            |
 
-               REST Protobuf / WebSocket / HTTPS (versioned: /api/v1/)
+               Structured REST / WebSocket / HTTPS (versioned: /api/v1/)
 
-               **POST only — No GET — No path variables — No query strings**
+               Standard REST (GET/POST/PUT/PATCH/DELETE)
 
 
                            |
@@ -82,21 +82,21 @@ Used by:
 Protocol:
 
 ```
-HTTPS REST Protobuf (/api/v1/*) — POST only, no GET, no path variables, no query strings
+HTTPS Structured REST (/api/v1/*) — Standard REST methods (GET/POST/PUT/PATCH/DELETE)
 WebSocket (/ws/v1/*)
 ```
 
-### REST Protobuf Standards
+### Structured REST Standards
 
 | Rule | Description |
 |---|---|
-| HTTP Method | **POST only** (no GET, no PUT, no DELETE, no PATCH) |
-| Path Variables | **NOT ALLOWED** — resource IDs in request body |
-| Query Strings | **NOT ALLOWED** — all parameters in request body |
-| Request Format | Protobuf (JSON-serialized) |
-| Response Format | Protobuf (JSON-serialized) |
+| HTTP Method | **Standard REST** (GET, POST, PUT, PATCH, DELETE as appropriate) |
+| Path Variables | Resource IDs in request body or URL path |
+| Query Strings | Supported for filtering and pagination |
+| Request Format | JSON |
+| Response Format | JSON |
 | Business Status | Every response includes `status` field |
-| Pagination | In request body: `limit` (default 10) + `offset` |
+| Pagination | Query parameters or request body: `limit` (default 10) + `offset` |
 
 ---
 
@@ -152,8 +152,6 @@ NATS JetStream (versioned subjects: aeroxe.v1.*)
 - Service discovery (not needed in-process)
 
 ---
-
-# 3. Trait Interface Architecture
 
 ## Module Communication
 
@@ -495,7 +493,7 @@ pub enum CommonError {
 
 ---
 
-# 17. NATS JetStream Architecture
+# 18. NATS JetStream Architecture
 
 NATS is the event backbone.
 
@@ -509,39 +507,39 @@ Used for:
 
 ---
 
-# 18. NATS Subject Naming Standard
+# 19. NATS Subject Naming Standard
 
 Format:
 
 ```
-aeroxe.<domain>.<event>
+aeroxe.v1.<domain>.<event>
 ```
 
 Example:
 
 ```
-aeroxe.ai.request.created
+aeroxe.v1.ai.request.created
 
-aeroxe.agent.execution.started
+aeroxe.v1.agent.execution.started
 
-aeroxe.rag.document.processed
+aeroxe.v1.rag.document.processed
 
-aeroxe.vision.analysis.completed
+aeroxe.v1.vision.analysis.completed
 
 ```
 
 ---
 
-# 19. Core NATS Subjects
+# 20. Core NATS Subjects
 
 ## AI Events
 
 ```
-aeroxe.ai.request.created
+aeroxe.v1.ai.request.created
 
-aeroxe.ai.response.generated
+aeroxe.v1.ai.response.generated
 
-aeroxe.ai.failed
+aeroxe.v1.ai.failed
 
 ```
 
@@ -550,11 +548,11 @@ aeroxe.ai.failed
 ## Agent Events
 
 ```
-aeroxe.agent.started
+aeroxe.v1.agent.started
 
-aeroxe.agent.completed
+aeroxe.v1.agent.completed
 
-aeroxe.agent.failed
+aeroxe.v1.agent.failed
 
 ```
 
@@ -563,11 +561,11 @@ aeroxe.agent.failed
 ## RAG Events
 
 ```
-aeroxe.rag.document.uploaded
+aeroxe.v1.rag.document.uploaded
 
-aeroxe.rag.document.processed
+aeroxe.v1.rag.document.processed
 
-aeroxe.rag.embedding.created
+aeroxe.v1.rag.embedding.created
 
 ```
 
@@ -576,9 +574,9 @@ aeroxe.rag.embedding.created
 ## Vision Events
 
 ```
-aeroxe.vision.image.received
+aeroxe.v1.vision.image.received
 
-aeroxe.vision.analysis.completed
+aeroxe.v1.vision.analysis.completed
 
 ```
 
@@ -587,11 +585,11 @@ aeroxe.vision.analysis.completed
 ## Workflow Events
 
 ```
-aeroxe.workflow.started
+aeroxe.v1.workflow.started
 
-aeroxe.workflow.completed
+aeroxe.v1.workflow.completed
 
-aeroxe.workflow.failed
+aeroxe.v1.workflow.failed
 
 ```
 
@@ -600,15 +598,15 @@ aeroxe.workflow.failed
 ## Security Events
 
 ```
-aeroxe.security.scan.started
+aeroxe.v1.security.scan.started
 
-aeroxe.security.threat.detected
+aeroxe.v1.security.threat.detected
 
 ```
 
 ---
 
-# 20. Event Schema Standard
+# 21. Event Schema Standard
 
 Every event:
 
@@ -636,7 +634,7 @@ Every event:
 
 ---
 
-# 21. Example Event
+# 22. Example Event
 
 Agent Completed:
 
@@ -662,7 +660,7 @@ Agent Completed:
 
 ---
 
-# 22. JetStream Stream Design
+# 23. JetStream Stream Design
 
 ## AI Stream
 
@@ -673,7 +671,7 @@ AI_EVENTS
 Subjects:
 
 ```
-aeroxe.ai.*
+aeroxe.v1.ai.*
 ```
 
 Retention:
@@ -693,7 +691,7 @@ AGENT_EVENTS
 Subjects:
 
 ```
-aeroxe.agent.*
+aeroxe.v1.agent.*
 ```
 
 Retention:
@@ -713,7 +711,7 @@ AUDIT_EVENTS
 Subjects:
 
 ```
-aeroxe.audit.*
+aeroxe.v1.audit.*
 ```
 
 Retention:
@@ -724,7 +722,7 @@ Retention:
 
 ---
 
-# 23. Request Flow Example
+# 24. Request Flow Example
 
 ## User asks:
 
@@ -760,7 +758,7 @@ Plan Created
 
 NATS Event
 
-aeroxe.agent.execution.started
+aeroxe.v1.agent.execution.started
 
 
  |
@@ -770,7 +768,7 @@ Customer Agent
 
  |
 
-gRPC
+Trait call
 
 
  |
@@ -790,7 +788,7 @@ Customer DB
 
  |
 
-RAG Service
+RAG Module
 
 
  |
@@ -807,7 +805,7 @@ Final Response
 
 ---
 
-# 24. Streaming Response Architecture
+# 25. Streaming Response Architecture
 
 For Chat UI:
 
@@ -838,9 +836,9 @@ User Interface
 
 ---
 
-# 25. Security Requirements
+# 26. Security Requirements
 
-REST Protobuf:
+Structured REST:
 
 * TLS encryption
 * JWT authentication
@@ -860,11 +858,11 @@ NATS:
 
 ---
 
-# 26. Final Communication Stack
+# 27. Final Communication Stack
 
 | Layer           | Technology         |
 | --------------- | ------------------ |
-| Mobile/Web API  | REST Protobuf (POST only) |
+| Mobile/Web API  | Structured REST (GET/POST/PUT/PATCH/DELETE) |
 | Real-time Chat  | WebSocket          |
 | Internal RPC    | Rust Trait Interfaces (in-process) |
 | Contract        | Protobuf (JSON-serialized) |
@@ -874,9 +872,9 @@ NATS:
 
 ---
 
-# 27. REST Protobuf API Definitions (NEW Modules)
+# 28. Structured REST API Definitions (NEW Modules)
 
-All operations use POST with Protobuf request/response bodies.
+All operations use standard REST methods (GET/POST/PUT/PATCH/DELETE) with JSON request/response bodies.
 
 ## 27.1 Telephony Module API
 
@@ -1224,8 +1222,8 @@ message PayInvoiceRequest {
 
 The AeroXe Nexus AI communication foundation is now defined:
 
-✅ REST Protobuf API (POST only, no GET, no path variables, no query strings)
-✅ Protobuf Request/Response Envelopes
+✅ Structured REST API (GET/POST/PUT/PATCH/DELETE)
+✅ Envelope Request/Response Envelopes
 ✅ Business Status Codes
 ✅ Pagination via Request Body
 ✅ Rust Trait Interfaces (in-process, no gRPC)

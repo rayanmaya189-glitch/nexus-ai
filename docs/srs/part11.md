@@ -94,7 +94,7 @@ Business Service
 
       |
 
-API / gRPC
+API / REST
 
 
       |
@@ -900,21 +900,21 @@ REST:
 /api/v1
 ```
 
-gRPC:
+REST:
 
 ```
-service ProductService
+GET/POST /api/v1/products
 
 ```
 
 Events:
 
 ```
-product.created
+aeroxe.v1.product.product.created
 
-product.updated
+aeroxe.v1.product.product.updated
 
-product.deleted
+aeroxe.v1.product.product.deleted
 
 ```
 

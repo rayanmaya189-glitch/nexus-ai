@@ -174,21 +174,21 @@ pub struct RequestContext {
 
 ```
 AI_ACCOUNT
-  subjects: aeroxe.ai.*
+  subjects: aeroxe.v1.ai.*
 ```
 
 ### Subject Permissions
 
 **Agent Service:**
 ```
-publish:   aeroxe.agent.*
-subscribe: aeroxe.rag.*
+publish:   aeroxe.v1.agent.*
+subscribe: aeroxe.v1.rag.*
 ```
 
 **RAG Service:**
 ```
-subscribe: aeroxe.rag.document.*
-publish:   aeroxe.rag.completed
+subscribe: aeroxe.v1.rag.document.*
+publish:   aeroxe.v1.rag.completed
 ```
 
 ---
@@ -347,7 +347,7 @@ Never store in code:
 
 ---
 
-## 13. Security Testing
+## 14. Security Testing
 
 | Test Type | Tools |
 |---|---|
@@ -359,7 +359,7 @@ Never store in code:
 
 ---
 
-## 14. Backup Security
+## 15. Backup Security
 
 | Component | Security Measure |
 |---|---|
@@ -369,7 +369,7 @@ Never store in code:
 
 ---
 
-## 15. Disaster Recovery
+## 16. Disaster Recovery
 
 | Metric | Target |
 |---|---|
@@ -378,7 +378,7 @@ Never store in code:
 
 ---
 
-## 16. Voice Security (NEW - CRITICAL)
+## 17. Voice Security (NEW - CRITICAL)
 
 ### 16.1 Anti-Spoofing Measures
 
@@ -411,7 +411,7 @@ Never store in code:
 
 ---
 
-## 17. Compliance Framework Mapping (NEW)
+## 18. Compliance Framework Mapping (NEW)
 
 ### 17.1 SOC 2 Controls
 

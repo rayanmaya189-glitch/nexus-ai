@@ -195,6 +195,7 @@ Model Router
 | Protocol | HTTP |
 | Default Port | 11434 |
 | Model Storage | `/usr/share/ollama/.ollama/models` |
+| Circuit Breaker | 5 failures → Open, 30s → Half-Open, 3 probes → Closed |
 
 ### API Endpoints Used
 
@@ -235,7 +236,7 @@ resources:
 
 | Attribute | Value |
 |---|---|
-| Model | Via Ollama (embedding endpoint) |
+| Model | nomic-embed-text (768 dimensions) via Ollama |
 | Dimension | 768 |
 | Used By | RAG Service, Memory Service |
 | Storage | pgvector |
@@ -278,7 +279,7 @@ resources:
 
 ---
 
-## 9. Model Registry Service
+## 10. Model Registry Service
 
 The `model-registry-service` manages Ollama models:
 
@@ -308,7 +309,7 @@ GET /api/v1/models/usage    - Usage statistics
 
 ---
 
-## 10. Model Monitoring
+## 11. Model Monitoring
 
 | Metric | Description |
 |---|---|

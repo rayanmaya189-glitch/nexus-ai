@@ -16,12 +16,12 @@ Events lost when NATS publish fails after PostgreSQL commit.
 
 ### 1.2 Solution
 
-Events stored in `outbox.events` table within the SAME transaction as business data. Background poller reads outbox and publishes to NATS.
+Events stored in `outbox_.events` table within the SAME transaction as business data. Background poller reads outbox and publishes to NATS.
 
 ### 1.3 Outbox Table
 
 ```sql
-CREATE TABLE outbox.events (
+CREATE TABLE outbox_.events (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     aggregate_type VARCHAR(100) NOT NULL,
     aggregate_id VARCHAR(100) NOT NULL,
@@ -60,7 +60,7 @@ Redis-based distributed locks with TTL and owner verification.
 ### 2.3 Lock Table
 
 ```sql
-CREATE TABLE distributed_locks.locks (
+CREATE TABLE distributed_locks_.locks (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     lock_key VARCHAR(200) NOT NULL UNIQUE,
     lock_owner VARCHAR(100) NOT NULL,

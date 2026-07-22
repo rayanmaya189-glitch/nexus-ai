@@ -229,7 +229,7 @@ NATS Event Received
 ### webhook_subscriptions
 
 ```sql
-CREATE TABLE webhook.subscriptions (
+CREATE TABLE webhook_.subscriptions (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     subscription_id UUID NOT NULL UNIQUE,
     tenant_id BIGINT NOT NULL,
@@ -249,16 +249,16 @@ CREATE TABLE webhook.subscriptions (
     updated_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_webhook_tenant ON webhook.subscriptions(tenant_id);
-CREATE INDEX idx_webhook_status ON webhook.subscriptions(status) WHERE status = 'active';
+CREATE INDEX idx_webhook_tenant ON webhook_.subscriptions(tenant_id);
+CREATE INDEX idx_webhook_status ON webhook_.subscriptions(status) WHERE status = 'active';
 ```
 
 ### webhook_deliveries
 
 ```sql
-CREATE TABLE webhook.deliveries (
+CREATE TABLE webhook_.deliveries (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    subscription_id BIGINT NOT NULL REFERENCES webhook.subscriptions(id) ON DELETE CASCADE,
+    subscription_id BIGINT NOT NULL REFERENCES webhook_.subscriptions(id) ON DELETE CASCADE,
     tenant_id BIGINT NOT NULL,
     event_id UUID NOT NULL,
     event_type VARCHAR(100) NOT NULL,
@@ -275,8 +275,8 @@ CREATE TABLE webhook.deliveries (
     delivered_at TIMESTAMP
 );
 
-CREATE INDEX idx_webhook_deliveries_sub ON webhook.deliveries(subscription_id, created_at DESC);
-CREATE INDEX idx_webhook_deliveries_pending ON webhook.deliveries(status, next_retry_at) WHERE status = 'pending';
+CREATE INDEX idx_webhook_deliveries_sub ON webhook_.deliveries(subscription_id, created_at DESC);
+CREATE INDEX idx_webhook_deliveries_pending ON webhook_.deliveries(status, next_retry_at) WHERE status = 'pending';
 ```
 
 ---
@@ -432,11 +432,11 @@ Webhook Request Received
 ### 11.3 Security Entities
 
 ```sql
-ALTER TABLE webhook.subscriptions ADD COLUMN allowed_ips JSONB;
-ALTER TABLE webhook.subscriptions ADD COLUMN require_tls BOOLEAN DEFAULT true;
-ALTER TABLE webhook.subscriptions ADD COLUMN min_tls_version VARCHAR(5) DEFAULT '1.2';
-ALTER TABLE webhook.subscriptions ADD COLUMN max_payload_bytes BIGINT DEFAULT 1048576;
-ALTER TABLE webhook.subscriptions ADD COLUMN timeout_ms INT DEFAULT 30000;
+ALTER TABLE webhook_.subscriptions ADD COLUMN allowed_ips JSONB;
+ALTER TABLE webhook_.subscriptions ADD COLUMN require_tls BOOLEAN DEFAULT true;
+ALTER TABLE webhook_.subscriptions ADD COLUMN min_tls_version VARCHAR(5) DEFAULT '1.2';
+ALTER TABLE webhook_.subscriptions ADD COLUMN max_payload_bytes BIGINT DEFAULT 1048576;
+ALTER TABLE webhook_.subscriptions ADD COLUMN timeout_ms INT DEFAULT 30000;
 ```
 
 ### 11.4 Webhook Inbound Rate Limiting

@@ -69,7 +69,7 @@ Architecture:
 ================================================
 
 
- PostgreSQL 18 (shared cluster)
+ PostgreSQL 16 (shared cluster)
 
  pgvector
 
@@ -854,7 +854,7 @@ Metadata Extraction
 
  |
 
-Embedding
+Embedding (nomic-embed-text: 768 dimensions, via Ollama)
 
 
  |
@@ -903,6 +903,8 @@ Chunks preserve meaning.
 
 # 15. Embedding Architecture
 
+Embedding model: **nomic-embed-text (768 dimensions, via Ollama)**
+
 Embedding stores:
 
 ```
@@ -920,6 +922,8 @@ Stored:
 
 ```
 pgvector
+
+nomic-embed-text (768 dimensions, via Ollama)
 
 ```
 

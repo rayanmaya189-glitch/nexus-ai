@@ -244,7 +244,7 @@ Agent Response Text
 ### tts_voices
 
 ```sql
-CREATE TABLE tts.voices (
+CREATE TABLE tts_.voices (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     tenant_id BIGINT,                       -- NULL = platform-wide
     voice_id VARCHAR(50) NOT NULL UNIQUE,
@@ -263,7 +263,7 @@ CREATE TABLE tts.voices (
 ### tts_synthesis_log
 
 ```sql
-CREATE TABLE tts.synthesis_log (
+CREATE TABLE tts_.synthesis_log (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     tenant_id BIGINT NOT NULL,
     session_id VARCHAR(100),
@@ -276,7 +276,7 @@ CREATE TABLE tts.synthesis_log (
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_tts_log_tenant ON tts.synthesis_log(tenant_id, created_at DESC);
+CREATE INDEX idx_tts_log_tenant ON tts_.synthesis_log(tenant_id, created_at DESC);
 ```
 
 ---
@@ -356,7 +356,7 @@ Tenant Requests Voice Clone
 ### 12.2 Clone Authorization Entities
 
 ```sql
-CREATE TABLE tts.voice_clones (
+CREATE TABLE tts_.voice_clones (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     clone_id UUID NOT NULL UNIQUE,
     tenant_id BIGINT NOT NULL,
@@ -457,47 +457,4 @@ Sentiment Analysis Result
 
 ---
 
-## 15. Post-Call Survey (NEW)
-
-### 15.1 Survey Flow
-
-```
-Call Ended
-    |
-    v
-[1] Play Survey Prompt
-    |  - "Please rate your experience from 1 to 5"
-    |  - "Press 1 for poor, 5 for excellent"
-    |
-    v
-[2] Collect Response
-    |  - DTMF: 1-5 rating
-    |  - Or speech: "Four" → "4"
-    |
-    v
-[3] Optional Follow-up
-    |  - "Would you like to leave a comment?"
-    |  - Record voicemail-style comment
-    |
-    v
-[4] Store & Process
-    |  - Save to CSAT database
-    |  - Update customer satisfaction score
-    |  - Trigger alert if low score
-```
-
-### 15.2 Survey Entities
-
-```sql
-CREATE TABLE tts.post_call_surveys (
-    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    survey_id UUID NOT NULL UNIQUE,
-    call_id BIGINT NOT NULL REFERENCES telephony.calls(id),
-    tenant_id BIGINT NOT NULL,
-    customer_id BIGINT,
-    rating INT,                          -- 1-5
-    comment TEXT,
-    comment_audio_path TEXT,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW()
-);
-```
+> **Note:** Post-Call Survey functionality has been moved to nexus-conversation module (see Section 16).

@@ -121,7 +121,7 @@ Store raw file in MinIO (aeroxe-documents bucket)
 Create document record in PostgreSQL
     |
     v
-Publish NATS event: aeroxe.rag.document.uploaded
+Publish NATS event: aeroxe.v1.rag.document.uploaded
 ```
 
 ### Step 2: Document Processing
@@ -151,7 +151,7 @@ Embedding Generation (via Ollama embedding model)
 Store chunks + embeddings in pgvector
     |
     v
-Publish NATS event: aeroxe.rag.document.processed
+Publish NATS event: aeroxe.v1.rag.document.processed
 ```
 
 ### Step 3: Knowledge Graph Update
@@ -166,7 +166,7 @@ Extract entities and relationships
 Update Apache AGE knowledge graph
     |
     v
-Publish NATS event: aeroxe.rag.embedding.created
+Publish NATS event: aeroxe.v1.rag.embedding.created
 ```
 
 ---
@@ -281,6 +281,7 @@ Final Answer
 
 | Parameter | Value |
 |---|---|
+| Model | nomic-embed-text |
 | Dimension | 768 |
 | Index Type | IVFFlat |
 | Distance Metric | Cosine Similarity |
@@ -553,16 +554,16 @@ GET /api/v1/rag/documents/{id}/status
 
 | Subject | Event |
 |---|---|
-| `aeroxe.rag.document.uploaded` | Document received |
-| `aeroxe.rag.document.processed` | Processing complete |
-| `aeroxe.rag.embedding.created` | Embeddings stored |
-| `aeroxe.rag.knowledge.updated` | Knowledge base modified |
+| `aeroxe.v1.rag.document.uploaded` | Document received |
+| `aeroxe.v1.rag.document.processed` | Processing complete |
+| `aeroxe.v1.rag.embedding.created` | Embeddings stored |
+| `aeroxe.v1.rag.knowledge.updated` | Knowledge base modified |
 
 ### Subscribed
 
 | Subject | Handler |
 |---|---|
-| `aeroxe.rag.document.uploaded` | Trigger document processing |
+| `aeroxe.v1.rag.document.uploaded` | Trigger document processing |
 
 ---
 

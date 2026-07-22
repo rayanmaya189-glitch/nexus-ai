@@ -81,7 +81,7 @@ conversation:user123:session456
 | Attribute | Value |
 |---|---|
 | Technology | PostgreSQL + pgvector |
-| Embedding Dimension | 768 |
+| Embedding Model | nomic-embed-text (768 dimensions) via Ollama |
 | Purpose | User preferences, past conversations, important facts |
 
 **Use Cases:**
@@ -306,10 +306,10 @@ Organizational (Apache AGE)
 
 | Subject | Event |
 |---|---|
-| `aeroxe.memory.created` | New memory stored |
-| `aeroxe.memory.updated` | Memory modified |
-| `aeroxe.memory.expired` | Short-term memory expired |
-| `aeroxe.memory.consolidated` | Similar memories merged |
+| `aeroxe.v1.memory.created` | New memory stored |
+| `aeroxe.v1.memory.updated` | Memory modified |
+| `aeroxe.v1.memory.expired` | Short-term memory expired |
+| `aeroxe.v1.memory.consolidated` | Similar memories merged |
 
 ---
 

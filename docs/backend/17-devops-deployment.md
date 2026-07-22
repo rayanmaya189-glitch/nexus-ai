@@ -100,7 +100,7 @@ CMD ["aeroxe-nexus"]
 version: "3.9"
 services:
   postgres:
-    image: postgres:18
+    image: postgres:16
     environment:
       POSTGRES_DB: aeroxe_nexus
       POSTGRES_USER: aeroxe

@@ -193,7 +193,7 @@ async fn test_agent_full_execution_flow() {
 
     // Verify audit event was published to NATS
     let audit_events = test_env.nats()
-        .subscribe("aeroxe.audit.ai.request")
+        .subscribe("aeroxe.v1.audit.ai.request")
         .await;
     assert_eq!(audit_events.len(), 1);
 }
@@ -236,7 +236,7 @@ async fn test_agent_completed_event_schema() {
 
     agent.start_execution(/* ... */).await.unwrap();
 
-    let mut sub = nats.subscribe("aeroxe.agent.completed").await.unwrap();
+    let mut sub = nats.subscribe("aeroxe.v1.agent.completed").await.unwrap();
     let msg = sub.next().await.unwrap();
 
     let event: AgentCompletedEvent = serde_json::from_slice(&msg.payload).unwrap();
@@ -470,7 +470,7 @@ export default function () {
 
 ---
 
-## 17. CI/CD Quality Gates
+## 18. CI/CD Quality Gates
 
 ```
 Developer Push
@@ -497,7 +497,7 @@ Developer Push
 
 ---
 
-## 18. Test Runners
+## 19. Test Runners
 
 | Area | Technology |
 |---|---|
@@ -510,7 +510,7 @@ Developer Push
 
 ---
 
-## 19. Final TDD Architecture
+## 20. Final TDD Architecture
 
 ```
                 AeroXe Nexus AI — Modular Monolith

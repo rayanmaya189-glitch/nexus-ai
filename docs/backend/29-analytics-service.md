@@ -248,7 +248,7 @@ Raw Events (NATS)
 ### conversation_metrics (partitioned)
 
 ```sql
-CREATE TABLE analytics.conversation_metrics (
+CREATE TABLE analytics_.conversation_metrics (
     id BIGINT GENERATED ALWAYS AS IDENTITY,
     tenant_id BIGINT NOT NULL,
     conversation_id BIGINT,
@@ -274,7 +274,7 @@ CREATE TABLE analytics.conversation_metrics (
 ### call_metrics (partitioned)
 
 ```sql
-CREATE TABLE analytics.call_metrics (
+CREATE TABLE analytics_.call_metrics (
     id BIGINT GENERATED ALWAYS AS IDENTITY,
     tenant_id BIGINT NOT NULL,
     call_id BIGINT,
@@ -302,7 +302,7 @@ CREATE TABLE analytics.call_metrics (
 ### agent_metrics (partitioned)
 
 ```sql
-CREATE TABLE analytics.agent_metrics (
+CREATE TABLE analytics_.agent_metrics (
     id BIGINT GENERATED ALWAYS AS IDENTITY,
     tenant_id BIGINT NOT NULL,
     agent_id BIGINT NOT NULL,
@@ -322,13 +322,13 @@ CREATE TABLE analytics.agent_metrics (
     PRIMARY KEY (id, created_at)
 ) PARTITION BY RANGE (created_at);
 
-CREATE UNIQUE INDEX idx_agent_metrics_daily ON analytics.agent_metrics(agent_id, metric_date);
+CREATE UNIQUE INDEX idx_agent_metrics_daily ON analytics_.agent_metrics(agent_id, metric_date);
 ```
 
 ### cost_tracking (partitioned)
 
 ```sql
-CREATE TABLE analytics.cost_tracking (
+CREATE TABLE analytics_.cost_tracking (
     id BIGINT GENERATED ALWAYS AS IDENTITY,
     tenant_id BIGINT NOT NULL,
     service VARCHAR(50) NOT NULL,         -- llm | stt | tts | telephony | storage
@@ -346,7 +346,7 @@ CREATE TABLE analytics.cost_tracking (
 ### analytics_snapshots (pre-aggregated)
 
 ```sql
-CREATE TABLE analytics.snapshots (
+CREATE TABLE analytics_.snapshots (
     id BIGINT GENERATED ALWAYS AS IDENTITY,
     tenant_id BIGINT NOT NULL,
     metric_name VARCHAR(100) NOT NULL,
@@ -359,7 +359,7 @@ CREATE TABLE analytics.snapshots (
     PRIMARY KEY (id, bucket_start)
 ) PARTITION BY RANGE (bucket_start);
 
-CREATE INDEX idx_snapshots_tenant_metric ON analytics.snapshots(tenant_id, metric_name, bucket_start DESC);
+CREATE INDEX idx_snapshots_tenant_metric ON analytics_.snapshots(tenant_id, metric_name, bucket_start DESC);
 ```
 
 ---
@@ -547,7 +547,7 @@ pub enum CostAlertType {
 ### 12.2 Cost Tracking Entities
 
 ```sql
-CREATE TABLE analytics.conversation_costs (
+CREATE TABLE analytics_.conversation_costs (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     conversation_id BIGINT NOT NULL,
     tenant_id BIGINT NOT NULL,
@@ -566,7 +566,7 @@ CREATE TABLE analytics.conversation_costs (
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_conv_costs_tenant ON analytics.conversation_costs(tenant_id, created_at DESC);
+CREATE INDEX idx_conv_costs_tenant ON analytics_.conversation_costs(tenant_id, created_at DESC);
 ```
 
 ---

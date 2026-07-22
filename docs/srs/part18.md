@@ -74,10 +74,10 @@ Campaign Created (Draft) → Target Selection → Schedule
 
 | Table | Purpose |
 |---|---|
-| `outbound.campaigns` | Campaign definitions |
-| `outbound.targets` | Campaign target customers |
-| `outbound.callbacks` | Scheduled callbacks |
-| `outbound.dnc_list` | Do-Not-Call list |
+| `outbound_.campaigns` | Campaign definitions |
+| `outbound_.targets` | Campaign target customers |
+| `outbound_.callbacks` | Scheduled callbacks |
+| `outbound_.dnc_list` | Do-Not-Call list |
 
 ---
 

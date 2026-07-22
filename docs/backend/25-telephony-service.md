@@ -550,7 +550,7 @@ Call Recording
 ### calls
 
 ```sql
-CREATE TABLE telephony.calls (
+CREATE TABLE telephony_.calls (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     tenant_id BIGINT NOT NULL,
     call_id UUID NOT NULL UNIQUE,
@@ -572,17 +572,17 @@ CREATE TABLE telephony.calls (
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_calls_tenant ON telephony.calls(tenant_id, created_at DESC);
-CREATE INDEX idx_calls_customer ON telephony.calls(customer_id, created_at DESC);
-CREATE INDEX idx_calls_status ON telephony.calls(status) WHERE status NOT IN ('completed', 'failed');
+CREATE INDEX idx_calls_tenant ON telephony_.calls(tenant_id, created_at DESC);
+CREATE INDEX idx_calls_customer ON telephony_.calls(customer_id, created_at DESC);
+CREATE INDEX idx_calls_status ON telephony_.calls(status) WHERE status NOT IN ('completed', 'failed');
 ```
 
 ### call_recordings
 
 ```sql
-CREATE TABLE telephony.recordings (
+CREATE TABLE telephony_.recordings (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    call_id BIGINT NOT NULL REFERENCES telephony.calls(id) ON DELETE CASCADE,
+    call_id BIGINT NOT NULL REFERENCES telephony_.calls(id) ON DELETE CASCADE,
     tenant_id BIGINT NOT NULL,
     storage_path TEXT NOT NULL,
     format VARCHAR(10) NOT NULL,              -- wav | mp3
@@ -597,9 +597,9 @@ CREATE TABLE telephony.recordings (
 ### call_transcripts
 
 ```sql
-CREATE TABLE telephony.transcripts (
+CREATE TABLE telephony_.transcripts (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    call_id BIGINT NOT NULL REFERENCES telephony.calls(id) ON DELETE CASCADE,
+    call_id BIGINT NOT NULL REFERENCES telephony_.calls(id) ON DELETE CASCADE,
     tenant_id BIGINT NOT NULL,
     speaker VARCHAR(20) NOT NULL,             -- caller | agent | system
     content TEXT NOT NULL,
@@ -610,13 +610,13 @@ CREATE TABLE telephony.transcripts (
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_transcripts_call ON telephony.transcripts(call_id);
+CREATE INDEX idx_transcripts_call ON telephony_.transcripts(call_id);
 ```
 
 ### phone_numbers
 
 ```sql
-CREATE TABLE telephony.phone_numbers (
+CREATE TABLE telephony_.phone_numbers (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     tenant_id BIGINT NOT NULL,
     number VARCHAR(20) NOT NULL,
@@ -627,13 +627,13 @@ CREATE TABLE telephony.phone_numbers (
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
-CREATE UNIQUE INDEX idx_phone_unique ON telephony.phone_numbers(number);
+CREATE UNIQUE INDEX idx_phone_unique ON telephony_.phone_numbers(number);
 ```
 
 ### call_queues
 
 ```sql
-CREATE TABLE telephony.queues (
+CREATE TABLE telephony_.queues (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     tenant_id BIGINT NOT NULL,
     name VARCHAR(100) NOT NULL,
@@ -651,9 +651,9 @@ CREATE TABLE telephony.queues (
 ### dtmf_events
 
 ```sql
-CREATE TABLE telephony.dtmf_events (
+CREATE TABLE telephony_.dtmf_events (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    call_id BIGINT NOT NULL REFERENCES telephony.calls(id) ON DELETE CASCADE,
+    call_id BIGINT NOT NULL REFERENCES telephony_.calls(id) ON DELETE CASCADE,
     digit CHAR(1) NOT NULL,
     timestamp_ms INT NOT NULL,
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
@@ -751,16 +751,16 @@ CREATE TABLE telephony.dtmf_events (
 
 | Subject | Event |
 |---|---|
-| `aeroxe.v1.telephony.call.inbound` | `InboundCallReceived` |
-| `aeroxe.v1.telephony.call.outbound` | `OutboundCallInitiated` |
-| `aeroxe.v1.telephony.call.answered` | `CallAnswered` |
-| `aeroxe.v1.telephony.call.ended` | `CallEnded` |
-| `aeroxe.v1.telephony.call.transferred` | `CallTransferred` |
-| `aeroxe.v1.telephony.call.hold` | `CallOnHold` |
-| `aeroxe.v1.telephony.call.recording.started` | `RecordingStarted` |
-| `aeroxe.v1.telephony.call.recording.stopped` | `RecordingStopped` |
-| `aeroxe.v1.telephony.call.dtmf` | `DTMFReceived` |
-| `aeroxe.v1.telephony.call.transcript.ready` | `TranscriptReady` |
+| `aeroxe.v1.telephony_.call.inbound` | `InboundCallReceived` |
+| `aeroxe.v1.telephony_.call.outbound` | `OutboundCallInitiated` |
+| `aeroxe.v1.telephony_.call.answered` | `CallAnswered` |
+| `aeroxe.v1.telephony_.call.ended` | `CallEnded` |
+| `aeroxe.v1.telephony_.call.transferred` | `CallTransferred` |
+| `aeroxe.v1.telephony_.call.hold` | `CallOnHold` |
+| `aeroxe.v1.telephony_.call.recording.started` | `RecordingStarted` |
+| `aeroxe.v1.telephony_.call.recording.stopped` | `RecordingStopped` |
+| `aeroxe.v1.telephony_.call.dtmf` | `DTMFReceived` |
+| `aeroxe.v1.telephony_.call.transcript.ready` | `TranscriptReady` |
 
 ### Subscribed
 
@@ -905,9 +905,9 @@ Inbound Call Received
 ### 17.3 Caller Authentication Entities
 
 ```sql
-CREATE TABLE telephony.caller_auth (
+CREATE TABLE telephony_.caller_auth (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    call_id BIGINT NOT NULL REFERENCES telephony.calls(id) ON DELETE CASCADE,
+    call_id BIGINT NOT NULL REFERENCES telephony_.calls(id) ON DELETE CASCADE,
     tenant_id BIGINT NOT NULL,
     customer_id BIGINT,
     auth_method VARCHAR(30) NOT NULL,       -- caller_id | pin | voice_biometric | knowledge
@@ -964,9 +964,9 @@ Call Received
 ### 18.3 Fraud Entities
 
 ```sql
-CREATE TABLE telephony.fraud_checks (
+CREATE TABLE telephony_.fraud_checks (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    call_id BIGINT NOT NULL REFERENCES telephony.calls(id) ON DELETE CASCADE,
+    call_id BIGINT NOT NULL REFERENCES telephony_.calls(id) ON DELETE CASCADE,
     tenant_id BIGINT NOT NULL,
     check_type VARCHAR(50) NOT NULL,       -- caller_reputation | number_validity | sim_swap | deepfake
     result VARCHAR(20) NOT NULL,           -- pass | flag | block
@@ -1017,9 +1017,9 @@ RTP Audio Stream
 ### 19.3 Quality Entities
 
 ```sql
-CREATE TABLE telephony.audio_quality (
+CREATE TABLE telephony_.audio_quality (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    call_id BIGINT NOT NULL REFERENCES telephony.calls(id) ON DELETE CASCADE,
+    call_id BIGINT NOT NULL REFERENCES telephony_.calls(id) ON DELETE CASCADE,
     tenant_id BIGINT NOT NULL,
     window_start_ms INT NOT NULL,
     window_end_ms INT NOT NULL,
@@ -1075,11 +1075,11 @@ Call Not Answered / Agent Unavailable
 ### 20.2 Voicemail Entities
 
 ```sql
-CREATE TABLE telephony.voicemails (
+CREATE TABLE telephony_.voicemails (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     voicemail_id UUID NOT NULL UNIQUE,
     tenant_id BIGINT NOT NULL,
-    call_id BIGINT REFERENCES telephony.calls(id),
+    call_id BIGINT REFERENCES telephony_.calls(id),
     customer_id BIGINT,
     caller_number VARCHAR(20) NOT NULL,
     agent_id BIGINT,
@@ -1180,7 +1180,7 @@ pub enum IVRAction {
 ### 21.3 IVR Entities
 
 ```sql
-CREATE TABLE telephony.ivr_flows (
+CREATE TABLE telephony_.ivr_flows (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     flow_id UUID NOT NULL UNIQUE,
     tenant_id BIGINT NOT NULL,
@@ -1236,9 +1236,9 @@ Supervisor Monitors Active Call
 ### 22.3 Monitoring Entities
 
 ```sql
-CREATE TABLE telephony.call_monitoring (
+CREATE TABLE telephony_.call_monitoring (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    call_id BIGINT NOT NULL REFERENCES telephony.calls(id) ON DELETE CASCADE,
+    call_id BIGINT NOT NULL REFERENCES telephony_.calls(id) ON DELETE CASCADE,
     tenant_id BIGINT NOT NULL,
     supervisor_id BIGINT NOT NULL,
     action VARCHAR(20) NOT NULL,          -- listen | whisper | barge_in

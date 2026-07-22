@@ -336,19 +336,19 @@ pub async fn log_middleware(req: Request, next: Next) -> Response { ... }
 | `ws://host/ws/v1/telephony/{call_id}` | Audio streaming for voice calls |
 | `ws://host/ws/v1/telephony/monitor/{call_id}` | Live call monitoring |
 
-### 8.3 REST API Method Standards (REST Protobuf)
+### 8.3 REST API Method Standards (Structured REST)
 
 | Method | Usage | Allowed |
 |---|---|---|
-| `GET` | Read resource(s) | **NOT ALLOWED** |
-| `POST` | All operations | **REQUIRED** |
-| `PUT` | Full replace | **NOT ALLOWED** |
-| `PATCH` | Partial update | **NOT ALLOWED** |
-| `DELETE` | Remove resource | **NOT ALLOWED** |
+| `GET` | Read resource(s) | **ALLOWED** |
+| `POST` | Create resource | **ALLOWED** |
+| `PUT` | Full replace | **ALLOWED** |
+| `PATCH` | Partial update | **ALLOWED** |
+| `DELETE` | Remove resource | **ALLOWED** |
 
-**ALL operations use POST.** Resource IDs, parameters, and filters go in the request body.
+Standard REST verbs are used. Resource IDs may appear in the URL path or request body.
 
-### 8.4 Request/Response Format (Protobuf)
+### 8.4 Request/Response Format (Structured REST)
 
 **Request Envelope:**
 ```json
@@ -687,7 +687,7 @@ Every response MUST include a `status` field with a business-specific code:
 
 ---
 
-## 13. Health Checks
+## 14. Health Checks
 
 ```
 GET /health
@@ -710,7 +710,7 @@ GET /health
 
 ---
 
-## 14. Configuration
+## 15. Configuration
 
 ### Environment Variables
 
@@ -730,7 +730,7 @@ GET /health
 
 ---
 
-## 15. Observability
+## 16. Observability
 
 ### Metrics (Prometheus)
 
@@ -759,7 +759,7 @@ Trace: gateway.request
 
 ---
 
-## 16. NATS Events
+## 17. NATS Events
 
 ### Published
 

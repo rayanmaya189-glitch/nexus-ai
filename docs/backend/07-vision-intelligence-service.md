@@ -318,9 +318,9 @@ Content-Type: multipart/form-data
 
 | Subject | Event |
 |---|---|
-| `aeroxe.vision.image.received` | Image uploaded |
-| `aeroxe.vision.analysis.completed` | Analysis complete |
-| `aeroxe.vision.ocr.completed` | OCR complete |
+| `aeroxe.v1.vision.image.received` | Image uploaded |
+| `aeroxe.v1.vision.analysis.completed` | Analysis complete |
+| `aeroxe.v1.vision.ocr.completed` | OCR complete |
 
 ---
 

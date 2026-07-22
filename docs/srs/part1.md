@@ -237,7 +237,7 @@ Production
 
 ## 4.3 Modular Monolith Architecture
 
-All modules live in a **single Rust binary** under `src/modules/`. Each module is a bounded context — not a separate microservice.
+All modules live in a **single Rust binary** under `src/modules/`. Each module is a bounded context — extractable to a separate service later.
 
 Each domain shall:
 
@@ -633,7 +633,7 @@ rag_
 Responsibilities:
 
 * Document ingestion
-* Embeddings (pgvector)
+* Embeddings (pgvector, nomic-embed-text: 768 dimensions, via Ollama)
 * Semantic search
 * Document set management
 
@@ -982,6 +982,7 @@ Responsibilities:
 * Circuit Breaker
 * Retry with exponential backoff
 * Bulkhead pattern
+* **Ollama Circuit Breaker**: 5 consecutive failures → Open state; 30s timeout → Half-Open (3 probe requests); 3 successful probes → Closed state
 
 ---
 
@@ -1018,7 +1019,7 @@ notification (src/modules/notification/)
 Schema:
 
 ```
-notif_
+notification_
 ```
 
 Responsibilities:
@@ -1085,7 +1086,7 @@ ecosystem (src/modules/ecosystem/)
 Schema:
 
 ```
-eco_
+ecosystem_
 ```
 
 Responsibilities:
@@ -1183,10 +1184,10 @@ Shared PostgreSQL Cluster
 ├── Schema: workflow_   → workflow module
 ├── Schema: security_   → security module
 ├── Schema: audit_      → audit module
-├── Schema: notif_      → notification module
+├── Schema: notification_      → notification module
 ├── Schema: config_     → config module
 ├── Schema: models_     → model-registry module
-└── Schema: eco_        → ecosystem module
+└── Schema: ecosystem_  → ecosystem module
 ```
 
 All access through **SeaORM** — no raw SQL.
@@ -1194,7 +1195,7 @@ All access through **SeaORM** — no raw SQL.
 Technology:
 
 ```
-PostgreSQL 18 (single cluster)
+PostgreSQL 16 (single cluster)
 
 pgvector
 
@@ -1225,8 +1226,7 @@ Ollama
 ## Communication
 
 ```
-gRPC
-Protocol Buffers
+REST (Structured)
 NATS JetStream
 ```
 

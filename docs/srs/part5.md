@@ -4,7 +4,7 @@
 
 # Part 5 — Security Architecture & Multi-Tenant Zero Trust Design
 
-## RBAC + ABAC + IAM + Service Security + AI Security
+## RBAC + ABAC + IAM + Module Security + AI Security
 
 ---
 
@@ -63,7 +63,7 @@ Threat Detection
 
                            |
 
-              Internal Microservices
+              Internal Modules (in-process trait dispatch)
 
 
                            |
@@ -71,11 +71,9 @@ Threat Detection
 ================================================
 
 
-Service Identity
+Module Identity
 
-mTLS
-
-gRPC Authentication
+Trait-Based Authentication
 
 NATS Permissions
 
@@ -106,10 +104,10 @@ Audit Logging
 
 # 3. Identity and Access Management (IAM)
 
-## Service
+## Module
 
 ```text
-identity-service
+identity (src/modules/identity/)
 ```
 
 Responsibilities:
@@ -305,7 +303,7 @@ Permission Granted
 
      |
 
-Service Execution
+Module Execution
 
 ```
 
@@ -384,7 +382,7 @@ tenant_c_database
 
 ---
 
-# 9. Service-to-Service Security
+# 9. Module-to-Module Security
 
 > **Modular Monolith:** In the modular monolith, modules communicate via Rust trait methods **within the same process**. There is no network between modules, so mTLS is not needed internally.
 
@@ -401,9 +399,9 @@ tenant_c_database
 
 ---
 
-# 10. gRPC Security Requirements
+# 10. External gRPC Security Requirements (SDK/Partner Integrations)
 
-Every gRPC request includes:
+For external gRPC integrations (not internal module communication), every request includes:
 
 Metadata:
 
@@ -468,7 +466,7 @@ AI_ACCOUNT
 
 subjects:
 
-aeroxe.ai.*
+aeroxe.v1.ai.*
 
 
 ```
@@ -484,12 +482,12 @@ Allowed:
 ```text
 publish:
 
-aeroxe.agent.*
+aeroxe.v1.agent.*
 
 
 subscribe:
 
-aeroxe.rag.*
+aeroxe.v1.rag.*
 
 ```
 
@@ -502,12 +500,12 @@ Allowed:
 ```text
 subscribe:
 
-aeroxe.rag.document.*
+aeroxe.v1.rag.document.*
 
 
 publish:
 
-aeroxe.rag.completed
+aeroxe.v1.rag.completed
 
 ```
 
@@ -515,10 +513,10 @@ aeroxe.rag.completed
 
 # 12. API Gateway Security
 
-Service:
+Module:
 
 ```text
-nexus-api-gateway
+gateway (src/modules/gateway/)
 ```
 
 Responsibilities:
@@ -1056,13 +1054,13 @@ Audit
 
                            |
 
-                 Microservices
+                 Modules (single binary)
 
 
 ================================================
 
 
-gRPC + mTLS
+Trait-Based Dispatch (in-process)
 
 
 NATS Secure Messaging
@@ -1098,7 +1096,7 @@ Covered:
 ✅ IAM Design
 ✅ RBAC + ABAC
 ✅ JWT Security
-✅ gRPC mTLS Security
+✅ Trait-Based Module Security
 ✅ NATS Security
 ✅ AI Security
 ✅ Prompt Injection Protection

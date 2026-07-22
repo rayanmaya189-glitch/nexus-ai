@@ -90,7 +90,7 @@ AeroXe Nexus AI production platform must support:
 ================================================================
 
 
- Shared PostgreSQL 18 Cluster (Schema-per-Module)
+ Shared PostgreSQL 16 Cluster (Schema-per-Module)
 
  Redis Cluster
 
@@ -201,7 +201,7 @@ Security:
 Contains:
 
 ```text
-Microservices
+Modules
 
 AI Agents
 
@@ -214,11 +214,9 @@ Integration Services
 Communication:
 
 ```text
-gRPC
+Trait-based dispatch (in-process)
 
 NATS
-
-mTLS
 
 ```
 
@@ -476,6 +474,7 @@ Recommended:
 | Qwen Coder 3B        | Development   | HIGH      |
 | Llama 3.1 7B         | Reasoning     | HIGH      |
 | Hermes3 3B           | Agent Control | MEDIUM    |
+| nomic-embed-text (768 dimensions) | Embeddings    | HIGH      |
 | LFM2.5 Thinking 1.2B | Planning      | MEDIUM    |
 | Phi-4 Mini 3.8B      | General Chat  | MEDIUM    |
 | WhiteRabbitNeo 7B    | Security      | ON DEMAND |
@@ -532,35 +531,31 @@ Example:
 
 # 9. Internal Communication
 
-Microservices:
+Modules:
 
 Use:
 
 ```
-gRPC
-
-+
-
-mTLS
+Trait-based dispatch (in-process)
 
 ```
 
 Example:
 
 ```
-Agent Service
+Agent Module
 
        |
 
        |
 
-gRPC
+Trait Dispatch
 
        |
 
        |
 
-RAG Service
+RAG Module
 
 ```
 
@@ -575,7 +570,7 @@ Example:
 Customer Event:
 
 ```
-customer.created
+aeroxe.v1.customer.customer.created
 
 
         |
@@ -1196,8 +1191,6 @@ Docker
 
 NATS
 
-gRPC
-
 OpenTelemetry
 
 Prometheus
@@ -1236,7 +1229,7 @@ Total Coverage:
 
 ✅ Part 1 — System Overview
 ✅ Part 2 — Functional Requirements
-✅ Part 3 — Microservices + DDD Architecture
+✅ Part 3 — Modules + DDD Architecture
 ✅ Part 4 — Database Architecture
 ✅ Part 5 — Security + Zero Trust
 ✅ Part 6 — DevOps + Infrastructure

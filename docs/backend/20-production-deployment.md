@@ -55,7 +55,7 @@ AeroXe Nexus AI production platform must support:
 ================================================================
 ```
 
-> **Key Difference:** A single `aeroxe-nexus` deployment replaces 10+ separate microservice deployments.
+> **Key Difference:** A single `aeroxe-nexus` deployment replaces multiple separate service deployments.
 
 ---
 
@@ -110,9 +110,8 @@ Contains:
 
 Communication:
 
-- gRPC
+- Trait-based dispatch (in-process)
 - NATS
-- mTLS
 
 ### Zone 4 — Data Zone
 

@@ -2,7 +2,7 @@
 
 ## Comprehensive Audit Logging + Regulatory Compliance + Data Governance
 
-> **Modular Monolith Context:** The `nexus-audit` module handles all audit logging within the `aeroxe-nexus` binary. Modules call `AuditService::log_event()` trait method (synchronous) or publish to `aeroxe.audit.*` NATS subjects (asynchronous). See [Communication Architecture](12-communication-architecture.md).
+> **Modular Monolith Context:** The `nexus-audit` module handles all audit logging within the `aeroxe-nexus` binary. Modules call `AuditService::log_event()` trait method (synchronous) or publish to `aeroxe.v1.audit.*` NATS subjects (asynchronous). See [Communication Architecture](12-communication-architecture.md).
 
 ---
 
@@ -24,7 +24,7 @@ AeroXe Nexus AI maintains complete audit trails for:
 Module (trait call or NATS) → AuditEvent → nexus-audit module → audit.events (PostgreSQL) + Elasticsearch
 ```
 
-> **Key Difference:** Audit events can be sent synchronously via `AuditService::log_event()` trait call (for critical events that must be persisted immediately) or asynchronously via NATS `aeroxe.audit.*` subjects (for high-volume events).
+> **Key Difference:** Audit events can be sent synchronously via `AuditService::log_event()` trait call (for critical events that must be persisted immediately) or asynchronously via NATS `aeroxe.v1.audit.*` subjects (for high-volume events).
 
 ---
 

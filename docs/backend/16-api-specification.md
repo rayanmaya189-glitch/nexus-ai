@@ -1,6 +1,6 @@
 # AeroXe Nexus AI — API Specification
 
-## REST Protobuf — POST Only — No Path Variables — No Query Strings
+## Structured REST — Standard HTTP Methods
 
 ---
 
@@ -8,36 +8,34 @@
 
 | Principle | Implementation |
 |---|---|
-| Protocol | REST with Protobuf request/response bodies |
-| HTTP Method | **POST only** (no GET, no PUT, no DELETE) |
-| Path Variables | **NOT ALLOWED** — resource IDs in request body |
-| Query Strings | **NOT ALLOWED** — all parameters in request body |
+| Protocol | Structured REST with JSON request/response bodies |
+| HTTP Methods | Standard REST: GET, POST, PUT, PATCH, DELETE |
+| Path Variables | Resource IDs in URL path |
+| Query Strings | Filtering and pagination via query parameters |
 | Versioning | `/api/v{version}/` prefix |
 | Authentication | JWT Bearer (`Authorization` header) |
 | Business Status | Every response includes `status` field |
-| Pagination | Server-side: `limit` (default 10) + `offset` in request body |
+| Pagination | Server-side: `limit` (default 10) + `offset` query parameters |
 
 ---
 
 ## 2. HTTP Methods
 
-| Method | Usage | Allowed |
+| Method | Usage | Example |
 |---|---|---|
-| `GET` | Read resource(s) | **NOT ALLOWED** |
-| `POST` | All operations | **REQUIRED** |
-| `PUT` | Full replace | **NOT ALLOWED** |
-| `DELETE` | Remove resource | **NOT ALLOWED** |
-| `PATCH` | Partial update | **NOT ALLOWED** |
-
-**ALL operations use POST.** Resource IDs, parameters, and filters go in the request body.
+| `GET` | Read resource(s) | `GET /api/v1/customers/{id}` |
+| `POST` | Create resource or trigger action | `POST /api/v1/customers` |
+| `PUT` | Full replace of resource | `PUT /api/v1/customers/{id}` |
+| `PATCH` | Partial update of resource | `PATCH /api/v1/customers/{id}` |
+| `DELETE` | Remove resource | `DELETE /api/v1/customers/{id}` |
 
 ---
 
 ## 3. Request/Response Format
 
-### 3.1 Request Envelope (Protobuf)
+### 3.1 Request Envelope
 
-Every request is a POST with a JSON body (Protobuf-serialized to JSON):
+Every request includes a JSON body with structured envelopes:
 
 ```json
 {
@@ -51,7 +49,7 @@ Every request is a POST with a JSON body (Protobuf-serialized to JSON):
 }
 ```
 
-### 3.2 Success Response Envelope (Protobuf)
+### 3.2 Success Response Envelope
 
 ```json
 {
@@ -69,7 +67,7 @@ Every request is a POST with a JSON body (Protobuf-serialized to JSON):
 }
 ```
 
-### 3.3 List Response Envelope (Protobuf)
+### 3.3 List Response Envelope
 
 ```json
 {
@@ -97,27 +95,47 @@ Every request is a POST with a JSON body (Protobuf-serialized to JSON):
 }
 ```
 
-### 3.4 Error Response Envelope (Protobuf)
+### 3.4 Error Response Envelope
 
 ```json
 {
-  "status": "VALIDATION_ERROR",
-  "operation": "CreateCustomer",
-  "request_id": "uuid",
-  "error": {
-    "code": "VALIDATION_ERROR",
-    "message": "Email is required",
-    "details": [{"field": "email", "message": "is required"}]
-  },
-  "meta": {
-    "timestamp": "2026-07-21T12:00:00Z"
-  }
+  "status": "ERROR",
+  "code": "VALIDATION_ERROR",
+  "message": "Email is required",
+  "details": [
+    {"field": "email", "message": "is required"}
+  ],
+  "request_id": "uuid"
 }
 ```
 
 ---
 
-## 4. Business Status Codes
+## 4. Error Response Standard
+
+All error responses follow a consistent format:
+
+```json
+{
+  "status": "ERROR",
+  "code": "ERROR_CODE",
+  "message": "Human-readable error description",
+  "details": [],
+  "request_id": "uuid"
+}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `status` | string | Always `"ERROR"` for error responses |
+| `code` | string | Machine-readable error code (e.g., `VALIDATION_ERROR`, `NOT_FOUND`) |
+| `message` | string | Human-readable error description |
+| `details` | array | Additional error context (field-level errors, validation details) |
+| `request_id` | string | UUID correlating request to server-side trace |
+
+---
+
+## 5. Business Status Codes
 
 | Status | Description |
 |---|---|
@@ -138,43 +156,49 @@ Every request is a POST with a JSON body (Protobuf-serialized to JSON):
 
 ---
 
-## 5. API Endpoint Structure
+## 6. API Endpoint Structure
 
-All endpoints follow: `POST /api/v{version}/{resource}/{operation}`
+Standard RESTful patterns:
 
-**No path variables.** Resource IDs go in the request body.
-
-**No query strings.** All parameters go in the request body.
+| Pattern | Method | Example |
+|---|---|---|
+| List resources | `GET /api/v1/{resource}` | `GET /api/v1/customers?limit=10&offset=0` |
+| Get single resource | `GET /api/v1/{resource}/{id}` | `GET /api/v1/customers/123` |
+| Create resource | `POST /api/v1/{resource}` | `POST /api/v1/customers` |
+| Update resource (full) | `PUT /api/v1/{resource}/{id}` | `PUT /api/v1/customers/123` |
+| Update resource (partial) | `PATCH /api/v1/{resource}/{id}` | `PATCH /api/v1/customers/123` |
+| Delete resource | `DELETE /api/v1/{resource}/{id}` | `DELETE /api/v1/customers/123` |
+| Trigger action | `POST /api/v1/{resource}/{action}` | `POST /api/v1/customers/123/suspend` |
 
 ---
 
-## 6. Authentication APIs
+## 7. Authentication APIs
 
 | Endpoint | Operation | Status |
 |---|---|---|
 | `POST /api/v1/auth/login` | Login | `SUCCESS` |
 | `POST /api/v1/auth/refresh` | Refresh Token | `SUCCESS` |
 | `POST /api/v1/auth/register` | Register | `CREATED` |
-| `POST /api/v1/auth/me` | Get Current User | `SUCCESS` |
+| `GET /api/v1/auth/me` | Get Current User | `SUCCESS` |
 | `POST /api/v1/auth/change-password` | Change Password | `SUCCESS` |
 
 ---
 
-## 7. Customer APIs
+## 8. Customer APIs
 
 | Endpoint | Operation | Status |
 |---|---|---|
-| `POST /api/v1/customers/create` | Create Customer | `CREATED` |
-| `POST /api/v1/customers/get` | Get Customer | `SUCCESS` |
-| `POST /api/v1/customers/list` | List Customers | `SUCCESS` |
-| `POST /api/v1/customers/update` | Update Customer | `UPDATED` |
-| `POST /api/v1/customers/delete` | Delete Customer | `DELETED` |
-| `POST /api/v1/customers/suspend` | Suspend Customer | `UPDATED` |
-| `POST /api/v1/customers/activate` | Activate Customer | `UPDATED` |
+| `POST /api/v1/customers` | Create Customer | `CREATED` |
+| `GET /api/v1/customers/{id}` | Get Customer | `SUCCESS` |
+| `GET /api/v1/customers` | List Customers | `SUCCESS` |
+| `PATCH /api/v1/customers/{id}` | Update Customer | `UPDATED` |
+| `DELETE /api/v1/customers/{id}` | Delete Customer | `DELETED` |
+| `POST /api/v1/customers/{id}/suspend` | Suspend Customer | `UPDATED` |
+| `POST /api/v1/customers/{id}/activate` | Activate Customer | `UPDATED` |
 
 ---
 
-## 8. AI Chat APIs
+## 9. AI Chat APIs
 
 | Endpoint | Operation | Status |
 |---|---|---|
@@ -183,39 +207,39 @@ All endpoints follow: `POST /api/v{version}/{resource}/{operation}`
 
 ---
 
-## 9. Agent APIs
+## 10. Agent APIs
 
 | Endpoint | Operation | Status |
 |---|---|---|
-| `POST /api/v1/agents/execute` | Execute Agent | `CREATED` |
-| `POST /api/v1/agents/get-execution` | Get Execution Status | `SUCCESS` |
-| `POST /api/v1/agents/list-executions` | List Executions | `SUCCESS` |
-| `POST /api/v1/agents/bind-document-sets` | Bind Document Sets | `UPDATED` |
-| `POST /api/v1/agents/unbind-document-sets` | Unbind Document Sets | `UPDATED` |
-| `POST /api/v1/agents/list-document-sets` | List Bound Document Sets | `SUCCESS` |
-| `POST /api/v1/agents/test-sql-connection` | Test SQL Connection | `SUCCESS` |
-| `POST /api/v1/agents/discover-schema` | Discover Database Schema | `SUCCESS` |
-| `POST /api/v1/agents/bind-tables` | Bind Tables | `UPDATED` |
+| `POST /api/v1/agents` | Execute Agent | `CREATED` |
+| `GET /api/v1/agents/{id}/execution` | Get Execution Status | `SUCCESS` |
+| `GET /api/v1/agents/{id}/executions` | List Executions | `SUCCESS` |
+| `POST /api/v1/agents/{id}/document-sets` | Bind Document Sets | `UPDATED` |
+| `DELETE /api/v1/agents/{id}/document-sets/{set_id}` | Unbind Document Sets | `UPDATED` |
+| `GET /api/v1/agents/{id}/document-sets` | List Bound Document Sets | `SUCCESS` |
+| `POST /api/v1/agents/sql/test-connection` | Test SQL Connection | `SUCCESS` |
+| `POST /api/v1/agents/sql/discover-schema` | Discover Database Schema | `SUCCESS` |
+| `POST /api/v1/agents/{id}/tables` | Bind Tables | `UPDATED` |
 
 ---
 
-## 10. RAG APIs
+## 11. RAG APIs
 
 | Endpoint | Operation | Status |
 |---|---|---|
-| `POST /api/v1/rag/upload-document` | Upload Document | `CREATED` |
-| `POST /api/v1/rag/get-document-status` | Get Document Status | `SUCCESS` |
-| `POST /api/v1/rag/list-documents` | List Documents | `SUCCESS` |
-| `POST /api/v1/rag/delete-document` | Delete Document | `DELETED` |
+| `POST /api/v1/rag/documents` | Upload Document | `CREATED` |
+| `GET /api/v1/rag/documents/{id}/status` | Get Document Status | `SUCCESS` |
+| `GET /api/v1/rag/documents` | List Documents | `SUCCESS` |
+| `DELETE /api/v1/rag/documents/{id}` | Delete Document | `DELETED` |
 | `POST /api/v1/rag/search` | Search Knowledge | `SUCCESS` |
-| `POST /api/v1/rag/create-document-set` | Create Document Set | `CREATED` |
-| `POST /api/v1/rag/list-document-sets` | List Document Sets | `SUCCESS` |
-| `POST /api/v1/rag/update-document-set` | Update Document Set | `UPDATED` |
-| `POST /api/v1/rag/delete-document-set` | Delete Document Set | `DELETED` |
+| `POST /api/v1/rag/document-sets` | Create Document Set | `CREATED` |
+| `GET /api/v1/rag/document-sets` | List Document Sets | `SUCCESS` |
+| `PATCH /api/v1/rag/document-sets/{id}` | Update Document Set | `UPDATED` |
+| `DELETE /api/v1/rag/document-sets/{id}` | Delete Document Set | `DELETED` |
 
 ---
 
-## 11. Vision APIs
+## 12. Vision APIs
 
 | Endpoint | Operation | Status |
 |---|---|---|
@@ -225,7 +249,7 @@ All endpoints follow: `POST /api/v{version}/{resource}/{operation}`
 
 ---
 
-## 12. SQL Intelligence APIs
+## 13. SQL Intelligence APIs
 
 | Endpoint | Operation | Status |
 |---|---|---|
@@ -234,55 +258,55 @@ All endpoints follow: `POST /api/v{version}/{resource}/{operation}`
 
 ---
 
-## 13. Memory APIs
+## 14. Memory APIs
 
 | Endpoint | Operation | Status |
 |---|---|---|
-| `POST /api/v1/memory/store` | Store Memory | `CREATED` |
-| `POST /api/v1/memory/search` | Search Memory | `SUCCESS` |
-| `POST /api/v1/memory/get-context` | Get Conversation Context | `SUCCESS` |
-| `POST /api/v1/memory/delete` | Delete Memory | `DELETED` |
+| `POST /api/v1/memory` | Store Memory | `CREATED` |
+| `GET /api/v1/memory/search` | Search Memory | `SUCCESS` |
+| `GET /api/v1/memory/context` | Get Conversation Context | `SUCCESS` |
+| `DELETE /api/v1/memory/{id}` | Delete Memory | `DELETED` |
 
 ---
 
-## 14. Workflow APIs
+## 15. Workflow APIs
 
 | Endpoint | Operation | Status |
 |---|---|---|
-| `POST /api/v1/workflows/start` | Start Workflow | `CREATED` |
-| `POST /api/v1/workflows/get` | Get Workflow | `SUCCESS` |
-| `POST /api/v1/workflows/list` | List Workflows | `SUCCESS` |
-| `POST /api/v1/workflows/approve-step` | Approve Step | `UPDATED` |
-| `POST /api/v1/workflows/cancel` | Cancel Workflow | `UPDATED` |
+| `POST /api/v1/workflows` | Start Workflow | `CREATED` |
+| `GET /api/v1/workflows/{id}` | Get Workflow | `SUCCESS` |
+| `GET /api/v1/workflows` | List Workflows | `SUCCESS` |
+| `POST /api/v1/workflows/{id}/approve-step` | Approve Step | `UPDATED` |
+| `POST /api/v1/workflows/{id}/cancel` | Cancel Workflow | `UPDATED` |
 
 ---
 
-## 15. Model Management APIs
+## 16. Model Management APIs
 
 | Endpoint | Operation | Status |
 |---|---|---|
-| `POST /api/v1/models/list` | List Models | `SUCCESS` |
-| `POST /api/v1/models/get` | Get Model | `SUCCESS` |
+| `GET /api/v1/models` | List Models | `SUCCESS` |
+| `GET /api/v1/models/{id}` | Get Model | `SUCCESS` |
 | `POST /api/v1/models/pull` | Pull Model | `CREATED` |
-| `POST /api/v1/models/delete` | Delete Model | `DELETED` |
-| `POST /api/v1/models/usage` | Get Usage Stats | `SUCCESS` |
+| `DELETE /api/v1/models/{id}` | Delete Model | `DELETED` |
+| `GET /api/v1/models/usage` | Get Usage Stats | `SUCCESS` |
 
 ---
 
-## 16. KYC APIs
+## 17. KYC APIs
 
 | Endpoint | Operation | Status |
 |---|---|---|
-| `POST /api/v1/kyc/get-status` | Get KYC Status | `SUCCESS` |
-| `POST /api/v1/kyc/upload-document` | Upload KYC Document | `CREATED` |
-| `POST /api/v1/kyc/list-documents` | List KYC Documents | `SUCCESS` |
-| `POST /api/v1/kyc/delete-document` | Delete KYC Document | `DELETED` |
+| `GET /api/v1/kyc/status` | Get KYC Status | `SUCCESS` |
+| `POST /api/v1/kyc/documents` | Upload KYC Document | `CREATED` |
+| `GET /api/v1/kyc/documents` | List KYC Documents | `SUCCESS` |
+| `DELETE /api/v1/kyc/documents/{id}` | Delete KYC Document | `DELETED` |
 | `POST /api/v1/kyc/submit` | Submit for Review | `UPDATED` |
 | `POST /api/v1/kyc/review` | Review KYC | `UPDATED` |
 
 ---
 
-## 17. Security APIs
+## 18. Security APIs
 
 | Endpoint | Operation | Status |
 |---|---|---|
@@ -291,31 +315,31 @@ All endpoints follow: `POST /api/v{version}/{resource}/{operation}`
 
 ---
 
-## 18. Telephony APIs
+## 19. Telephony APIs
 
 | Endpoint | Operation | Status |
 |---|---|---|
 | `POST /api/v1/telephony/webhook/inbound` | Inbound Call Webhook | `SUCCESS` |
-| `POST /api/v1/telephony/calls/initiate` | Initiate Outbound Call | `CREATED` |
-| `POST /api/v1/telephony/calls/get` | Get Call Details | `SUCCESS` |
-| `POST /api/v1/telephony/calls/list` | List Calls | `SUCCESS` |
-| `POST /api/v1/telephony/calls/hold` | Hold Call | `UPDATED` |
-| `POST /api/v1/telephony/calls/resume` | Resume Call | `UPDATED` |
-| `POST /api/v1/telephony/calls/transfer` | Transfer Call | `UPDATED` |
-| `POST /api/v1/telephony/calls/end` | End Call | `UPDATED` |
-| `POST /api/v1/telephony/calls/start-recording` | Start Recording | `UPDATED` |
-| `POST /api/v1/telephony/calls/stop-recording` | Stop Recording | `UPDATED` |
-| `POST /api/v1/telephony/calls/get-transcript` | Get Transcript | `SUCCESS` |
-| `POST /api/v1/telephony/calls/verify-pin` | Verify PIN | `SUCCESS` |
-| `POST /api/v1/telephony/calls/verify-voice` | Verify Voice | `SUCCESS` |
-| `POST /api/v1/telephony/calls/get-auth-status` | Get Auth Status | `SUCCESS` |
-| `POST /api/v1/telephony/voicemails/list` | List Voicemails | `SUCCESS` |
-| `POST /api/v1/telephony/voicemails/get` | Get Voicemail | `SUCCESS` |
-| `POST /api/v1/telephony/voicemails/handle` | Handle Voicemail | `UPDATED` |
-| `POST /api/v1/telephony/ivr/create` | Create IVR Flow | `CREATED` |
-| `POST /api/v1/telephony/ivr/list` | List IVR Flows | `SUCCESS` |
-| `POST /api/v1/telephony/ivr/update` | Update IVR Flow | `UPDATED` |
-| `POST /api/v1/telephony/ivr/delete` | Delete IVR Flow | `DELETED` |
+| `POST /api/v1/telephony/calls` | Initiate Outbound Call | `CREATED` |
+| `GET /api/v1/telephony/calls/{id}` | Get Call Details | `SUCCESS` |
+| `GET /api/v1/telephony/calls` | List Calls | `SUCCESS` |
+| `POST /api/v1/telephony/calls/{id}/hold` | Hold Call | `UPDATED` |
+| `POST /api/v1/telephony/calls/{id}/resume` | Resume Call | `UPDATED` |
+| `POST /api/v1/telephony/calls/{id}/transfer` | Transfer Call | `UPDATED` |
+| `POST /api/v1/telephony/calls/{id}/end` | End Call | `UPDATED` |
+| `POST /api/v1/telephony/calls/{id}/start-recording` | Start Recording | `UPDATED` |
+| `POST /api/v1/telephony/calls/{id}/stop-recording` | Stop Recording | `UPDATED` |
+| `GET /api/v1/telephony/calls/{id}/transcript` | Get Transcript | `SUCCESS` |
+| `POST /api/v1/telephony/calls/{id}/verify-pin` | Verify PIN | `SUCCESS` |
+| `POST /api/v1/telephony/calls/{id}/verify-voice` | Verify Voice | `SUCCESS` |
+| `GET /api/v1/telephony/calls/{id}/auth-status` | Get Auth Status | `SUCCESS` |
+| `GET /api/v1/telephony/voicemails` | List Voicemails | `SUCCESS` |
+| `GET /api/v1/telephony/voicemails/{id}` | Get Voicemail | `SUCCESS` |
+| `POST /api/v1/telephony/voicemails/{id}/handle` | Handle Voicemail | `UPDATED` |
+| `POST /api/v1/telephony/ivr` | Create IVR Flow | `CREATED` |
+| `GET /api/v1/telephony/ivr` | List IVR Flows | `SUCCESS` |
+| `PATCH /api/v1/telephony/ivr/{id}` | Update IVR Flow | `UPDATED` |
+| `DELETE /api/v1/telephony/ivr/{id}` | Delete IVR Flow | `DELETED` |
 | `POST /api/v1/telephony/monitor/listen` | Listen-In | `SUCCESS` |
 | `POST /api/v1/telephony/monitor/whisper` | Whisper to Agent | `SUCCESS` |
 | `POST /api/v1/telephony/monitor/barge-in` | Barge-In | `SUCCESS` |
@@ -325,146 +349,211 @@ All endpoints follow: `POST /api/v{version}/{resource}/{operation}`
 
 ---
 
-## 19. Conversation APIs
+## 20. Conversation APIs
 
 | Endpoint | Operation | Status |
 |---|---|---|
-| `POST /api/v1/conversations/create` | Create Conversation | `CREATED` |
-| `POST /api/v1/conversations/get` | Get Conversation | `SUCCESS` |
-| `POST /api/v1/conversations/list` | List Conversations | `SUCCESS` |
-| `POST /api/v1/conversations/get-messages` | Get Messages | `SUCCESS` |
-| `POST /api/v1/conversations/add-message` | Add Message | `CREATED` |
-| `POST /api/v1/conversations/get-state` | Get State | `SUCCESS` |
-| `POST /api/v1/conversations/end` | End Conversation | `UPDATED` |
-| `POST /api/v1/conversations/branch` | Branch Conversation | `CREATED` |
-| `POST /api/v1/conversations/delete` | Delete Conversation | `DELETED` |
+| `POST /api/v1/conversations` | Create Conversation | `CREATED` |
+| `GET /api/v1/conversations/{id}` | Get Conversation | `SUCCESS` |
+| `GET /api/v1/conversations` | List Conversations | `SUCCESS` |
+| `GET /api/v1/conversations/{id}/messages` | Get Messages | `SUCCESS` |
+| `POST /api/v1/conversations/{id}/messages` | Add Message | `CREATED` |
+| `GET /api/v1/conversations/{id}/state` | Get State | `SUCCESS` |
+| `POST /api/v1/conversations/{id}/end` | End Conversation | `UPDATED` |
+| `POST /api/v1/conversations/{id}/branch` | Branch Conversation | `CREATED` |
+| `DELETE /api/v1/conversations/{id}` | Delete Conversation | `DELETED` |
 
 ---
 
-## 20. STT APIs
+## 21. STT APIs
 
 | Endpoint | Operation | Status |
 |---|---|---|
-| `POST /api/v1/stt/start-session` | Start Session | `CREATED` |
-| `POST /api/v1/stt/send-audio` | Send Audio Chunk | `SUCCESS` |
-| `POST /api/v1/stt/end-session` | End Session | `UPDATED` |
+| `POST /api/v1/stt/sessions` | Start Session | `CREATED` |
+| `POST /api/v1/stt/sessions/{id}/audio` | Send Audio Chunk | `SUCCESS` |
+| `POST /api/v1/stt/sessions/{id}/end` | End Session | `UPDATED` |
 | `POST /api/v1/stt/transcribe` | Batch Transcribe | `SUCCESS` |
-| `POST /api/v1/stt/get-session` | Get Session | `SUCCESS` |
+| `GET /api/v1/stt/sessions/{id}` | Get Session | `SUCCESS` |
 
 ---
 
-## 21. TTS APIs
+## 22. TTS APIs
 
 | Endpoint | Operation | Status |
 |---|---|---|
 | `POST /api/v1/tts/synthesize` | Synthesize Speech | `SUCCESS` |
 | `POST /api/v1/tts/synthesize-ssml` | Synthesize SSML | `SUCCESS` |
-| `POST /api/v1/tts/list-voices` | List Voices | `SUCCESS` |
-| `POST /api/v1/tts/get-voice` | Get Voice | `SUCCESS` |
-| `POST /api/v1/tts/preview-voice` | Preview Voice | `SUCCESS` |
-| `POST /api/v1/tts/clone-voice` | Clone Voice | `CREATED` |
-| `POST /api/v1/tts/revoke-clone` | Revoke Clone | `DELETED` |
+| `GET /api/v1/tts/voices` | List Voices | `SUCCESS` |
+| `GET /api/v1/tts/voices/{id}` | Get Voice | `SUCCESS` |
+| `POST /api/v1/tts/voices/{id}/preview` | Preview Voice | `SUCCESS` |
+| `POST /api/v1/tts/voices/clone` | Clone Voice | `CREATED` |
+| `DELETE /api/v1/tts/voices/clone/{id}` | Revoke Clone | `DELETED` |
 
 ---
 
-## 22. Outbound APIs
+## 23. Outbound APIs
 
 | Endpoint | Operation | Status |
 |---|---|---|
-| `POST /api/v1/outbound/create-campaign` | Create Campaign | `CREATED` |
-| `POST /api/v1/outbound/get-campaign` | Get Campaign | `SUCCESS` |
-| `POST /api/v1/outbound/list-campaigns` | List Campaigns | `SUCCESS` |
-| `POST /api/v1/outbound/start-campaign` | Start Campaign | `UPDATED` |
-| `POST /api/v1/outbound/pause-campaign` | Pause Campaign | `UPDATED` |
-| `POST /api/v1/outbound/cancel-campaign` | Cancel Campaign | `UPDATED` |
-| `POST /api/v1/outbound/get-campaign-stats` | Get Campaign Stats | `SUCCESS` |
-| `POST /api/v1/outbound/schedule-callback` | Schedule Callback | `CREATED` |
-| `POST /api/v1/outbound/list-callbacks` | List Callbacks | `SUCCESS` |
-| `POST /api/v1/outbound/cancel-callback` | Cancel Callback | `DELETED` |
-| `POST /api/v1/outbound/add-dnc` | Add to DNC | `CREATED` |
-| `POST /api/v1/outbound/list-dnc` | List DNC | `SUCCESS` |
-| `POST /api/v1/outbound/remove-dnc` | Remove from DNC | `DELETED` |
+| `POST /api/v1/outbound/campaigns` | Create Campaign | `CREATED` |
+| `GET /api/v1/outbound/campaigns/{id}` | Get Campaign | `SUCCESS` |
+| `GET /api/v1/outbound/campaigns` | List Campaigns | `SUCCESS` |
+| `POST /api/v1/outbound/campaigns/{id}/start` | Start Campaign | `UPDATED` |
+| `POST /api/v1/outbound/campaigns/{id}/pause` | Pause Campaign | `UPDATED` |
+| `POST /api/v1/outbound/campaigns/{id}/cancel` | Cancel Campaign | `UPDATED` |
+| `GET /api/v1/outbound/campaigns/{id}/stats` | Get Campaign Stats | `SUCCESS` |
+| `POST /api/v1/outbound/callbacks` | Schedule Callback | `CREATED` |
+| `GET /api/v1/outbound/callbacks` | List Callbacks | `SUCCESS` |
+| `DELETE /api/v1/outbound/callbacks/{id}` | Cancel Callback | `DELETED` |
+| `POST /api/v1/outbound/dnc` | Add to DNC | `CREATED` |
+| `GET /api/v1/outbound/dnc` | List DNC | `SUCCESS` |
+| `DELETE /api/v1/outbound/dnc/{id}` | Remove from DNC | `DELETED` |
 
 ---
 
-## 23. Webhook APIs
+## 24. Webhook APIs
 
 | Endpoint | Operation | Status |
 |---|---|---|
-| `POST /api/v1/webhooks/create` | Create Webhook | `CREATED` |
-| `POST /api/v1/webhooks/get` | Get Webhook | `SUCCESS` |
-| `POST /api/v1/webhooks/list` | List Webhooks | `SUCCESS` |
-| `POST /api/v1/webhooks/update` | Update Webhook | `UPDATED` |
-| `POST /api/v1/webhooks/delete` | Delete Webhook | `DELETED` |
-| `POST /api/v1/webhooks/test` | Test Webhook | `SUCCESS` |
-| `POST /api/v1/webhooks/list-deliveries` | List Deliveries | `SUCCESS` |
-| `POST /api/v1/webhooks/retry-delivery` | Retry Delivery | `SUCCESS` |
+| `POST /api/v1/webhooks` | Create Webhook | `CREATED` |
+| `GET /api/v1/webhooks/{id}` | Get Webhook | `SUCCESS` |
+| `GET /api/v1/webhooks` | List Webhooks | `SUCCESS` |
+| `PATCH /api/v1/webhooks/{id}` | Update Webhook | `UPDATED` |
+| `DELETE /api/v1/webhooks/{id}` | Delete Webhook | `DELETED` |
+| `POST /api/v1/webhooks/{id}/test` | Test Webhook | `SUCCESS` |
+| `GET /api/v1/webhooks/{id}/deliveries` | List Deliveries | `SUCCESS` |
+| `POST /api/v1/webhooks/deliveries/{id}/retry` | Retry Delivery | `SUCCESS` |
 
 ---
 
-## 24. Analytics APIs
+## 25. Analytics APIs
 
 | Endpoint | Operation | Status |
 |---|---|---|
-| `POST /api/v1/analytics/dashboard` | Get Dashboard | `SUCCESS` |
-| `POST /api/v1/analytics/realtime` | Get Real-time Metrics | `SUCCESS` |
-| `POST /api/v1/analytics/conversations` | Get Conversation Metrics | `SUCCESS` |
-| `POST /api/v1/analytics/calls` | Get Call Metrics | `SUCCESS` |
-| `POST /api/v1/analytics/list-agents` | List Agent Metrics | `SUCCESS` |
-| `POST /api/v1/analytics/get-agent-performance` | Get Agent Performance | `SUCCESS` |
-| `POST /api/v1/analytics/costs` | Get Cost Breakdown | `SUCCESS` |
-| `POST /api/v1/analytics/get-customer-cost` | Get Customer Cost | `SUCCESS` |
-| `POST /api/v1/analytics/create-report` | Create Report | `CREATED` |
-| `POST /api/v1/analytics/list-reports` | List Reports | `SUCCESS` |
-| `POST /api/v1/analytics/get-report` | Get Report | `SUCCESS` |
+| `GET /api/v1/analytics/dashboard` | Get Dashboard | `SUCCESS` |
+| `GET /api/v1/analytics/realtime` | Get Real-time Metrics | `SUCCESS` |
+| `GET /api/v1/analytics/conversations` | Get Conversation Metrics | `SUCCESS` |
+| `GET /api/v1/analytics/calls` | Get Call Metrics | `SUCCESS` |
+| `GET /api/v1/analytics/agents` | List Agent Metrics | `SUCCESS` |
+| `GET /api/v1/analytics/agents/{id}/performance` | Get Agent Performance | `SUCCESS` |
+| `GET /api/v1/analytics/costs` | Get Cost Breakdown | `SUCCESS` |
+| `GET /api/v1/analytics/customers/{id}/cost` | Get Customer Cost | `SUCCESS` |
+| `POST /api/v1/analytics/reports` | Create Report | `CREATED` |
+| `GET /api/v1/analytics/reports` | List Reports | `SUCCESS` |
+| `GET /api/v1/analytics/reports/{id}` | Get Report | `SUCCESS` |
 
 ---
 
-## 25. Billing APIs
+## 26. Billing APIs
 
 | Endpoint | Operation | Status |
 |---|---|---|
-| `POST /api/v1/billing/list-plans` | List Plans | `SUCCESS` |
-| `POST /api/v1/billing/create-subscription` | Create Subscription | `CREATED` |
-| `POST /api/v1/billing/get-subscription` | Get Subscription | `SUCCESS` |
-| `POST /api/v1/billing/update-subscription` | Update Subscription | `UPDATED` |
-| `POST /api/v1/billing/cancel-subscription` | Cancel Subscription | `UPDATED` |
-| `POST /api/v1/billing/get-usage` | Get Usage | `SUCCESS` |
-| `POST /api/v1/billing/list-invoices` | List Invoices | `SUCCESS` |
-| `POST /api/v1/billing/get-invoice` | Get Invoice | `SUCCESS` |
-| `POST /api/v1/billing/pay-invoice` | Pay Invoice | `SUCCESS` |
-| `POST /api/v1/billing/list-payments` | List Payments | `SUCCESS` |
+| `GET /api/v1/billing/plans` | List Plans | `SUCCESS` |
+| `POST /api/v1/billing/subscriptions` | Create Subscription | `CREATED` |
+| `GET /api/v1/billing/subscriptions/{id}` | Get Subscription | `SUCCESS` |
+| `PATCH /api/v1/billing/subscriptions/{id}` | Update Subscription | `UPDATED` |
+| `POST /api/v1/billing/subscriptions/{id}/cancel` | Cancel Subscription | `UPDATED` |
+| `GET /api/v1/billing/usage` | Get Usage | `SUCCESS` |
+| `GET /api/v1/billing/invoices` | List Invoices | `SUCCESS` |
+| `GET /api/v1/billing/invoices/{id}` | Get Invoice | `SUCCESS` |
+| `POST /api/v1/billing/invoices/{id}/pay` | Pay Invoice | `SUCCESS` |
+| `GET /api/v1/billing/payments` | List Payments | `SUCCESS` |
 
 ---
 
-## 26. Health & Observability
+## 27. Health & Observability
 
 | Endpoint | Operation | Status |
 |---|---|---|
-| `POST /api/v1/health/check` | Health Check | `SUCCESS` |
-| `POST /api/v1/metrics/get` | Get Metrics | `SUCCESS` |
+| `GET /api/v1/health/check` | Health Check | `SUCCESS` |
+| `GET /api/v1/metrics` | Get Metrics | `SUCCESS` |
 
 ---
 
-## 27. Error Codes
+## 28. WebSocket Protocol
 
-| Code | Business Status | Description |
+### Connection
+
+```
+ws://host/ws/v1/{channel}?token={jwt}
+```
+
+Channels: `chat`, `telephony`, `telephony/monitor`
+
+### Message Format
+
+All WebSocket messages use a standard envelope:
+
+```json
+{
+  "type": "message_type",
+  "data": {},
+  "timestamp": "2026-07-21T12:00:00Z"
+}
+```
+
+| Field | Type | Description |
 |---|---|---|
-| `VALIDATION_ERROR` | `VALIDATION_ERROR` | Request body validation failed |
-| `UNAUTHORIZED` | `UNAUTHORIZED` | Missing or invalid JWT |
-| `TOKEN_EXPIRED` | `TOKEN_EXPIRED` | JWT has expired |
-| `FORBIDDEN` | `FORBIDDEN` | Insufficient permissions |
-| `NOT_FOUND` | `NOT_FOUND` | Resource not found |
-| `CONFLICT` | `CONFLICT` | Resource already exists |
-| `UNPROCESSABLE_ENTITY` | `UNPROCESSABLE_ENTITY` | Business rule violation |
-| `RATE_LIMIT_EXCEEDED` | `RATE_LIMIT_EXCEEDED` | Rate limit exceeded |
-| `AI_MODEL_TIMEOUT` | `INTERNAL_ERROR` | Model inference timeout |
-| `INTERNAL_ERROR` | `INTERNAL_ERROR` | Server error |
-| `SERVICE_UNAVAILABLE` | `SERVICE_UNAVAILABLE` | Service temporarily unavailable |
+| `type` | string | Message type (`message`, `ping`, `pong`, `error`, `done`) |
+| `data` | object | Message payload (type-specific) |
+| `timestamp` | string | ISO 8601 timestamp |
+
+### Ping/Pong Keep-Alive
+
+Server sends `ping` every **30 seconds**. Client must respond with `pong` within **10 seconds**. If no `pong` is received, the connection is closed and the client should reconnect.
+
+```json
+// Server → Client
+{"type": "ping", "data": {}, "timestamp": "..."}
+
+// Client → Server
+{"type": "pong", "data": {}, "timestamp": "..."}
+```
+
+### Auto-Reconnect with Exponential Backoff
+
+Clients must implement automatic reconnection:
+
+| Attempt | Delay | Jitter |
+|---|---|---|
+| 1 | 1s | ±250ms |
+| 2 | 2s | ±500ms |
+| 3 | 4s | ±1s |
+| 4 | 8s | ±2s |
+| 5+ | 16s (cap) | ±2s |
+
+After 5 failed attempts, the client should enter a degraded state and notify the user. Reconnection must resume the previous session using the stored `conversation_id` or `session_id`.
+
+### Streaming Chat Message Flow
+
+```
+Client → Server:  {"type": "message", "data": {"content": "Hello", "conversation_id": "123"}}
+Server → Client:  {"type": "message", "data": {"content": "Hi", "role": "assistant", "done": false}}
+Server → Client:  {"type": "message", "data": {"content": "there!", "role": "assistant", "done": false}}
+Server → Client:  {"type": "done", "data": {"tokens_used": 42, "model": "phi4-mini:3.8b"}}
+```
 
 ---
 
-## 28. Protobuf Definitions
+## 29. Error Codes
+
+| Code | HTTP Status | Description |
+|---|---|---|
+| `VALIDATION_ERROR` | 400 | Request body validation failed |
+| `UNAUTHORIZED` | 401 | Missing or invalid JWT |
+| `TOKEN_EXPIRED` | 401 | JWT has expired |
+| `FORBIDDEN` | 403 | Insufficient permissions |
+| `NOT_FOUND` | 404 | Resource not found |
+| `CONFLICT` | 409 | Resource already exists |
+| `UNPROCESSABLE_ENTITY` | 422 | Business rule violation |
+| `RATE_LIMIT_EXCEEDED` | 429 | Rate limit exceeded |
+| `AI_MODEL_TIMEOUT` | 504 | Model inference timeout |
+| `INTERNAL_ERROR` | 500 | Server error |
+| `SERVICE_UNAVAILABLE` | 503 | Service temporarily unavailable |
+
+---
+
+## 30. Protobuf Definitions
 
 ### 2.1 Request Envelope
 
@@ -561,7 +650,7 @@ message ListCustomersRequest {
 
 ---
 
-## 29. Performance Targets
+## 31. Performance Targets
 
 | API | Target |
 |---|---|

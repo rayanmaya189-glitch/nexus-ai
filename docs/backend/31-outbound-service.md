@@ -266,7 +266,7 @@ pub struct TimeRange {
 ### campaigns
 
 ```sql
-CREATE TABLE outbound.campaigns (
+CREATE TABLE outbound_.campaigns (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     campaign_id UUID NOT NULL UNIQUE,
     tenant_id BIGINT NOT NULL,
@@ -290,9 +290,9 @@ CREATE TABLE outbound.campaigns (
 ### campaign_targets
 
 ```sql
-CREATE TABLE outbound.targets (
+CREATE TABLE outbound_.targets (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    campaign_id BIGINT NOT NULL REFERENCES outbound.campaigns(id) ON DELETE CASCADE,
+    campaign_id BIGINT NOT NULL REFERENCES outbound_.campaigns(id) ON DELETE CASCADE,
     tenant_id BIGINT NOT NULL,
     customer_id BIGINT,
     phone_number VARCHAR(20),
@@ -305,14 +305,14 @@ CREATE TABLE outbound.targets (
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_outbound_targets_campaign ON outbound.targets(campaign_id, status);
-CREATE INDEX idx_outbound_targets_pending ON outbound.targets(status, created_at) WHERE status = 'pending';
+CREATE INDEX idx_outbound_targets_campaign ON outbound_.targets(campaign_id, status);
+CREATE INDEX idx_outbound_targets_pending ON outbound_.targets(status, created_at) WHERE status = 'pending';
 ```
 
 ### scheduled_callbacks
 
 ```sql
-CREATE TABLE outbound.callbacks (
+CREATE TABLE outbound_.callbacks (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     callback_id UUID NOT NULL UNIQUE,
     tenant_id BIGINT NOT NULL,
@@ -329,14 +329,14 @@ CREATE TABLE outbound.callbacks (
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_callbacks_tenant_date ON outbound.callbacks(tenant_id, scheduled_at);
-CREATE INDEX idx_callbacks_pending ON outbound.callbacks(status, scheduled_at) WHERE status = 'scheduled';
+CREATE INDEX idx_callbacks_tenant_date ON outbound_.callbacks(tenant_id, scheduled_at);
+CREATE INDEX idx_callbacks_pending ON outbound_.callbacks(status, scheduled_at) WHERE status = 'scheduled';
 ```
 
 ### dnc_list
 
 ```sql
-CREATE TABLE outbound.dnc_list (
+CREATE TABLE outbound_.dnc_list (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     tenant_id BIGINT NOT NULL,
     phone_number VARCHAR(20) NOT NULL,
@@ -347,7 +347,7 @@ CREATE TABLE outbound.dnc_list (
     added_by BIGINT
 );
 
-CREATE UNIQUE INDEX idx_dnc_unique ON outbound.dnc_list(tenant_id, phone_number) WHERE removed_at IS NULL;
+CREATE UNIQUE INDEX idx_dnc_unique ON outbound_.dnc_list(tenant_id, phone_number) WHERE removed_at IS NULL;
 ```
 
 ---
@@ -421,12 +421,12 @@ CREATE UNIQUE INDEX idx_dnc_unique ON outbound.dnc_list(tenant_id, phone_number)
 
 | Subject | Event |
 |---|---|
-| `aeroxe.v1.outbound.campaign.started` | `CampaignStarted` |
-| `aeroxe.v1.outbound.campaign.completed` | `CampaignCompleted` |
-| `aeroxe.v1.outbound.call.initiated` | `OutboundCallInitiated` |
-| `aeroxe.v1.outbound.call.completed` | `OutboundCallCompleted` |
-| `aeroxe.v1.outbound.callback.scheduled` | `CallbackScheduled` |
-| `aeroxe.v1.outbound.callback.triggered` | `CallbackTriggered` |
+| `aeroxe.v1.outbound_.campaign.started` | `CampaignStarted` |
+| `aeroxe.v1.outbound_.campaign.completed` | `CampaignCompleted` |
+| `aeroxe.v1.outbound_.call.initiated` | `OutboundCallInitiated` |
+| `aeroxe.v1.outbound_.call.completed` | `OutboundCallCompleted` |
+| `aeroxe.v1.outbound_.callback.scheduled` | `CallbackScheduled` |
+| `aeroxe.v1.outbound_.callback.triggered` | `CallbackTriggered` |
 
 ---
 
@@ -579,7 +579,7 @@ Incoming Call / Request
 ### 12.3 Agent Load Entities
 
 ```sql
-CREATE TABLE outbound.agent_load (
+CREATE TABLE outbound_.agent_load (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     agent_id BIGINT NOT NULL,
     tenant_id BIGINT NOT NULL,

@@ -6,12 +6,12 @@
 
 ## 1. Architecture Principles
 
-AeroXe Nexus AI uses a **shared PostgreSQL cluster with schema-per-module** architecture. This provides the **isolation benefits of microservices** with the **operational simplicity of a monolith**. **No raw SQL is used anywhere** — all database access goes through SeaORM entity models.
+AeroXe Nexus AI uses a **shared PostgreSQL cluster with schema-per-module** architecture. This provides the **isolation benefits of modular design** with the **operational simplicity of a monolith**. **No raw SQL is used anywhere** — all database access goes through SeaORM entity models.
 
 | Rule | Description |
 |---|---|
 | **Schema-per-BoundedContext** | Each module owns a PostgreSQL schema (namespace) |
-| **Service-Wise DB Isolation** | Each service has its own schema for easy extraction to microservices |
+| **Module-Wise DB Isolation** | Each module has its own schema for clear boundaries |
 | **No Cross-Schema Access via SQL** | Modules access other module's data only through Rust trait methods |
 | **No Raw SQL** | All DB access through SeaORM entities, models, and query builders |
 | **Single ORM** | SeaORM is the only ORM — unified across all modules |
@@ -19,11 +19,10 @@ AeroXe Nexus AI uses a **shared PostgreSQL cluster with schema-per-module** arch
 | **Shared Cluster** | Single PostgreSQL cluster for all modules (replication + failover) |
 | **Mandatory tenant_id** | All business tables include `tenant_id` for multi-tenancy |
 
-### Service-Wise DB Isolation
+### Module-Wise DB Isolation
 
-Each service/module has its own PostgreSQL schema, enabling:
-- **Independent schema migrations** per service
-- **Easy microservice extraction** — move schema to standalone DB
+Each module has its own PostgreSQL schema, enabling:
+- **Independent schema migrations** per module
 - **Clear ownership** — each team owns their schema
 - **Security isolation** — cross-schema access blocked by design
 
@@ -47,7 +46,7 @@ Each service/module has its own PostgreSQL schema, enabling:
 | analytics | `analytics` | conversation_metrics, call_metrics, agent_metrics, cost_tracking, snapshots |
 | webhook | `webhook` | subscriptions, deliveries |
 | outbound | `outbound` | campaigns, targets, callbacks, dnc_list |
-| notification | `notif` | (notification templates) |
+| notification | `notification` | (notification templates) |
 | model-registry | `models` | (model registry) |
 | config | `config` | (configuration) |
 | ecosystem | `eco` | (integration) |
@@ -56,7 +55,7 @@ Each service/module has its own PostgreSQL schema, enabling:
 |---|---|---|
 | Transactions | Distributed (2PC / Saga) | Standard ACID (same connection) |
 | Schema changes | N separate migrations | Ordered SeaORM migrations with module prefix |
-| Query across contexts | gRPC/NATS joins | Trait method calls + in-process |
+| Query across contexts | NATS joins | Trait method calls + in-process |
 | ORM | Each service chooses | SeaORM unified across all modules |
 | Backup | N separate backups | Single pg_dump |
 | Future extraction | N/A | Move schema to new cluster |
@@ -68,7 +67,7 @@ Each service/module has its own PostgreSQL schema, enabling:
 
 | Requirement | Technology | Module Users |
 |---|---|---|
-| Transactional Data | **PostgreSQL 18** — via **SeaORM** | All modules |
+| Transactional Data | **PostgreSQL 16** — via **SeaORM** | All modules |
 | Vector Search | pgvector (extension) — via SeaORM | rag, memory |
 | Knowledge Graph | Apache AGE (extension) — via SeaORM | rag |
 | Cache / Short-Term Memory | **Redis** | gateway, memory, identity |
@@ -81,7 +80,7 @@ Each service/module has its own PostgreSQL schema, enabling:
 ## 3. Schema-per-Module Map
 
 ```
-PostgreSQL 18 Cluster — All access via SeaORM entities
+PostgreSQL 16 Cluster — All access via SeaORM entities
 │
 ├── Schema: identity_
 │   └── Module: identity (src/modules/identity/)
@@ -116,7 +115,7 @@ PostgreSQL 18 Cluster — All access via SeaORM entities
 ├── Schema: audit_
 │   └── Module: audit
 │
-├── Schema: notif_
+├── Schema: notification_
 │   └── Module: notification
 │
 ├── Schema: config_

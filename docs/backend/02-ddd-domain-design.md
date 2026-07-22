@@ -18,7 +18,7 @@ AeroXe Nexus AI is designed using **Domain-Driven Design** principles organized 
 | Deployment | N containers | 1 binary |
 | Testing | Service-level integration tests | Module-level + full binary tests |
 | Latency | 2-5ms per gRPC call | < 1μs per trait dispatch |
-| Extractability | N/A | Any module can be extracted to a microservice later |
+| Extractability | N/A | Any module can be extracted to a standalone service later if needed |
 
 ---
 
@@ -56,7 +56,7 @@ AeroXe Nexus AI is designed using **Domain-Driven Design** principles organized 
 |---|---|---|
 | `gateway` | API Gateway (axum HTTP/WS) | — (stateless) |
 | `model-registry` | Ollama model management | `models_` |
-| `notification` | Email, WhatsApp, push | `notif_` |
+| `notification` | Email, WhatsApp, push | `notification_` |
 | `config` | Dynamic configuration | `config_` |
 | `ecosystem` | AeroXe product connectors | `eco_` |
 
@@ -97,7 +97,7 @@ src/modules/<name>/                # Module root
 ├── api/                          # 🟣 Interface Adapters
 │   ├── mod.rs
 │   ├── http/                     # HTTP controllers (axum handlers)
-│   └── grpc/                     # gRPC services (tonic)
+│   └── external/                 # External adapters (gRPC, partner SDKs)
 ├── migrations/                   # SeaORM migration files
 └── tests/                        # Module tests
     ├── unit/                     # 🔴 Domain unit tests (no infra)
@@ -581,17 +581,17 @@ src/modules/
 |  ├── rag           (Document knowledge)                  rag_  |
 |  ├── vision        (Image intelligence)                  vision|
 |  ├── sql-agent     (Natural language SQL)                sql_  |
-|  ├── security      (Security intelligence)               secur |
-|  ├── telephony     (Voice channel, SIP/WebRTC)          tele_ |
-|  ├── conversation  (State machine, context)             conv_ |
+|  ├── security      (Security intelligence)               security_ |
+|  ├── telephony     (Voice channel, SIP/WebRTC)          telephony_ |
+|  ├── conversation  (State machine, context)             conversation_ |
 |  ├── stt           (Speech-to-Text)                     stt_  |
 |  └── tts           (Text-to-Speech)                     tts_  |
 |                                                               |
 |  Supporting Domain Modules:                                    |
-|  ├── identity      (IAM, RBAC, ABAC, KYC)               ident |
-|  ├── customer      (Customer management)                 cust_ |
-|  ├── memory        (AI memory system)                    memor |
-|  ├── workflow      (Business automation)                 workf |
+|  ├── identity      (IAM, RBAC, ABAC, KYC)               identity_ |
+|  ├── customer      (Customer management)                 customer_ |
+|  ├── memory        (AI memory system)                    memory_ |
+|  ├── workflow      (Business automation)                 workflow_ |
 |  ├── audit         (Compliance logging)                  audit |
 |  ├── analytics     (Metrics, reports, BI)                anly_ |
 |  ├── webhook       (Event delivery, retry)               whk_  |
@@ -600,7 +600,7 @@ src/modules/
 |  Infrastructure Modules:                                       |
 |  ├── gateway       (API Gateway — HTTP/WS + middleware)   —    |
 |  ├── model-registry (Model management)                   mode  |
-|  ├── notification  (Email, WhatsApp, push)               notif |
+|  ├── notification  (Email, WhatsApp, push)               notification_ |
 |  ├── config        (Dynamic configuration)                conf |
 |  └── ecosystem     (AeroXe product connectors)            eco_ |
 +---------------------------------------------------------------+

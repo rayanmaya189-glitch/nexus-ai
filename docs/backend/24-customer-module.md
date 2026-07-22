@@ -66,8 +66,8 @@ src/modules/customer/
 │   ├── http/
 │   │   ├── customer_controller.rs  # Axum HTTP handlers
 │   │   └── tests/                  # Endpoint tests
-│   └── grpc/
-│       └── customer_service.rs     # gRPC service (tonic)
+│   └── external/
+│       └── customer_grpc.rs        # External gRPC adapter (tonic, optional)
 └── migrations/                   # SeaORM migration files
 ```
 
@@ -157,7 +157,7 @@ CREATED → ACTIVE → SUSPENDED → ACTIVE (re-activated)
 use sea_orm::entity::prelude::*;
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
-#[sea_orm(table_name = "customers", schema_name = "customer")]
+#[sea_orm(table_name = "customers", schema_name = "customer_")]
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i64,
@@ -187,7 +187,7 @@ impl ActiveModelBehavior for ActiveModel {}
 
 ```rust
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
-#[sea_orm(table_name = "addresses", schema_name = "customer")]
+#[sea_orm(table_name = "addresses", schema_name = "customer_")]
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i64,
@@ -370,7 +370,7 @@ pub trait CustomerService: Send + Sync {
 
 ---
 
-## 10. gRPC Service (Versioned)
+## 10. External gRPC Adapter (Versioned, Optional)
 
 ```protobuf
 // proto/customer/v1/customer_service.proto

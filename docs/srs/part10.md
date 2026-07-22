@@ -944,7 +944,7 @@ AI Event
 
  |
 
-Notification Service
+Notification Module
 
 
  |

@@ -94,12 +94,12 @@ pub struct ConversationCost {
 
 | Table | Purpose |
 |---|---|
-| `analytics.conversation_metrics` | Conversation metrics (partitioned) |
-| `analytics.call_metrics` | Call metrics (partitioned) |
-| `analytics.agent_metrics` | Agent metrics (partitioned) |
-| `analytics.cost_tracking` | Cost tracking (partitioned) |
-| `analytics.snapshots` | Pre-aggregated snapshots |
-| `analytics.conversation_costs` | Per-conversation costs |
+| `analytics_.conversation_metrics` | Conversation metrics (partitioned) |
+| `analytics_.call_metrics` | Call metrics (partitioned) |
+| `analytics_.agent_metrics` | Agent metrics (partitioned) |
+| `analytics_.cost_tracking` | Cost tracking (partitioned) |
+| `analytics_.snapshots` | Pre-aggregated snapshots |
+| `analytics_.conversation_costs` | Per-conversation costs |
 
 ---
 

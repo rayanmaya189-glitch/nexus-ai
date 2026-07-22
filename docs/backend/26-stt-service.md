@@ -216,7 +216,7 @@ Audio Stream (from Telephony)
 ### transcription_sessions
 
 ```sql
-CREATE TABLE stt.sessions (
+CREATE TABLE stt_.sessions (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     session_id UUID NOT NULL UNIQUE,
     tenant_id BIGINT NOT NULL,
@@ -238,9 +238,9 @@ CREATE TABLE stt.sessions (
 ### transcription_segments
 
 ```sql
-CREATE TABLE stt.segments (
+CREATE TABLE stt_.segments (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    session_id BIGINT NOT NULL REFERENCES stt.sessions(id) ON DELETE CASCADE,
+    session_id BIGINT NOT NULL REFERENCES stt_.sessions(id) ON DELETE CASCADE,
     tenant_id BIGINT NOT NULL,
     text TEXT NOT NULL,
     speaker VARCHAR(20),
@@ -252,13 +252,13 @@ CREATE TABLE stt.segments (
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_stt_segments_session ON stt.segments(session_id, start_ms);
+CREATE INDEX idx_stt_segments_session ON stt_.segments(session_id, start_ms);
 ```
 
 ### stt_models
 
 ```sql
-CREATE TABLE stt.models (
+CREATE TABLE stt_.models (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     tenant_id BIGINT,
     name VARCHAR(100) NOT NULL,

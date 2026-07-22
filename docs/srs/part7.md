@@ -81,10 +81,10 @@ Architecture:
 
 All APIs must support:
 
-* **REST Protobuf** — Request/response in Protobuf format (JSON-serialized)
-* **POST only** — No GET, no PUT, no DELETE, no PATCH
-* **No path variables** — Resource IDs in request body
-* **No query strings** — All parameters in request body
+* **Structured REST** — Standard REST methods (GET/POST/PUT/PATCH/DELETE) with JSON request/response
+* **Standard REST** — GET for reads, POST for creates, PUT/PATCH for updates, DELETE for removals
+* **Path variables** — Resource IDs in URL path (e.g., `/api/v1/agents/{id}`)
+* **Query strings** — Supported for filtering and pagination
 * Versioning (`/api/v1/*`)
 * Authentication
 * Tenant isolation
@@ -134,7 +134,7 @@ POST /api/v1/auth/login
 
  |
 
-Identity Service
+Identity Module
 
 
  |
@@ -680,10 +680,10 @@ Response:
 
 # 16. Model Management API
 
-Service:
+Module:
 
 ```
-model-registry-service
+model-registry (src/modules/model-registry/)
 ```
 
 ---
@@ -915,7 +915,7 @@ Broadband Service
 
  |
 
-gRPC
+Trait call
 
 
  |
@@ -997,7 +997,7 @@ API Gateway
 
  |
 
-AI Services
+AI Modules
 
 
  |

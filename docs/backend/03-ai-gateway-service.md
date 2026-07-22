@@ -199,7 +199,7 @@ External Request
 [9] Agent Routing Decision
     |
     v
-[10] gRPC Call to Agent Orchestrator
+[10] Trait-based dispatch to Agent Orchestrator
     |
     v
 [11] Response Aggregation / Streaming
@@ -407,7 +407,7 @@ Every filter match is logged:
 
 ---
 
-## 8. Session Management
+## 9. Session Management
 
 ### Session Lifecycle
 
@@ -433,7 +433,7 @@ Session expires -> Cleanup
 
 ---
 
-## 9. Agent Routing
+## 10. Agent Routing
 
 The gateway determines which specialized agent handles each request.
 
@@ -463,19 +463,19 @@ Classify Intent -> Select Agent -> Execute
 
 ---
 
-## 10. Multi-Tenancy
+## 11. Multi-Tenancy
 
 Every request must include `tenant_id`. The gateway:
 
 1. Extracts `tenant_id` from JWT claims
 2. Validates tenant exists and is active
-3. Attaches `tenant_id` to all downstream gRPC calls
+3. Attaches `tenant_id` to all downstream trait calls
 4. Enforces tenant-specific rate limits
 5. Filters responses by tenant scope
 
 ---
 
-## 11. Database Schema (gateway_db)
+## 12. Database Schema (gateway_db)
 
 ### ai_sessions
 
@@ -510,7 +510,7 @@ CREATE TABLE ai_requests (
 
 ---
 
-## 12. NATS Events (Async Communication)
+## 13. NATS Events (Async Communication)
 
 > **Note:** Unlike the old microservice architecture, module-to-module calls use trait interfaces, not NATS. NATS is used only for async event publishing that other modules may consume for background processing.
 
@@ -518,20 +518,20 @@ CREATE TABLE ai_requests (
 
 | Subject | Event | Trigger |
 |---|---|---|
-| `aeroxe.ai.request.created` | `AIRequestReceived` | New request |
-| `aeroxe.ai.response.generated` | `AIResponseGenerated` | Response ready |
-| `aeroxe.ai.failed` | `AIRequestFailed` | Request error |
+| `aeroxe.v1.ai.request.created` | `AIRequestReceived` | New request |
+| `aeroxe.v1.ai.response.generated` | `AIResponseGenerated` | Response ready |
+| `aeroxe.v1.ai.failed` | `AIRequestFailed` | Request error |
 
 ### Subscribed
 
 | Subject | Handler |
 |---|---|
-| `aeroxe.agent.completed` | Update request status |
-| `aeroxe.agent.failed` | Handle failure, retry if applicable |
+| `aeroxe.v1.agent.completed` | Update request status |
+| `aeroxe.v1.agent.failed` | Handle failure, retry if applicable |
 
 ---
 
-## 13. Error Handling
+## 14. Error Handling
 
 ### Error Types
 
@@ -558,7 +558,7 @@ CREATE TABLE ai_requests (
 
 ---
 
-## 14. Observability
+## 15. Observability
 
 ### Metrics
 
@@ -574,12 +574,12 @@ CREATE TABLE ai_requests (
 
 Every request gets a `trace_id` propagated through:
 - REST header: `X-Trace-ID`
-- gRPC metadata: `trace-id`
+- Internal: `trace_id` field in request context
 - NATS: `trace_id` in event data
 
 ---
 
-## 15. Health Checks
+## 16. Health Checks
 
 ```
 GET /health/live    -> 200 OK (process alive)

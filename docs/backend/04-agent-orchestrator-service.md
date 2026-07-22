@@ -354,6 +354,7 @@ Step 2 (after all complete):
 -- Schema: agent_
 CREATE TABLE agent.agents (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    tenant_id BIGINT NOT NULL,
     name VARCHAR(100) NOT NULL,
     type VARCHAR(100) NOT NULL,
     model VARCHAR(100) NOT NULL,
@@ -536,28 +537,28 @@ Agent SQL Query → Query agent_databases for bound connections
 
 | Subject | Event |
 |---|---|
-| `aeroxe.agent.started` | `AgentStarted` |
-| `aeroxe.agent.completed` | `AgentCompleted` |
-| `aeroxe.agent.failed` | `AgentFailed` |
-| `aeroxe.agent.tool.executed` | `ToolExecuted` |
-| `aeroxe.agent.bound` | `AgentBoundToDocumentSet` |
-| `aeroxe.agent.unbound` | `AgentUnboundFromDocumentSet` |
-| `aeroxe.agent.db.test.success` | `AgentDBConnectionTested` |
-| `aeroxe.agent.db.test.failed` | `AgentDBConnectionTestFailed` |
-| `aeroxe.agent.db.bound` | `AgentBoundToDatabase` |
-| `aeroxe.agent.db.unbound` | `AgentUnboundFromDatabase` |
+| `aeroxe.v1.agent.started` | `AgentStarted` |
+| `aeroxe.v1.agent.completed` | `AgentCompleted` |
+| `aeroxe.v1.agent.failed` | `AgentFailed` |
+| `aeroxe.v1.agent.tool.executed` | `ToolExecuted` |
+| `aeroxe.v1.agent.bound` | `AgentBoundToDocumentSet` |
+| `aeroxe.v1.agent.unbound` | `AgentUnboundFromDocumentSet` |
+| `aeroxe.v1.agent.db.test.success` | `AgentDBConnectionTested` |
+| `aeroxe.v1.agent.db.test.failed` | `AgentDBConnectionTestFailed` |
+| `aeroxe.v1.agent.db.bound` | `AgentBoundToDatabase` |
+| `aeroxe.v1.agent.db.unbound` | `AgentUnboundFromDatabase` |
 
 ### Subscribed
 
 | Subject | Handler |
 |---|---|
-| `aeroxe.ai.request.created` | Start agent execution |
-| `aeroxe.rag.completed` | Process RAG results |
-| `aeroxe.vision.completed` | Process vision results |
+| `aeroxe.v1.ai.request.created` | Start agent execution |
+| `aeroxe.v1.rag.completed` | Process RAG results |
+| `aeroxe.v1.vision.completed` | Process vision results |
 
 ---
 
-## 11. Human Approval Workflow
+## 13. Human Approval Workflow
 
 For sensitive actions (refunds, data deletion, financial transactions):
 
@@ -579,7 +580,7 @@ Action executed (or rejected with reason)
 
 ---
 
-## 11.1 Voice Call Agent Support (NEW)
+## 13.1 Voice Call Agent Support (NEW)
 
 The agent orchestrator supports voice call contexts alongside text chat:
 
@@ -663,7 +664,7 @@ pub struct AgentVoiceConfig {
 
 ---
 
-## 12. Observability
+## 14. Observability
 
 ### Tracked Metrics
 

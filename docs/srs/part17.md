@@ -88,8 +88,8 @@ NATS Event → Event Filter → Rate Limit Check → Payload Construction
 
 | Table | Purpose |
 |---|---|
-| `webhook.subscriptions` | Webhook subscriptions |
-| `webhook.deliveries` | Delivery attempts |
+| `webhook_.subscriptions` | Webhook subscriptions |
+| `webhook_.deliveries` | Delivery attempts |
 
 ---
 

@@ -40,7 +40,7 @@ Rules:
 
 ================================================================
 
-Single PostgreSQL 18 Cluster
+Single PostgreSQL 16 Cluster
 
 
  Identity Module (schema: identity_)
@@ -98,7 +98,7 @@ Single PostgreSQL 18 Cluster
 
 | Requirement      | Technology     |
 | ---------------- | -------------- |
-| Transaction Data | PostgreSQL 18  |
+| Transaction Data | PostgreSQL 16  |
 | Vector Search    | pgvector       |
 | Knowledge Graph  | Apache AGE     |
 | Cache            | Redis          |
@@ -139,7 +139,7 @@ pub struct Model {
 
 ---
 
-# 5. Identity Service Database
+# 5. Identity Module Database
 
 Database:
 
@@ -429,6 +429,7 @@ Track AI agent execution.
 pub struct Model {
     #[sea_orm(primary_key)]
     pub id: i64,
+    pub tenant_id: i64,
     pub name: Option<String>,
     pub type_: Option<String>,  // 'type' is a Rust keyword
     pub model: Option<String>,
@@ -520,7 +521,7 @@ pub struct Model {
     pub document_id: Option<i64>,
     pub content: Option<String>,
     pub chunk_index: Option<i32>,
-    pub embedding: Option<Vec<f32>>,  // pgvector vector(768)
+    pub embedding: Option<Vec<f32>>,  // pgvector vector(768) — nomic-embed-text via Ollama
 }
 ```
 
@@ -612,6 +613,8 @@ Chunk Generator
       |
 
 Embedding Model
+
+(nomic-embed-text: 768 dimensions, via Ollama)
 
 
       |
@@ -731,7 +734,7 @@ BELONGS_TO
 
 ---
 
-# 11. Vision Service Database
+# 11. Vision Module Database
 
 Database:
 
@@ -788,7 +791,7 @@ pub struct Model {
 
 ---
 
-# 12. Memory Service Database
+# 12. Memory Module Database
 
 Database:
 
@@ -832,7 +835,7 @@ pub struct Model {
     pub id: i64,
     pub user_id: Option<i64>,
     pub content: Option<String>,
-    pub embedding: Option<Vec<f32>>,  // pgvector vector(768)
+    pub embedding: Option<Vec<f32>>,  // pgvector vector(768) — nomic-embed-text via Ollama
     pub importance: Option<f64>,
     pub created_at: Option<chrono::NaiveDateTime>,
 }
@@ -1294,7 +1297,7 @@ MinIO
 
 Covered:
 
-✅ Database-per-service architecture
+✅ Schema-per-Module architecture
 ✅ PostgreSQL schema design
 ✅ pgvector RAG database
 ✅ Knowledge Graph model

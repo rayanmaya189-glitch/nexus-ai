@@ -349,7 +349,7 @@ pub struct TokenUsage {
 ### conversations
 
 ```sql
-CREATE TABLE conversation.conversations (
+CREATE TABLE conversation_.conversations (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     conversation_id UUID NOT NULL UNIQUE,
     tenant_id BIGINT NOT NULL,
@@ -370,18 +370,18 @@ CREATE TABLE conversation.conversations (
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_conv_tenant ON conversation.conversations(tenant_id, created_at DESC);
-CREATE INDEX idx_conv_customer ON conversation.conversations(customer_id, created_at DESC);
-CREATE INDEX idx_conv_state ON conversation.conversations(state) WHERE state != 'end';
-CREATE INDEX idx_conv_active ON conversation.conversations(last_activity_at DESC) WHERE state != 'end';
+CREATE INDEX idx_conv_tenant ON conversation_.conversations(tenant_id, created_at DESC);
+CREATE INDEX idx_conv_customer ON conversation_.conversations(customer_id, created_at DESC);
+CREATE INDEX idx_conv_state ON conversation_.conversations(state) WHERE state != 'end';
+CREATE INDEX idx_conv_active ON conversation_.conversations(last_activity_at DESC) WHERE state != 'end';
 ```
 
 ### conversation_messages
 
 ```sql
-CREATE TABLE conversation.messages (
+CREATE TABLE conversation_.messages (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    conversation_id BIGINT NOT NULL REFERENCES conversation.conversations(id) ON DELETE CASCADE,
+    conversation_id BIGINT NOT NULL REFERENCES conversation_.conversations(id) ON DELETE CASCADE,
     tenant_id BIGINT NOT NULL,
     message_id UUID NOT NULL,
     role VARCHAR(20) NOT NULL,            -- user | assistant | system | tool
@@ -394,15 +394,15 @@ CREATE TABLE conversation.messages (
     created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX idx_conv_msg_conv ON conversation.messages(conversation_id, created_at);
+CREATE INDEX idx_conv_msg_conv ON conversation_.messages(conversation_id, created_at);
 ```
 
 ### conversation_entities
 
 ```sql
-CREATE TABLE conversation.entities (
+CREATE TABLE conversation_.entities (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    conversation_id BIGINT NOT NULL REFERENCES conversation.conversations(id) ON DELETE CASCADE,
+    conversation_id BIGINT NOT NULL REFERENCES conversation_.conversations(id) ON DELETE CASCADE,
     tenant_id BIGINT NOT NULL,
     entity_type VARCHAR(50) NOT NULL,     -- customer_id, product, ticket, etc.
     entity_value TEXT NOT NULL,
@@ -460,12 +460,12 @@ CREATE TABLE conversation.entities (
 
 | Subject | Event |
 |---|---|
-| `aeroxe.v1.conversation.created` | `ConversationCreated` |
-| `aeroxe.v1.conversation.state.changed` | `ConversationStateChanged` |
-| `aeroxe.v1.conversation.message.added` | `MessageAdded` |
-| `aeroxe.v1.conversation.ended` | `ConversationEnded` |
-| `aeroxe.v1.conversation.timeout` | `ConversationTimeout` |
-| `aeroxe.v1.conversation.escalated` | `ConversationEscalated` |
+| `aeroxe.v1.conversation_.created` | `ConversationCreated` |
+| `aeroxe.v1.conversation_.state.changed` | `ConversationStateChanged` |
+| `aeroxe.v1.conversation_.message.added` | `MessageAdded` |
+| `aeroxe.v1.conversation_.ended` | `ConversationEnded` |
+| `aeroxe.v1.conversation_.timeout` | `ConversationTimeout` |
+| `aeroxe.v1.conversation_.escalated` | `ConversationEscalated` |
 
 ---
 
@@ -635,9 +635,9 @@ Each Message in Conversation
 ### 14.3 Sentiment Entities
 
 ```sql
-CREATE TABLE conversation.sentiment (
+CREATE TABLE conversation_.sentiment (
     id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    conversation_id BIGINT NOT NULL REFERENCES conversation.conversations(id) ON DELETE CASCADE,
+    conversation_id BIGINT NOT NULL REFERENCES conversation_.conversations(id) ON DELETE CASCADE,
     message_id BIGINT NOT NULL,
     tenant_id BIGINT NOT NULL,
     score FLOAT NOT NULL,              -- -1.0 to 1.0
@@ -741,3 +741,68 @@ pub enum DeletionMethod {
     Anonymize,     // Replace with anonymized data
 }
 ```
+
+---
+
+## 16. Post-Call Survey
+
+Post-call surveys collect customer satisfaction feedback after conversations end.
+
+### 16.1 Survey Configuration
+
+- survey_enabled: bool
+- survey_delay_seconds: u32 (default 5)
+- rating_scale: u8 (default 5)
+- questions: Vec<SurveyQuestion>
+
+### 16.2 Survey Flow
+
+1. Conversation ends
+2. Wait survey_delay_seconds
+3. Play/ask survey prompt via TTS
+4. Collect DTMF/speech rating (1-5 scale)
+5. Optional free-text comment
+6. Store in post_call_surveys table
+
+### 16.3 Database Table
+
+```sql
+CREATE TABLE conversation_.post_call_surveys (
+    id BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    conversation_id BIGINT NOT NULL,
+    tenant_id BIGINT NOT NULL,
+    rating SMALLINT NOT NULL CHECK (rating BETWEEN 1 AND 5),
+    comment TEXT,
+    channel VARCHAR(20) NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+```
+
+### 16.4 NATS Events
+
+- aeroxe.v1.conversation.survey.completed
+
+---
+
+## 17. Conversation Timeout
+
+Conversations are automatically managed when participants become inactive.
+
+### 17.1 Timeout Configuration
+
+```rust
+pub struct ConversationTimeoutConfig {
+    pub inactivity_timeout_seconds: u32,  // default 300 (5 min)
+    pub warning_threshold_seconds: u32,   // default 240 (4 min)
+    pub auto_end_on_timeout: bool,        // default true
+    pub max_idle_conversations: usize,    // default 10000
+}
+```
+
+### 17.2 Timeout Flow
+
+1. Timer starts after each message
+2. At warning_threshold: send "Are you still there?" prompt
+3. At inactivity_timeout: log timeout event, end conversation
+4. Archive conversation with outcome=timeout
+5. Publish NATS event: aeroxe.v1.conversation.timeout

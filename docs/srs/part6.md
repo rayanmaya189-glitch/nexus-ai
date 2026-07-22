@@ -72,7 +72,7 @@ Deployment goals:
 ================================================================
 
 
- PostgreSQL Cluster 18 (Schema-per-Module)
+ PostgreSQL Cluster 16 (Schema-per-Module)
 
  Redis Cluster
 
@@ -122,9 +122,9 @@ aeroxe-nexus (single binary)
 
 Benefits:
 
-| Aspect | Microservices (N containers) | Modular Monolith (1 binary) |
-|---|---|---|
-| Deployment | Docker Compose / K8s | Single systemd service |
+| Aspect | Modular Monolith (1 binary) |
+|---|---|
+| Deployment | Single systemd service |
 | Startup | Minutes | < 1 second |
 | Debugging | Cross-container tracing | Single process |
 | Latency | 2-5ms (gRPC) | < 1μs (trait call) |
@@ -214,7 +214,7 @@ Services:
 
 - Elasticsearch
 
-- Microservices
+- aeroxe-nexus (single binary)
 
 ```
 
@@ -250,18 +250,21 @@ ElasticSearch
 ================================================
 
 
-Microservices
+Application (single binary)
 
 
-identity-service
+aeroxe-nexus
 
-gateway-service
 
-agent-service
+src/modules/identity
 
-rag-service
+src/modules/customer
 
-vision-service
+src/modules/agent
+
+src/modules/rag
+
+src/modules/vision
 
 
 ```
@@ -298,17 +301,19 @@ aeroxe-monitoring
 Contains:
 
 ```text
-ai-gateway
+aeroxe-nexus (single binary)
 
-agent-orchestrator
+src/modules/ai-gateway
 
-rag-service
+src/modules/agent
 
-vision-service
+src/modules/rag
 
-sql-agent
+src/modules/vision
 
-workflow-service
+src/modules/sql-agent
+
+src/modules/workflow
 
 ```
 
@@ -354,7 +359,7 @@ OpenTelemetry
 
 # 10. Kubernetes Deployment Example
 
-Agent Service:
+Single Binary Deployment:
 
 ```yaml
 apiVersion: apps/v1
@@ -364,7 +369,7 @@ kind: Deployment
 
 metadata:
 
- name: agent-service
+ name: aeroxe-nexus
 
 
 spec:
@@ -376,7 +381,7 @@ spec:
 
   matchLabels:
 
-   app: agent-service
+   app: aeroxe-nexus
 
 
  template:
@@ -388,16 +393,16 @@ spec:
    containers:
 
 
-   - name: agent
+   - name: nexus
 
 
-     image: aeroxe/agent-service:v1
+     image: aeroxe/nexus:latest
 
 
      ports:
 
 
-     - containerPort:50051
+     - containerPort: 8080
 
 ```
 
@@ -410,13 +415,13 @@ AI inference runs separately.
 Architecture:
 
 ```text
-                AI Services
+                AI Modules
 
 
                     |
 
 
-                    | HTTP/gRPC
+                    | HTTP
 
 
                     |
@@ -459,6 +464,7 @@ Responsibilities:
 * Model management
 * GPU inference
 * Token streaming
+* **Circuit Breaker**: 5 consecutive failures → Open state; 30s timeout → Half-Open (3 probe requests); 3 successful probes → Closed state
 
 ---
 
@@ -631,17 +637,22 @@ Kubernetes Deploy
 aeroxe-nexus-ai/
 
 
-├── services/
+├── src/
 
 
 │
-├── identity-service
+├── modules/
 
-├── agent-service
 
-├── rag-service
+│   ├── identity/
 
-├── vision-service
+│   ├── customer/
+
+│   ├── agent/
+
+│   ├── rag/
+
+│   ├── vision/
 
 
 ├── proto/
@@ -878,7 +889,7 @@ GET /health/ready
 
 Example:
 
-Agent Service:
+Single Binary:
 
 ```text
 1 Replica
@@ -1102,10 +1113,10 @@ NVMe RAID
 Applications
 
 
-Microservices
+Single Binary (Modular Monolith)
 
 
-gRPC
+Trait-Based Dispatch (in-process)
 
 
 NATS JetStream

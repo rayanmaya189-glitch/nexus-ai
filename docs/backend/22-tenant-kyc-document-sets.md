@@ -313,7 +313,7 @@ POST /api/v1/agents/:agent_id/sql-connections/test
 ```json
 {
   "status": "connected",
-  "server_version": "PostgreSQL 18.0",
+  "server_version": "PostgreSQL 16.0",
   "tables_found": 45,
   "latency_ms": 120
 }
@@ -734,10 +734,6 @@ Result: Agent can ONLY answer from Product Manuals, FAQ, and Troubleshooting
 
 ## 9. NATS Events
 
-### KYC Events
-
-| Subject | Event | When |
-|---|---|---|
 ### KYC Events
 
 | Subject | Event | When |

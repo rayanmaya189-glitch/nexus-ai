@@ -143,7 +143,7 @@ src/modules/<name>/
 ├── api/
 │   ├── mod.rs
 │   ├── http/                      # Axum HTTP handlers
-│   └── grpc/                      # gRPC services (optional)
+│   └── http/                      # Axum HTTP handlers
 ├── migrations/                    # SeaORM migration files
 └── tests/
     ├── unit/
@@ -1251,9 +1251,9 @@ Infrastructure
 
 ├── gateway        (stateless, Redis)
 ├── model-registry (schema: models_)
-├── notification   (schema: notif_)
+├── notification   (schema: notification_)
 ├── config         (schema: config_)
-├── ecosystem      (schema: eco_)
+├── ecosystem      (schema: ecosystem_)
 
 ```
 

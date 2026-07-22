@@ -313,7 +313,7 @@ POST /api/v1/agents/:agent_id/sql-connections/test
 ```json
 {
   "status": "connected",
-  "server_version": "PostgreSQL 18.0",
+  "server_version": "PostgreSQL 16.0",
   "tables_found": 45,
   "latency_ms": 120
 }
