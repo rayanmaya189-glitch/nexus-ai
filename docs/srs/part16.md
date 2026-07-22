@@ -81,11 +81,11 @@ pub struct ConversationCost {
 
 | Method | Endpoint | Business Status | HTTP |
 |---|---|---|---|
-| `GET` | `/api/v1/analytics/dashboard?start=...&end=...` | `SUCCESS` | `200` |
-| `GET` | `/api/v1/analytics/realtime` | `SUCCESS` | `200` |
-| `GET` | `/api/v1/analytics/agents?limit=10&offset=0` | `SUCCESS` | `200` |
-| `GET` | `/api/v1/analytics/agents/{agent_id}/performance` | `SUCCESS` | `200` |
-| `GET` | `/api/v1/analytics/costs?start=...&end=...` | `SUCCESS` | `200` |
+| `POST` | `/api/v1/analytics/dashboard?start=...&end=...` | `SUCCESS` | `200` |
+| `POST` | `/api/v1/analytics/realtime` | `SUCCESS` | `200` |
+| `POST` | `/api/v1/analytics/agents?limit=10&offset=0` | `SUCCESS` | `200` |
+| `POST` | `/api/v1/analytics/agents/{agent_id}/performance` | `SUCCESS` | `200` |
+| `POST` | `/api/v1/analytics/costs?start=...&end=...` | `SUCCESS` | `200` |
 | `POST` | `/api/v1/analytics/reports` | `CREATED` | `201` |
 
 ---

@@ -2,7 +2,7 @@
 
 ## AI-Powered Security Analysis, Vulnerability Detection & Threat Intelligence
 
-> **Modular Monolith Module:** This document describes the `nexus-security-ai` crate — a module within the single `aeroxe-nexus` binary. It communicates with other modules via Rust trait interfaces (see [Communication Architecture](12-communication-architecture.md)).
+> **Modular Monolith Module:** This document describes the `nexus-security-ai` crate — a module within the single `aeroxe-nexus` binary. It communicates with other modules via gRPC (synchronous) or NATS (async) messaging (see [Communication Architecture](12-communication-architecture.md)). All request/response messages are Protobuf (proto3) serialized as JSON over HTTP.
 
 ---
 
@@ -109,7 +109,7 @@ pub struct CodeReviewResponse {
 }
 ```
 
-> **Note:** `SecurityService` is consumed by `nexus-ai-gateway` (prompt injection scanning) and `nexus-gateway` (API security checks) — all via in-process trait dispatch.
+> **Note:** `SecurityService` is consumed by `nexus-ai-gateway` (prompt injection scanning) and `nexus-gateway` (API security checks) — via gRPC calls (in-process tonic channels).
 
 ---
 
@@ -241,12 +241,15 @@ Safe Response
 
 ---
 
-## 8. REST API Endpoints
+## 8. API Endpoints (PATCH, POST, DELETE only)
+
+> All request/response are Protobuf messages serialized as JSON over HTTP. Read operations use POST with a request body (no GET).
 
 ### Security Scan
 
 ```
 POST /api/v1/security/scan
+Content-Type: application/json (Protobuf serialized)
 ```
 
 **Request:**
@@ -279,6 +282,7 @@ POST /api/v1/security/scan
 
 ```
 POST /api/v1/security/review
+Content-Type: application/json (Protobuf serialized)
 ```
 
 ---

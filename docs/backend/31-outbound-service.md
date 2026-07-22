@@ -2,7 +2,7 @@
 
 ## Proactive AI Calls, Campaign Management, DNC Compliance & Scheduling
 
-> **Modular Monolith Module:** This document describes the `nexus-outbound` crate — a module within the single `aeroxe-nexus` binary. It communicates with other modules via Rust trait interfaces and NATS.
+> **Modular Monolith Module:** This document describes the `nexus-outbound` crate — a module within the single `aeroxe-nexus` binary. It communicates with other modules via gRPC (sync) or NATS (async) between services.
 
 ---
 
@@ -352,22 +352,22 @@ CREATE UNIQUE INDEX idx_dnc_unique ON outbound_.dnc_list(tenant_id, phone_number
 
 ---
 
-## 8. REST API Endpoints
+## 8. REST API Endpoints (Protobuf over HTTP)
 
 | Method | Endpoint | Business Status | HTTP | Description |
 |---|---|---|---|---|
 | `POST` | `/api/v1/outbound/campaigns` | `CREATED` | `201` | Create campaign |
-| `GET` | `/api/v1/outbound/campaigns/{id}` | `SUCCESS` | `200` | Get campaign |
-| `GET` | `/api/v1/outbound/campaigns?limit=10&offset=0` | `SUCCESS` | `200` | List campaigns |
+| `POST` | `/api/v1/outbound/campaigns` (read body) | `SUCCESS` | `200` | Get campaign |
+| `POST` | `/api/v1/outbound/campaigns/list` (read body) | `SUCCESS` | `200` | List campaigns |
 | `POST` | `/api/v1/outbound/campaigns/{id}/start` | `UPDATED` | `200` | Start campaign |
 | `POST` | `/api/v1/outbound/campaigns/{id}/pause` | `UPDATED` | `200` | Pause campaign |
 | `POST` | `/api/v1/outbound/campaigns/{id}/cancel` | `UPDATED` | `200` | Cancel campaign |
-| `GET` | `/api/v1/outbound/campaigns/{id}/stats` | `SUCCESS` | `200` | Campaign stats |
+| `POST` | `/api/v1/outbound/campaigns/{id}/stats` (read body) | `SUCCESS` | `200` | Campaign stats |
 | `POST` | `/api/v1/outbound/callbacks` | `CREATED` | `201` | Schedule callback |
-| `GET` | `/api/v1/outbound/callbacks?limit=10&offset=0` | `SUCCESS` | `200` | List callbacks |
+| `POST` | `/api/v1/outbound/callbacks/list` (read body) | `SUCCESS` | `200` | List callbacks |
 | `DELETE` | `/api/v1/outbound/callbacks/{id}` | `DELETED` | `204` | Cancel callback |
 | `POST` | `/api/v1/outbound/dnc` | `CREATED` | `201` | Add to DNC |
-| `GET` | `/api/v1/outbound/dnc?limit=10&offset=0` | `SUCCESS` | `200` | List DNC |
+| `POST` | `/api/v1/outbound/dnc/list` (read body) | `SUCCESS` | `200` | List DNC |
 | `DELETE` | `/api/v1/outbound/dnc/{id}` | `DELETED` | `204` | Remove from DNC |
 
 ### List Campaigns Response
@@ -413,7 +413,7 @@ CREATE UNIQUE INDEX idx_dnc_unique ON outbound_.dnc_list(tenant_id, phone_number
 }
 ```
 
-**Note:** No PUT method. Use PATCH for updates. All list endpoints support `limit` (default 10) and `offset`.
+**Note:** All endpoints use Protobuf (proto3) serialized as JSON over HTTP. Content-Type: `application/json` (Protobuf messages serialized as JSON). No PUT method — use PATCH for updates. All list endpoints support `limit` (default 10) and `offset`.
 
 ---
 

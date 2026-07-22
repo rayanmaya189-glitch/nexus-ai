@@ -2,7 +2,7 @@
 
 ## Natural Voice Synthesis, Streaming Audio Output & Voice Personalization
 
-> **Modular Monolith Module:** This document describes the `nexus-tts` crate — a module within the single `aeroxe-nexus` binary. It communicates with other modules via Rust trait interfaces.
+> **Modular Monolith Module:** This document describes the `nexus-tts` crate — a module within the single `aeroxe-nexus` binary. It communicates with other modules via gRPC (sync) or NATS (async) between services.
 
 ---
 
@@ -281,19 +281,19 @@ CREATE INDEX idx_tts_log_tenant ON tts_.synthesis_log(tenant_id, created_at DESC
 
 ---
 
-## 9. REST API Endpoints
+## 9. REST API Endpoints (Protobuf over HTTP)
 
 | Method | Endpoint | Business Status | HTTP | Description |
 |---|---|---|---|---|
 | `POST` | `/api/v1/tts/synthesize` | `SUCCESS` | `200` | Synthesize speech |
 | `POST` | `/api/v1/tts/ssml` | `SUCCESS` | `200` | Synthesize SSML |
-| `GET` | `/api/v1/tts/voices?limit=10&offset=0&language=en` | `SUCCESS` | `200` | List voices |
-| `GET` | `/api/v1/tts/voices/{voice_id}` | `SUCCESS` | `200` | Get voice |
-| `GET` | `/api/v1/tts/voices/{voice_id}/preview?text=Hello` | `SUCCESS` | `200` | Preview voice |
+| `POST` | `/api/v1/tts/voices/list` (read body) | `SUCCESS` | `200` | List voices |
+| `POST` | `/api/v1/tts/voices` (read body) | `SUCCESS` | `200` | Get voice |
+| `POST` | `/api/v1/tts/voices/preview` (read body) | `SUCCESS` | `200` | Preview voice |
 | `POST` | `/api/v1/tts/voices/clone` | `CREATED` | `201` | Clone voice |
 | `DELETE` | `/api/v1/tts/voices/clone/{clone_id}` | `DELETED` | `204` | Revoke clone |
 
-**Note:** No PUT method. Use PATCH for updates. All list endpoints support `limit` (default 10) and `offset`.
+**Note:** All endpoints use Protobuf (proto3) serialized as JSON over HTTP. Content-Type: `application/json` (Protobuf messages serialized as JSON). No PUT method — use PATCH for updates. All list endpoints support `limit` (default 10) and `offset`.
 
 ---
 

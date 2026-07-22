@@ -1,6 +1,6 @@
 # AeroXe Nexus AI — API Specification
 
-## Structured REST — Standard HTTP Methods
+## REST + Protobuf — Microservices in Modular Monolith
 
 ---
 
@@ -8,14 +8,14 @@
 
 | Principle | Implementation |
 |---|---|
-| Protocol | Structured REST with JSON request/response bodies |
-| HTTP Methods | Standard REST: GET, POST, PUT, PATCH, DELETE |
+| Protocol | REST + Protobuf (proto3) serialized as JSON over HTTP |
+| HTTP Methods | PATCH (partial update), POST (create + read + actions), DELETE (remove) |
+| Serialization | All request/response bodies are Protobuf messages encoded as JSON |
 | Path Variables | Resource IDs in URL path |
-| Query Strings | Filtering and pagination via query parameters |
 | Versioning | `/api/v{version}/` prefix |
 | Authentication | JWT Bearer (`Authorization` header) |
 | Business Status | Every response includes `status` field |
-| Pagination | Server-side: `limit` (default 10) + `offset` query parameters |
+| Pagination | Included in Protobuf response message (`Pagination` field) |
 
 ---
 
@@ -23,11 +23,11 @@
 
 | Method | Usage | Example |
 |---|---|---|
-| `GET` | Read resource(s) | `GET /api/v1/customers/{id}` |
-| `POST` | Create resource or trigger action | `POST /api/v1/customers` |
-| `PUT` | Full replace of resource | `PUT /api/v1/customers/{id}` |
+| `POST` | Read, create, or trigger action | `POST /api/v1/customers` (body specifies operation) |
 | `PATCH` | Partial update of resource | `PATCH /api/v1/customers/{id}` |
 | `DELETE` | Remove resource | `DELETE /api/v1/customers/{id}` |
+
+> **Note:** No `GET` or `PUT` methods are used. Read operations use `POST` with an operation-specific Protobuf request body.
 
 ---
 
@@ -35,7 +35,7 @@
 
 ### 3.1 Request Envelope
 
-Every request includes a JSON body with structured envelopes:
+Every request includes a Protobuf message (serialized as JSON) with structured envelopes:
 
 ```json
 {
@@ -43,11 +43,11 @@ Every request includes a JSON body with structured envelopes:
   "request_id": "uuid",
   "tenant_id": 1,
   "user_id": 123,
-  "data": {
-    "customer_id": 456
-  }
+  "data": "<base64-encoded Protobuf request>"
 }
 ```
+
+> All request bodies are Protobuf messages. The `data` field contains the serialized operation-specific Protobuf request message.
 
 ### 3.2 Success Response Envelope
 
@@ -74,10 +74,7 @@ Every request includes a JSON body with structured envelopes:
   "status": "SUCCESS",
   "operation": "ListCustomers",
   "request_id": "uuid",
-  "data": [
-    {"id": 1, "name": "Item 1", "status": "active"},
-    {"id": 2, "name": "Item 2", "status": "inactive"}
-  ],
+  "data": "<base64-encoded Protobuf repeated message>",
   "summary": {
     "total_items": 1234,
     "active_items": 980,
@@ -97,6 +94,8 @@ Every request includes a JSON body with structured envelopes:
 
 ### 3.4 Error Response Envelope
 
+All error responses are also Protobuf messages (`ErrorInfo` + `ErrorDetail`):
+
 ```json
 {
   "status": "ERROR",
@@ -113,7 +112,7 @@ Every request includes a JSON body with structured envelopes:
 
 ## 4. Error Response Standard
 
-All error responses follow a consistent format:
+All error responses follow a consistent Protobuf-based format:
 
 ```json
 {
@@ -158,17 +157,16 @@ All error responses follow a consistent format:
 
 ## 6. API Endpoint Structure
 
-Standard RESTful patterns:
-
 | Pattern | Method | Example |
 |---|---|---|
-| List resources | `GET /api/v1/{resource}` | `GET /api/v1/customers?limit=10&offset=0` |
-| Get single resource | `GET /api/v1/{resource}/{id}` | `GET /api/v1/customers/123` |
-| Create resource | `POST /api/v1/{resource}` | `POST /api/v1/customers` |
-| Update resource (full) | `PUT /api/v1/{resource}/{id}` | `PUT /api/v1/customers/123` |
-| Update resource (partial) | `PATCH /api/v1/{resource}/{id}` | `PATCH /api/v1/customers/123` |
-| Delete resource | `DELETE /api/v1/{resource}/{id}` | `DELETE /api/v1/customers/123` |
+| Read resource(s) | `POST /api/v1/{resource}` | Body: `{"operation": "ListCustomers", "limit": 10}` |
+| Read single resource | `POST /api/v1/{resource}` | Body: `{"operation": "GetCustomer", "id": 123}` |
+| Create resource | `POST /api/v1/{resource}` | Body: `{"operation": "CreateCustomer", ...}` |
+| Update resource (partial) | `PATCH /api/v1/{resource}/{id}` | Body: partial update fields |
+| Delete resource | `DELETE /api/v1/{resource}/{id}` | — |
 | Trigger action | `POST /api/v1/{resource}/{action}` | `POST /api/v1/customers/123/suspend` |
+
+> **Note:** No `GET` or `PUT` methods. Read operations use `POST` with a Protobuf request body specifying the operation.
 
 ---
 
@@ -179,7 +177,7 @@ Standard RESTful patterns:
 | `POST /api/v1/auth/login` | Login | `SUCCESS` |
 | `POST /api/v1/auth/refresh` | Refresh Token | `SUCCESS` |
 | `POST /api/v1/auth/register` | Register | `CREATED` |
-| `GET /api/v1/auth/me` | Get Current User | `SUCCESS` |
+| `POST /api/v1/auth/me` | Get Current User | `SUCCESS` |
 | `POST /api/v1/auth/change-password` | Change Password | `SUCCESS` |
 
 ---
@@ -189,8 +187,8 @@ Standard RESTful patterns:
 | Endpoint | Operation | Status |
 |---|---|---|
 | `POST /api/v1/customers` | Create Customer | `CREATED` |
-| `GET /api/v1/customers/{id}` | Get Customer | `SUCCESS` |
-| `GET /api/v1/customers` | List Customers | `SUCCESS` |
+| `POST /api/v1/customers` | Get Customer | `SUCCESS` |
+| `POST /api/v1/customers` | List Customers | `SUCCESS` |
 | `PATCH /api/v1/customers/{id}` | Update Customer | `UPDATED` |
 | `DELETE /api/v1/customers/{id}` | Delete Customer | `DELETED` |
 | `POST /api/v1/customers/{id}/suspend` | Suspend Customer | `UPDATED` |
@@ -212,11 +210,11 @@ Standard RESTful patterns:
 | Endpoint | Operation | Status |
 |---|---|---|
 | `POST /api/v1/agents` | Execute Agent | `CREATED` |
-| `GET /api/v1/agents/{id}/execution` | Get Execution Status | `SUCCESS` |
-| `GET /api/v1/agents/{id}/executions` | List Executions | `SUCCESS` |
+| `POST /api/v1/agents/{id}/execution` | Get Execution Status | `SUCCESS` |
+| `POST /api/v1/agents/{id}/executions` | List Executions | `SUCCESS` |
 | `POST /api/v1/agents/{id}/document-sets` | Bind Document Sets | `UPDATED` |
 | `DELETE /api/v1/agents/{id}/document-sets/{set_id}` | Unbind Document Sets | `UPDATED` |
-| `GET /api/v1/agents/{id}/document-sets` | List Bound Document Sets | `SUCCESS` |
+| `POST /api/v1/agents/{id}/document-sets` | List Bound Document Sets | `SUCCESS` |
 | `POST /api/v1/agents/sql/test-connection` | Test SQL Connection | `SUCCESS` |
 | `POST /api/v1/agents/sql/discover-schema` | Discover Database Schema | `SUCCESS` |
 | `POST /api/v1/agents/{id}/tables` | Bind Tables | `UPDATED` |
@@ -228,12 +226,12 @@ Standard RESTful patterns:
 | Endpoint | Operation | Status |
 |---|---|---|
 | `POST /api/v1/rag/documents` | Upload Document | `CREATED` |
-| `GET /api/v1/rag/documents/{id}/status` | Get Document Status | `SUCCESS` |
-| `GET /api/v1/rag/documents` | List Documents | `SUCCESS` |
+| `POST /api/v1/rag/documents/{id}/status` | Get Document Status | `SUCCESS` |
+| `POST /api/v1/rag/documents` | List Documents | `SUCCESS` |
 | `DELETE /api/v1/rag/documents/{id}` | Delete Document | `DELETED` |
 | `POST /api/v1/rag/search` | Search Knowledge | `SUCCESS` |
 | `POST /api/v1/rag/document-sets` | Create Document Set | `CREATED` |
-| `GET /api/v1/rag/document-sets` | List Document Sets | `SUCCESS` |
+| `POST /api/v1/rag/document-sets` | List Document Sets | `SUCCESS` |
 | `PATCH /api/v1/rag/document-sets/{id}` | Update Document Set | `UPDATED` |
 | `DELETE /api/v1/rag/document-sets/{id}` | Delete Document Set | `DELETED` |
 
@@ -263,8 +261,8 @@ Standard RESTful patterns:
 | Endpoint | Operation | Status |
 |---|---|---|
 | `POST /api/v1/memory` | Store Memory | `CREATED` |
-| `GET /api/v1/memory/search` | Search Memory | `SUCCESS` |
-| `GET /api/v1/memory/context` | Get Conversation Context | `SUCCESS` |
+| `POST /api/v1/memory/search` | Search Memory | `SUCCESS` |
+| `POST /api/v1/memory/context` | Get Conversation Context | `SUCCESS` |
 | `DELETE /api/v1/memory/{id}` | Delete Memory | `DELETED` |
 
 ---
@@ -274,8 +272,8 @@ Standard RESTful patterns:
 | Endpoint | Operation | Status |
 |---|---|---|
 | `POST /api/v1/workflows` | Start Workflow | `CREATED` |
-| `GET /api/v1/workflows/{id}` | Get Workflow | `SUCCESS` |
-| `GET /api/v1/workflows` | List Workflows | `SUCCESS` |
+| `POST /api/v1/workflows/{id}` | Get Workflow | `SUCCESS` |
+| `POST /api/v1/workflows` | List Workflows | `SUCCESS` |
 | `POST /api/v1/workflows/{id}/approve-step` | Approve Step | `UPDATED` |
 | `POST /api/v1/workflows/{id}/cancel` | Cancel Workflow | `UPDATED` |
 
@@ -285,11 +283,11 @@ Standard RESTful patterns:
 
 | Endpoint | Operation | Status |
 |---|---|---|
-| `GET /api/v1/models` | List Models | `SUCCESS` |
-| `GET /api/v1/models/{id}` | Get Model | `SUCCESS` |
+| `POST /api/v1/models` | List Models | `SUCCESS` |
+| `POST /api/v1/models/{id}` | Get Model | `SUCCESS` |
 | `POST /api/v1/models/pull` | Pull Model | `CREATED` |
 | `DELETE /api/v1/models/{id}` | Delete Model | `DELETED` |
-| `GET /api/v1/models/usage` | Get Usage Stats | `SUCCESS` |
+| `POST /api/v1/models/usage` | Get Usage Stats | `SUCCESS` |
 
 ---
 
@@ -297,9 +295,9 @@ Standard RESTful patterns:
 
 | Endpoint | Operation | Status |
 |---|---|---|
-| `GET /api/v1/kyc/status` | Get KYC Status | `SUCCESS` |
+| `POST /api/v1/kyc/status` | Get KYC Status | `SUCCESS` |
 | `POST /api/v1/kyc/documents` | Upload KYC Document | `CREATED` |
-| `GET /api/v1/kyc/documents` | List KYC Documents | `SUCCESS` |
+| `POST /api/v1/kyc/documents` | List KYC Documents | `SUCCESS` |
 | `DELETE /api/v1/kyc/documents/{id}` | Delete KYC Document | `DELETED` |
 | `POST /api/v1/kyc/submit` | Submit for Review | `UPDATED` |
 | `POST /api/v1/kyc/review` | Review KYC | `UPDATED` |
@@ -321,31 +319,31 @@ Standard RESTful patterns:
 |---|---|---|
 | `POST /api/v1/telephony/webhook/inbound` | Inbound Call Webhook | `SUCCESS` |
 | `POST /api/v1/telephony/calls` | Initiate Outbound Call | `CREATED` |
-| `GET /api/v1/telephony/calls/{id}` | Get Call Details | `SUCCESS` |
-| `GET /api/v1/telephony/calls` | List Calls | `SUCCESS` |
+| `POST /api/v1/telephony/calls/{id}` | Get Call Details | `SUCCESS` |
+| `POST /api/v1/telephony/calls` | List Calls | `SUCCESS` |
 | `POST /api/v1/telephony/calls/{id}/hold` | Hold Call | `UPDATED` |
 | `POST /api/v1/telephony/calls/{id}/resume` | Resume Call | `UPDATED` |
 | `POST /api/v1/telephony/calls/{id}/transfer` | Transfer Call | `UPDATED` |
 | `POST /api/v1/telephony/calls/{id}/end` | End Call | `UPDATED` |
 | `POST /api/v1/telephony/calls/{id}/start-recording` | Start Recording | `UPDATED` |
 | `POST /api/v1/telephony/calls/{id}/stop-recording` | Stop Recording | `UPDATED` |
-| `GET /api/v1/telephony/calls/{id}/transcript` | Get Transcript | `SUCCESS` |
+| `POST /api/v1/telephony/calls/{id}/transcript` | Get Transcript | `SUCCESS` |
 | `POST /api/v1/telephony/calls/{id}/verify-pin` | Verify PIN | `SUCCESS` |
 | `POST /api/v1/telephony/calls/{id}/verify-voice` | Verify Voice | `SUCCESS` |
-| `GET /api/v1/telephony/calls/{id}/auth-status` | Get Auth Status | `SUCCESS` |
-| `GET /api/v1/telephony/voicemails` | List Voicemails | `SUCCESS` |
-| `GET /api/v1/telephony/voicemails/{id}` | Get Voicemail | `SUCCESS` |
+| `POST /api/v1/telephony/calls/{id}/auth-status` | Get Auth Status | `SUCCESS` |
+| `POST /api/v1/telephony/voicemails` | List Voicemails | `SUCCESS` |
+| `POST /api/v1/telephony/voicemails/{id}` | Get Voicemail | `SUCCESS` |
 | `POST /api/v1/telephony/voicemails/{id}/handle` | Handle Voicemail | `UPDATED` |
 | `POST /api/v1/telephony/ivr` | Create IVR Flow | `CREATED` |
-| `GET /api/v1/telephony/ivr` | List IVR Flows | `SUCCESS` |
+| `POST /api/v1/telephony/ivr` | List IVR Flows | `SUCCESS` |
 | `PATCH /api/v1/telephony/ivr/{id}` | Update IVR Flow | `UPDATED` |
 | `DELETE /api/v1/telephony/ivr/{id}` | Delete IVR Flow | `DELETED` |
 | `POST /api/v1/telephony/monitor/listen` | Listen-In | `SUCCESS` |
 | `POST /api/v1/telephony/monitor/whisper` | Whisper to Agent | `SUCCESS` |
 | `POST /api/v1/telephony/monitor/barge-in` | Barge-In | `SUCCESS` |
 | `POST /api/v1/telephony/monitor/stop` | Stop Monitoring | `UPDATED` |
-| `WS /ws/v1/telephony` | Audio Stream | — |
-| `WS /ws/v1/telephony/monitor` | Live Monitoring | — |
+| `WS /ws/v1/telephony` | Audio Stream (Protobuf framing) | — |
+| `WS /ws/v1/telephony/monitor` | Live Monitoring (Protobuf framing) | — |
 
 ---
 
@@ -354,11 +352,11 @@ Standard RESTful patterns:
 | Endpoint | Operation | Status |
 |---|---|---|
 | `POST /api/v1/conversations` | Create Conversation | `CREATED` |
-| `GET /api/v1/conversations/{id}` | Get Conversation | `SUCCESS` |
-| `GET /api/v1/conversations` | List Conversations | `SUCCESS` |
-| `GET /api/v1/conversations/{id}/messages` | Get Messages | `SUCCESS` |
+| `POST /api/v1/conversations/{id}` | Get Conversation | `SUCCESS` |
+| `POST /api/v1/conversations` | List Conversations | `SUCCESS` |
+| `POST /api/v1/conversations/{id}/messages` | Get Messages | `SUCCESS` |
 | `POST /api/v1/conversations/{id}/messages` | Add Message | `CREATED` |
-| `GET /api/v1/conversations/{id}/state` | Get State | `SUCCESS` |
+| `POST /api/v1/conversations/{id}/state` | Get State | `SUCCESS` |
 | `POST /api/v1/conversations/{id}/end` | End Conversation | `UPDATED` |
 | `POST /api/v1/conversations/{id}/branch` | Branch Conversation | `CREATED` |
 | `DELETE /api/v1/conversations/{id}` | Delete Conversation | `DELETED` |
@@ -373,7 +371,7 @@ Standard RESTful patterns:
 | `POST /api/v1/stt/sessions/{id}/audio` | Send Audio Chunk | `SUCCESS` |
 | `POST /api/v1/stt/sessions/{id}/end` | End Session | `UPDATED` |
 | `POST /api/v1/stt/transcribe` | Batch Transcribe | `SUCCESS` |
-| `GET /api/v1/stt/sessions/{id}` | Get Session | `SUCCESS` |
+| `POST /api/v1/stt/sessions/{id}` | Get Session | `SUCCESS` |
 
 ---
 
@@ -383,8 +381,8 @@ Standard RESTful patterns:
 |---|---|---|
 | `POST /api/v1/tts/synthesize` | Synthesize Speech | `SUCCESS` |
 | `POST /api/v1/tts/synthesize-ssml` | Synthesize SSML | `SUCCESS` |
-| `GET /api/v1/tts/voices` | List Voices | `SUCCESS` |
-| `GET /api/v1/tts/voices/{id}` | Get Voice | `SUCCESS` |
+| `POST /api/v1/tts/voices` | List Voices | `SUCCESS` |
+| `POST /api/v1/tts/voices/{id}` | Get Voice | `SUCCESS` |
 | `POST /api/v1/tts/voices/{id}/preview` | Preview Voice | `SUCCESS` |
 | `POST /api/v1/tts/voices/clone` | Clone Voice | `CREATED` |
 | `DELETE /api/v1/tts/voices/clone/{id}` | Revoke Clone | `DELETED` |
@@ -396,17 +394,17 @@ Standard RESTful patterns:
 | Endpoint | Operation | Status |
 |---|---|---|
 | `POST /api/v1/outbound/campaigns` | Create Campaign | `CREATED` |
-| `GET /api/v1/outbound/campaigns/{id}` | Get Campaign | `SUCCESS` |
-| `GET /api/v1/outbound/campaigns` | List Campaigns | `SUCCESS` |
+| `POST /api/v1/outbound/campaigns/{id}` | Get Campaign | `SUCCESS` |
+| `POST /api/v1/outbound/campaigns` | List Campaigns | `SUCCESS` |
 | `POST /api/v1/outbound/campaigns/{id}/start` | Start Campaign | `UPDATED` |
 | `POST /api/v1/outbound/campaigns/{id}/pause` | Pause Campaign | `UPDATED` |
 | `POST /api/v1/outbound/campaigns/{id}/cancel` | Cancel Campaign | `UPDATED` |
-| `GET /api/v1/outbound/campaigns/{id}/stats` | Get Campaign Stats | `SUCCESS` |
+| `POST /api/v1/outbound/campaigns/{id}/stats` | Get Campaign Stats | `SUCCESS` |
 | `POST /api/v1/outbound/callbacks` | Schedule Callback | `CREATED` |
-| `GET /api/v1/outbound/callbacks` | List Callbacks | `SUCCESS` |
+| `POST /api/v1/outbound/callbacks` | List Callbacks | `SUCCESS` |
 | `DELETE /api/v1/outbound/callbacks/{id}` | Cancel Callback | `DELETED` |
 | `POST /api/v1/outbound/dnc` | Add to DNC | `CREATED` |
-| `GET /api/v1/outbound/dnc` | List DNC | `SUCCESS` |
+| `POST /api/v1/outbound/dnc` | List DNC | `SUCCESS` |
 | `DELETE /api/v1/outbound/dnc/{id}` | Remove from DNC | `DELETED` |
 
 ---
@@ -416,12 +414,12 @@ Standard RESTful patterns:
 | Endpoint | Operation | Status |
 |---|---|---|
 | `POST /api/v1/webhooks` | Create Webhook | `CREATED` |
-| `GET /api/v1/webhooks/{id}` | Get Webhook | `SUCCESS` |
-| `GET /api/v1/webhooks` | List Webhooks | `SUCCESS` |
+| `POST /api/v1/webhooks/{id}` | Get Webhook | `SUCCESS` |
+| `POST /api/v1/webhooks` | List Webhooks | `SUCCESS` |
 | `PATCH /api/v1/webhooks/{id}` | Update Webhook | `UPDATED` |
 | `DELETE /api/v1/webhooks/{id}` | Delete Webhook | `DELETED` |
 | `POST /api/v1/webhooks/{id}/test` | Test Webhook | `SUCCESS` |
-| `GET /api/v1/webhooks/{id}/deliveries` | List Deliveries | `SUCCESS` |
+| `POST /api/v1/webhooks/{id}/deliveries` | List Deliveries | `SUCCESS` |
 | `POST /api/v1/webhooks/deliveries/{id}/retry` | Retry Delivery | `SUCCESS` |
 
 ---
@@ -430,17 +428,17 @@ Standard RESTful patterns:
 
 | Endpoint | Operation | Status |
 |---|---|---|
-| `GET /api/v1/analytics/dashboard` | Get Dashboard | `SUCCESS` |
-| `GET /api/v1/analytics/realtime` | Get Real-time Metrics | `SUCCESS` |
-| `GET /api/v1/analytics/conversations` | Get Conversation Metrics | `SUCCESS` |
-| `GET /api/v1/analytics/calls` | Get Call Metrics | `SUCCESS` |
-| `GET /api/v1/analytics/agents` | List Agent Metrics | `SUCCESS` |
-| `GET /api/v1/analytics/agents/{id}/performance` | Get Agent Performance | `SUCCESS` |
-| `GET /api/v1/analytics/costs` | Get Cost Breakdown | `SUCCESS` |
-| `GET /api/v1/analytics/customers/{id}/cost` | Get Customer Cost | `SUCCESS` |
+| `POST /api/v1/analytics/dashboard` | Get Dashboard | `SUCCESS` |
+| `POST /api/v1/analytics/realtime` | Get Real-time Metrics | `SUCCESS` |
+| `POST /api/v1/analytics/conversations` | Get Conversation Metrics | `SUCCESS` |
+| `POST /api/v1/analytics/calls` | Get Call Metrics | `SUCCESS` |
+| `POST /api/v1/analytics/agents` | List Agent Metrics | `SUCCESS` |
+| `POST /api/v1/analytics/agents/{id}/performance` | Get Agent Performance | `SUCCESS` |
+| `POST /api/v1/analytics/costs` | Get Cost Breakdown | `SUCCESS` |
+| `POST /api/v1/analytics/customers/{id}/cost` | Get Customer Cost | `SUCCESS` |
 | `POST /api/v1/analytics/reports` | Create Report | `CREATED` |
-| `GET /api/v1/analytics/reports` | List Reports | `SUCCESS` |
-| `GET /api/v1/analytics/reports/{id}` | Get Report | `SUCCESS` |
+| `POST /api/v1/analytics/reports` | List Reports | `SUCCESS` |
+| `POST /api/v1/analytics/reports/{id}` | Get Report | `SUCCESS` |
 
 ---
 
@@ -448,16 +446,16 @@ Standard RESTful patterns:
 
 | Endpoint | Operation | Status |
 |---|---|---|
-| `GET /api/v1/billing/plans` | List Plans | `SUCCESS` |
+| `POST /api/v1/billing/plans` | List Plans | `SUCCESS` |
 | `POST /api/v1/billing/subscriptions` | Create Subscription | `CREATED` |
-| `GET /api/v1/billing/subscriptions/{id}` | Get Subscription | `SUCCESS` |
+| `POST /api/v1/billing/subscriptions/{id}` | Get Subscription | `SUCCESS` |
 | `PATCH /api/v1/billing/subscriptions/{id}` | Update Subscription | `UPDATED` |
 | `POST /api/v1/billing/subscriptions/{id}/cancel` | Cancel Subscription | `UPDATED` |
-| `GET /api/v1/billing/usage` | Get Usage | `SUCCESS` |
-| `GET /api/v1/billing/invoices` | List Invoices | `SUCCESS` |
-| `GET /api/v1/billing/invoices/{id}` | Get Invoice | `SUCCESS` |
+| `POST /api/v1/billing/usage` | Get Usage | `SUCCESS` |
+| `POST /api/v1/billing/invoices` | List Invoices | `SUCCESS` |
+| `POST /api/v1/billing/invoices/{id}` | Get Invoice | `SUCCESS` |
 | `POST /api/v1/billing/invoices/{id}/pay` | Pay Invoice | `SUCCESS` |
-| `GET /api/v1/billing/payments` | List Payments | `SUCCESS` |
+| `POST /api/v1/billing/payments` | List Payments | `SUCCESS` |
 
 ---
 
@@ -465,12 +463,14 @@ Standard RESTful patterns:
 
 | Endpoint | Operation | Status |
 |---|---|---|
-| `GET /api/v1/health/check` | Health Check | `SUCCESS` |
-| `GET /api/v1/metrics` | Get Metrics | `SUCCESS` |
+| `POST /api/v1/health/check` | Health Check | `SUCCESS` |
+| `POST /api/v1/metrics` | Get Metrics | `SUCCESS` |
 
 ---
 
 ## 28. WebSocket Protocol
+
+> **Note:** WebSocket messages use Protobuf framing. The JSON examples below illustrate the logical message structure; actual wire format is Protobuf-serialized binary.
 
 ### Connection
 
@@ -482,7 +482,7 @@ Channels: `chat`, `telephony`, `telephony/monitor`
 
 ### Message Format
 
-All WebSocket messages use a standard envelope:
+All WebSocket messages use a standard Protobuf envelope:
 
 ```json
 {
@@ -554,6 +554,8 @@ Server → Client:  {"type": "done", "data": {"tokens_used": 42, "model": "phi4-
 ---
 
 ## 30. Protobuf Definitions
+
+> All API request/response bodies are Protobuf messages (proto3) serialized as JSON over HTTP.
 
 ### 2.1 Request Envelope
 

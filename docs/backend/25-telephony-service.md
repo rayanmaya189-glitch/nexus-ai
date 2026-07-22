@@ -2,7 +2,7 @@
 
 ## Voice Channel, SIP/WebRTC Integration, Call Management & Real-Time Audio
 
-> **Modular Monolith Module:** This document describes the `nexus-telephony` crate — a module within the single `aeroxe-nexus` binary. It communicates with other modules via Rust trait interfaces (see [Communication Architecture](12-communication-architecture.md)).
+> **Modular Monolith Module:** This document describes the `nexus-telephony` crate — a module within the single `aeroxe-nexus` binary. It communicates with other modules via gRPC (sync) or NATS (async) between services.
 
 ---
 
@@ -662,29 +662,29 @@ CREATE TABLE telephony_.dtmf_events (
 
 ---
 
-## 12. REST API Endpoints
+## 12. REST API Endpoints (Protobuf over HTTP)
 
 | Method | Endpoint | Business Status | HTTP | Description |
 |---|---|---|---|---|
 | `POST` | `/api/v1/telephony/webhook/inbound` | `SUCCESS` | `200` | Inbound call webhook |
 | `POST` | `/api/v1/telephony/calls/outbound` | `CREATED` | `201` | Initiate outbound call |
-| `GET` | `/api/v1/telephony/calls/{call_id}` | `SUCCESS` | `200` | Get call details |
-| `GET` | `/api/v1/telephony/calls?limit=10&offset=0` | `SUCCESS` | `200` | List calls |
+| `POST` | `/api/v1/telephony/calls` (read body) | `SUCCESS` | `200` | Get call details |
+| `POST` | `/api/v1/telephony/calls/list` (read body) | `SUCCESS` | `200` | List calls |
 | `POST` | `/api/v1/telephony/calls/{call_id}/hold` | `UPDATED` | `200` | Hold call |
 | `POST` | `/api/v1/telephony/calls/{call_id}/resume` | `UPDATED` | `200` | Resume call |
 | `POST` | `/api/v1/telephony/calls/{call_id}/transfer` | `UPDATED` | `200` | Transfer call |
 | `POST` | `/api/v1/telephony/calls/{call_id}/end` | `UPDATED` | `200` | End call |
 | `POST` | `/api/v1/telephony/calls/{call_id}/recording/start` | `UPDATED` | `200` | Start recording |
 | `POST` | `/api/v1/telephony/calls/{call_id}/recording/stop` | `UPDATED` | `200` | Stop recording |
-| `GET` | `/api/v1/telephony/calls/{call_id}/transcript` | `SUCCESS` | `200` | Get transcript |
+| `POST` | `/api/v1/telephony/calls/{call_id}/transcript` (read body) | `SUCCESS` | `200` | Get transcript |
 | `POST` | `/api/v1/telephony/calls/{call_id}/auth/verify-pin` | `SUCCESS` | `200` | Verify PIN |
 | `POST` | `/api/v1/telephony/calls/{call_id}/auth/verify-voice` | `SUCCESS` | `200` | Verify voice |
-| `GET` | `/api/v1/telephony/calls/{call_id}/auth/status` | `SUCCESS` | `200` | Auth status |
-| `GET` | `/api/v1/telephony/voicemails?limit=10&offset=0` | `SUCCESS` | `200` | List voicemails |
-| `GET` | `/api/v1/telephony/voicemails/{id}` | `SUCCESS` | `200` | Get voicemail |
+| `POST` | `/api/v1/telephony/calls/{call_id}/auth/status` (read body) | `SUCCESS` | `200` | Auth status |
+| `POST` | `/api/v1/telephony/voicemails/list` (read body) | `SUCCESS` | `200` | List voicemails |
+| `POST` | `/api/v1/telephony/voicemails` (read body) | `SUCCESS` | `200` | Get voicemail |
 | `POST` | `/api/v1/telephony/voicemails/{id}/handle` | `UPDATED` | `200` | Handle voicemail |
 | `POST` | `/api/v1/telephony/ivr-flows` | `CREATED` | `201` | Create IVR flow |
-| `GET` | `/api/v1/telephony/ivr-flows?limit=10&offset=0` | `SUCCESS` | `200` | List IVR flows |
+| `POST` | `/api/v1/telephony/ivr-flows/list` (read body) | `SUCCESS` | `200` | List IVR flows |
 | `PATCH` | `/api/v1/telephony/ivr-flows/{id}` | `UPDATED` | `200` | Update IVR flow |
 | `DELETE` | `/api/v1/telephony/ivr-flows/{id}` | `DELETED` | `204` | Delete IVR flow |
 | `POST` | `/api/v1/telephony/calls/{call_id}/monitor/listen` | `SUCCESS` | `200` | Listen-in |
@@ -741,7 +741,7 @@ CREATE TABLE telephony_.dtmf_events (
 }
 ```
 
-**Note:** No PUT method. Use PATCH for updates. All list endpoints support `limit` (default 10) and `offset`.
+**Note:** All endpoints use Protobuf (proto3) serialized as JSON over HTTP. Content-Type: `application/json` (Protobuf messages serialized as JSON). No PUT method — use PATCH for updates. Read operations use POST with a read body. All list endpoints support `limit` (default 10) and `offset`.
 
 ---
 

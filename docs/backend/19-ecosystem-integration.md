@@ -2,7 +2,7 @@
 
 ## AI-Powered Enterprise Operating System Integration (Modular Monolith)
 
-> **Modular Monolith Context:** Integration is handled by the `nexus-ecosystem` module within the `aeroxe-nexus` binary. It communicates with AeroXe products via their published APIs and internal modules via trait interfaces. See [Communication Architecture](12-communication-architecture.md).
+> **Modular Monolith Context:** Integration is handled by the `nexus-ecosystem` module within the `aeroxe-nexus` binary. It communicates with AeroXe products via their published APIs and internal modules via gRPC (sync) or NATS (async). See [Communication Architecture](12-communication-architecture.md).
 
 ---
 
@@ -47,7 +47,7 @@ It connects business applications within the `aeroxe-nexus` modular monolith and
 AeroXe Nexus AI does not directly modify business databases.
 
 ```
-Business Service → API / NATS → nexus-ecosystem module → nexus-agent / nexus-workflow (trait calls) → Decision / Automation
+Business Service → API / NATS → nexus-ecosystem module → nexus-agent / nexus-workflow (gRPC or NATS) → Decision / Automation
 ```
 
 ---
@@ -62,10 +62,10 @@ nexus-ecosystem  (Cargo workspace crate)
 
 ### Responsibilities
 
-- Connect AeroXe products (via trait interfaces + NATS events)
+- Connect AeroXe products (via gRPC or NATS events)
 - Normalize data
-- Manage permissions (via `nexus-identity` trait)
-- Trigger AI workflows (via `nexus-workflow` trait)
+- Manage permissions (via `nexus-identity` service)
+- Trigger AI workflows (via `nexus-workflow` service)
 - Publish business events (via NATS)
 
 ---
@@ -439,7 +439,7 @@ Users can install:
 
 | Protocol | Standard | Usage |
 |---|---|---|
-| Internal (Module) | Rust trait methods | Module-to-module within monolith |
+| Internal (Module) | gRPC (sync) / NATS (async) | Module-to-module within monolith |
 | Event (Async) | NATS JetStream `aeroxe.v1.*` | Background processing |
 | External API | REST `/api/v1/*` | Client applications (via `nexus-gateway`) |
 | External gRPC (opt.) | `tonic` service | Partner SDK integrations |

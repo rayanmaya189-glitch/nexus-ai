@@ -6,18 +6,18 @@
 
 ## 1. DDD Architecture Overview
 
-AeroXe Nexus AI is designed using **Domain-Driven Design** principles organized as a **modular monolith**. The system is divided into independent **Bounded Contexts**, each owning its business logic, database schema (via SeaORM entities), and trait interfaces. Modules communicate through Rust trait methods (synchronous) and NATS events (asynchronous).
+AeroXe Nexus AI is designed using **Domain-Driven Design** principles organized as a **modular monolith**. The system is divided into independent **Bounded Contexts**, each owning its business logic, database schema (via SeaORM entities), and public API. Modules communicate via **gRPC** (synchronous request-response) and **NATS events** (async fire-and-forget) with Protobuf payloads.
 
 ### Key Difference from Microservices
 
 | Aspect | Microservice Architecture | Modular Monolith (This Project) |
 |---|---|---|
-| Communication | gRPC over network | Rust trait method calls (in-process) |
+| Communication | gRPC over network | gRPC (in-process) + NATS (async) |
 | Database | Separate DB per service | Shared PostgreSQL, schema per module via SeaORM |
 | ORM | N/A (each service chooses) | SeaORM (unified across all modules) |
 | Deployment | N containers | 1 binary |
 | Testing | Service-level integration tests | Module-level + full binary tests |
-| Latency | 2-5ms per gRPC call | < 1μs per trait dispatch |
+| Latency | 2-5ms per gRPC call | < 2ms per in-process gRPC call |
 | Extractability | N/A | Any module can be extracted to a standalone service later if needed |
 
 ---
@@ -110,7 +110,7 @@ src/modules/<name>/                # Module root
 
 ## 4. Module Public API Trait Pattern
 
-Each module exposes its public API as Rust traits. Other modules depend on the trait, not the implementation.
+Each module exposes its public API as Rust traits (internal implementation detail). Inter-service communication uses **gRPC** (synchronous) or **NATS** (async). The trait implementations serve as the service layer behind gRPC handlers.
 
 ```rust
 // src/modules/rag/src/domain/interfaces/api.rs
@@ -122,18 +122,18 @@ pub trait RagService: Send + Sync {
     async fn delete_document(&self, id: DocumentId) -> Result<()>;
 }
 
-// src/modules/agent/application/services/agent_service.rs — uses RagService as dependency
+// src/modules/agent/application/services/agent_service.rs — uses RagService via gRPC
 pub struct AgentServiceImpl {
-    rag: Arc<dyn RagService>,
-    memory: Arc<dyn MemoryService>,
+    rag_client: RagServiceClient,  // gRPC client
+    memory_client: MemoryServiceClient,  // gRPC client
     ollama: OllamaClient,
 }
 
 #[async_trait]
 impl AgentService for AgentServiceImpl {
     async fn start_execution(&self, request: StartAgentRequest) -> Result<ExecutionResponse> {
-        // Call RAG synchronously — no gRPC, no serialization
-        let docs = self.rag.search(SearchQuery {
+        // Call RAG via gRPC — Protobuf request/response
+        let docs = self.rag_client.search(SearchQuery {
             query: request.task.clone(),
             tenant_id: request.tenant_id,
             limit: 5,
@@ -147,7 +147,7 @@ impl AgentService for AgentServiceImpl {
 }
 ```
 
-The binary's `main.rs` wires all module implementations together:
+The binary's `main.rs` wires all services together, starting gRPC servers for each module:
 
 ```rust
 // src/main.rs (binary entry point)
@@ -158,19 +158,29 @@ async fn main() {
     let nats = init_nats().await;
     let ollama = OllamaClient::new(config.ollama_url);
 
-    // Instantiate module implementations (each implements the trait)
-    let identity = Arc::new(identity::IdentityServiceImpl::new(db.clone(), redis.clone())) as Arc<dyn IdentityService>;
-    let customer = Arc::new(customer::CustomerServiceImpl::new(db.clone(), nats.clone())) as Arc<dyn CustomerService>;
-    let memory = Arc::new(memory::MemoryServiceImpl::new(db.clone(), redis.clone(), ollama.clone())) as Arc<dyn MemoryService>;
-    let rag = Arc::new(rag::RagServiceImpl::new(db.clone(), nats.clone(), ollama.clone())) as Arc<dyn RagService>;
-    let agent = Arc::new(agent::AgentServiceImpl::new(rag.clone(), memory.clone(), ollama.clone())) as Arc<dyn AgentService>;
+    // Start gRPC servers for each service module
+    let identity_server = identity::start_grpc_server(db.clone(), redis.clone());
+    let customer_server = customer::start_grpc_server(db.clone(), nats.clone());
+    let memory_server = memory::start_grpc_server(db.clone(), redis.clone(), ollama.clone());
+    let rag_server = rag::start_grpc_server(db.clone(), nats.clone(), ollama.clone());
+    let agent_server = agent::start_grpc_server(/* ... */);
 
-    let app = gateway::build_router(AppState {
-        identity, customer, agent, rag, memory, /* ... */
-    });
+    // Start NATS subscribers for async event processing
+    let audit_subscriber = audit::start_nats_subscriber(nats.clone());
 
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:8080").await?;
-    axum::serve(listener, app).await?;
+    // Start API Gateway (HTTP + WebSocket)
+    let gateway = gateway::start_http_server(/* ... */);
+
+    // Run all services concurrently
+    tokio::join!(
+        identity_server,
+        customer_server,
+        memory_server,
+        rag_server,
+        agent_server,
+        audit_subscriber,
+        gateway,
+    );
 }
 ```
 
@@ -507,27 +517,22 @@ KnowledgeDocument (Aggregate Root)
 
 ## 11. Domain Event Architecture (Versioned)
 
-### Synchronous Events (In-Process)
+### Synchronous Events (gRPC)
 
-For events that must be handled immediately within a transaction:
+For events that must be handled immediately within a transaction, services use **gRPC** for synchronous request-response:
 
 ```rust
-// Module emits event within its aggregate method
-pub struct AgentExecuted {
-    pub execution_id: ExecutionId,
-    pub result: AgentResult,
-    pub timestamp: ChronoDateTime,
-}
-
-// Event handler is called synchronously via a trait
-pub trait AgentEventHandler: Send + Sync {
-    fn handle(&self, event: &AgentExecuted);
-}
+// Agent service calls RAG service via gRPC for document search
+let results = rag_client.search(SearchRequest {
+    query: task_description,
+    tenant_id: tenant_id,
+    limit: 5,
+}).await?;
 ```
 
-### Asynchronous Events (NATS JetStream — Versioned)
+### Asynchronous Events (NATS JetStream — Protobuf Payloads)
 
-For cross-module notifications and background processing — all subjects include `v1` version prefix:
+For cross-module notifications and background processing — all NATS event payloads are **Protobuf messages** and subjects include `v1` version prefix:
 
 | Subject | Publisher | Consumers |
 |---|---|---|
@@ -541,9 +546,9 @@ For cross-module notifications and background processing — all subjects includ
 | `aeroxe.v1.identity.user.created` | identity | audit, notification |
 | `aeroxe.v1.identity.role.assigned` | identity | audit |
 
-### Event Envelope (Versioned)
+### Event Envelope (Protobuf)
 
-Every NATS event follows a standard JSON envelope with version:
+Every NATS event follows a standard Protobuf message serialized as JSON or binary:
 
 ```json
 {

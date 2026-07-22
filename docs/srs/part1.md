@@ -4,7 +4,7 @@ I will create the **complete final SRS** for:
 
 ## Enterprise Agentic AI Intelligence Platform
 
-### DDD + TDD + Modular Monolith + Rust Trait Interfaces + NATS JetStream + Ollama + Hybrid RAG + SeaORM
+### DDD + TDD + Modular Monolith + gRPC + NATS JetStream + Ollama + Hybrid RAG + SeaORM + Protobuf
 
 **Version: 1.0 Final Architecture Specification**
 
@@ -55,7 +55,7 @@ The final SRS will contain:
 | Product Category        | Enterprise Agentic AI Platform                  |
 | Architecture            | **DDD Modular Monolith** (single binary)        |
 | Development Methodology | TDD                                             |
-| Internal Communication  | **Rust trait interfaces** (in-process, no gRPC) |
+| Internal Communication  | **gRPC** (sync) + **NATS** (async) between services |
 | Event System            | **NATS JetStream** (versioned subjects)          |
 | AI Runtime              | Ollama                                          |
 | Deployment              | Private Infrastructure (single binary)          |
@@ -243,17 +243,17 @@ Each domain shall:
 
 * Own its business rules
 * Own its database **schema** (not separate database)
-* Communicate through **Rust trait interfaces**
+* Communicate through **gRPC** (sync) or **NATS** (async)
 * Deploy as part of a single binary (extractable to separate service later)
 
 ---
 
 ## 4.4 Communication Strategy
 
-Synchronous (in-process):
+Synchronous:
 
 ```
-Rust trait interfaces (< 1μs dispatch)
+gRPC (< 1ms dispatch)
 ```
 
 Asynchronous:
@@ -265,7 +265,7 @@ NATS JetStream (versioned subjects: aeroxe.v1.*)
 External:
 
 ```
-REST (/api/v1/*)
+Protobuf over HTTP (/api/v1/*)
 WebSocket (/ws/v1/*)
 ```
 
@@ -286,9 +286,9 @@ WebSocket (/ws/v1/*)
 
                            |
 
-                 Rust Trait Interfaces
+                 gRPC / NATS
 
-                 (in-process, < 1μs dispatch)
+                 (inter-service communication)
 
 
                            |
@@ -1099,7 +1099,7 @@ Responsibilities:
 
 # 8. Module Communication
 
-## Synchronous (In-Process Trait Interfaces)
+## Synchronous (gRPC Between Services)
 
 Example:
 
@@ -1108,7 +1108,7 @@ agent module
 
         |
 
-        | trait method call (< 1μs)
+        | gRPC call (< 1ms)
 
         |
 
@@ -1116,7 +1116,7 @@ rag module
 
 ```
 
-No gRPC required — all modules are in the same binary and communicate through Rust trait interfaces.
+Modules communicate through gRPC (synchronous) or NATS (async) — microservices in a modular monolith.
 
 ---
 
@@ -1226,8 +1226,9 @@ Ollama
 ## Communication
 
 ```
-REST (Structured)
+Protobuf over HTTP (PATCH/POST/DELETE)
 NATS JetStream
+gRPC (inter-service)
 ```
 
 ## Storage

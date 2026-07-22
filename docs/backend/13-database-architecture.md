@@ -28,28 +28,28 @@ Each module has its own PostgreSQL schema, enabling:
 
 | Service | Schema | Tables |
 |---|---|---|
-| identity | `identity` | users, roles, permissions, tenants, api_keys, sessions, kyc_documents |
-| customer | `customer` | customers, addresses |
-| ai-gateway | `ai` | sessions, requests |
-| agent | `agent` | agents, executions, steps, document_sets, databases, database_tables |
-| rag | `rag` | documents, chunks, document_metadata, document_sets |
-| vision | `vision` | images, analysis, ocr_results |
-| sql-agent | `sql` | (via agent schema) |
-| memory | `memory` | memories, conversation_history |
-| workflow | `workflow` | definitions, instances, steps, approvals |
-| security | `security` | (scan results) |
-| audit | `audit` | chat_trail, events (partitioned) |
-| telephony | `telephony` | calls, recordings, transcripts, phone_numbers, queues, voicemails, ivr_flows, caller_auth, fraud_checks, audio_quality |
-| conversation | `conversation` | conversations, messages, entities, sentiment |
-| stt | `stt` | sessions, segments, models |
-| tts | `tts` | voices, voice_clones, synthesis_log, post_call_surveys |
-| analytics | `analytics` | conversation_metrics, call_metrics, agent_metrics, cost_tracking, snapshots |
-| webhook | `webhook` | subscriptions, deliveries |
-| outbound | `outbound` | campaigns, targets, callbacks, dnc_list |
-| notification | `notification` | (notification templates) |
-| model-registry | `models` | (model registry) |
-| config | `config` | (configuration) |
-| ecosystem | `eco` | (integration) |
+| identity | `identity_` | users, roles, permissions, tenants, api_keys, sessions, kyc_documents |
+| customer | `customer_` | customers, addresses |
+| ai-gateway | `ai_` | sessions, requests |
+| agent | `agent_` | agents, executions, steps, document_sets, databases, database_tables |
+| rag | `rag_` | documents, chunks, document_metadata, document_sets |
+| vision | `vision_` | images, analysis, ocr_results |
+| sql-agent | `sql_` | (via agent schema) |
+| memory | `memory_` | memories, conversation_history |
+| workflow | `workflow_` | definitions, instances, steps, approvals |
+| security | `security_` | (scan results) |
+| audit | `audit_` | chat_trail, events (partitioned) |
+| telephony | `telephony_` | calls, recordings, transcripts, phone_numbers, queues, voicemails, ivr_flows, caller_auth, fraud_checks, audio_quality |
+| conversation | `conversation_` | conversations, messages, entities, sentiment |
+| stt | `stt_` | sessions, segments, models |
+| tts | `tts_` | voices, voice_clones, synthesis_log, post_call_surveys |
+| analytics | `analytics_` | conversation_metrics, call_metrics, agent_metrics, cost_tracking, snapshots |
+| webhook | `webhook_` | subscriptions, deliveries |
+| outbound | `outbound_` | campaigns, targets, callbacks, dnc_list |
+| notification | `notification_` | (notification templates) |
+| model-registry | `models_` | (model registry) |
+| config | `config_` | (configuration) |
+| ecosystem | `eco_` | (integration) |
 
 | Aspect | Microservice DB-per-Service | Modular Monolith Schema-per-Module |
 |---|---|---|

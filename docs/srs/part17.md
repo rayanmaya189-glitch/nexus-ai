@@ -75,12 +75,12 @@ NATS Event → Event Filter → Rate Limit Check → Payload Construction
 | Method | Endpoint | Business Status | HTTP |
 |---|---|---|---|
 | `POST` | `/api/v1/webhooks` | `CREATED` | `201` |
-| `GET` | `/api/v1/webhooks/{id}` | `SUCCESS` | `200` |
-| `GET` | `/api/v1/webhooks?limit=10&offset=0` | `SUCCESS` | `200` |
+| `POST` | `/api/v1/webhooks/{id}` | `SUCCESS` | `200` |
+| `POST` | `/api/v1/webhooks?limit=10&offset=0` | `SUCCESS` | `200` |
 | `PATCH` | `/api/v1/webhooks/{id}` | `UPDATED` | `200` |
 | `DELETE` | `/api/v1/webhooks/{id}` | `DELETED` | `204` |
 | `POST` | `/api/v1/webhooks/{id}/test` | `SUCCESS` | `200` |
-| `GET` | `/api/v1/webhooks/{id}/deliveries?limit=10&offset=0` | `SUCCESS` | `200` |
+| `POST` | `/api/v1/webhooks/{id}/deliveries?limit=10&offset=0` | `SUCCESS` | `200` |
 
 ---
 

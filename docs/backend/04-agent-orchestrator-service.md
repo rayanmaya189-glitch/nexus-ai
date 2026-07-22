@@ -2,7 +2,7 @@
 
 ## AI Agent Lifecycle, Planning, Tool Execution & Orchestration
 
-> **Modular Monolith Module:** This document describes the `nexus-agent` crate — a module within the single `aeroxe-nexus` binary. It communicates with other modules via Rust trait interfaces (see [Communication Architecture](12-communication-architecture.md)).
+> **Modular Monolith Module:** This document describes the `nexus-agent` crate — a module within the single `aeroxe-nexus` binary. It communicates with other modules via **gRPC** (synchronous) or **NATS** (async) with Protobuf payloads.
 
 ---
 
@@ -16,7 +16,7 @@
 | Domain Type | Core Domain |
 | Language | Rust |
 | Schema | `agent_` (in shared PostgreSQL) |
-| Dependencies | `nexus-rag` (RagService trait), `nexus-memory` (MemoryService trait) + Ollama |
+| Dependencies | `nexus-rag` (gRPC), `nexus-memory` (gRPC) + Ollama |
 
 ---
 
@@ -107,7 +107,7 @@ pub struct ExecutionEvent {
 }
 ```
 
-> **Note:** AgentService is consumed by `nexus-ai-gateway` and `nexus-gateway` via trait dispatch — no network overhead.
+> **Note:** AgentService is consumed by `nexus-ai-gateway` and `nexus-gateway` via gRPC dispatch.
 
 ---
 
@@ -285,7 +285,7 @@ Permission Engine (RBAC + ABAC check)
 Rate Limiter (Per-tool limits)
     |
     v
-Tool Execution (trait method call to module)
+Tool Execution (gRPC call to target service)
     |
     v
 Result returned to Agent
@@ -486,7 +486,7 @@ Agent Request → Query agent_document_sets for bound set IDs
 | Method | Endpoint | Description |
 |---|---|---|
 | POST | `/api/v1/agents/:id/document-sets` | Bind agent to sets |
-| GET | `/api/v1/agents/:id/document-sets` | List bound sets |
+| POST | `/api/v1/agents/:id/document-sets/read` | List bound sets (with query body) |
 | DELETE | `/api/v1/agents/:id/document-sets/:set_id` | Unbind agent |
 
 ---
@@ -516,7 +516,7 @@ Admin enters credentials → Click "Test Connection"
 | POST | `/api/v1/agents/:id/sql-connections/test` | Test database connection |
 | POST | `/api/v1/agents/:id/sql-connections/discover` | Discover schema |
 | POST | `/api/v1/agents/:id/sql-connections/tables` | Bind tables |
-| GET | `/api/v1/agents/:id/sql-connections` | List bound databases |
+| POST | `/api/v1/agents/:id/sql-connections/read` | List bound databases (with query body) |
 | DELETE | `/api/v1/agents/:id/sql-connections/:conn_id` | Unbind database |
 
 ### Scope Enforcement
@@ -587,7 +587,7 @@ The agent orchestrator supports voice call contexts alongside text chat:
 ### Voice Call Agent Flow
 
 ```
-Inbound Call Received (via nexus-telephony)
+Inbound Call Received (via telephony service — gRPC)
     |
     v
 Agent Orchestrator receives call context
@@ -602,17 +602,17 @@ Select Agent
     |
     v
 Initialize Conversation
-    |  - Create conversation (nexus-conversation)
+    |  - Create conversation (conversation service — gRPC)
     |  - Set channel: voice
     |
     v
 Audio Processing Loop
-    |  - Receive audio (nexus-telephony)
-    |  - Transcribe (nexus-stt)
+    |  - Receive audio (telephony service — gRPC)
+    |  - Transcribe (stt service — gRPC)
     |  - Process text (agent reasoning)
     |  - Generate response text
-    |  - Synthesize speech (nexus-tts)
-    |  - Send audio (nexus-telephony)
+    |  - Synthesize speech (tts service — gRPC)
+    |  - Send audio (telephony service — gRPC)
     |
     v
 Handle Barge-in
@@ -629,8 +629,8 @@ Transfer to Human (if needed)
     v
 Call Ended
     |  - Save transcript
-    |  - Update analytics
-    |  - Publish audit event
+    |  - Update analytics (analytics service — gRPC)
+    |  - Publish audit event (NATS)
 ```
 
 ### Voice-Specific Agent Tools

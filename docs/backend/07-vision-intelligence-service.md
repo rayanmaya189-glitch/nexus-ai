@@ -2,7 +2,7 @@
 
 ## Image Processing, OCR, Visual Reasoning & Device Analysis
 
-> **Modular Monolith Module:** This document describes the `nexus-vision` crate — a module within the single `aeroxe-nexus` binary. It communicates with other modules via Rust trait interfaces (see [Communication Architecture](12-communication-architecture.md)).
+> **Modular Monolith Module:** This document describes the `nexus-vision` crate — a module within the single `aeroxe-nexus` binary. It communicates with other modules via gRPC (synchronous) or NATS (async) messaging (see [Communication Architecture](12-communication-architecture.md)). All request/response messages are Protobuf (proto3) serialized as JSON over HTTP.
 
 ---
 
@@ -101,7 +101,7 @@ pub struct ImageAnalysisResponse {
 }
 ```
 
-> **Note:** `VisionService` is consumed by `nexus-agent` during multi-step agent execution — all via in-process trait dispatch, no network overhead.
+> **Note:** `VisionService` is consumed by `nexus-agent` during multi-step agent execution — via gRPC calls (in-process tonic channels).
 
 ---
 
@@ -274,13 +274,15 @@ CREATE TABLE vision.ocr_results (
 
 ---
 
-## 8. REST API Endpoints
+## 8. API Endpoints (PATCH, POST, DELETE only)
+
+> All request/response are Protobuf messages serialized as JSON over HTTP. Read operations use POST with a request body (no GET).
 
 ### Analyze Image
 
 ```
 POST /api/v1/vision/analyze
-Content-Type: multipart/form-data
+Content-Type: application/json (Protobuf serialized)
 ```
 
 **Parameters:**
@@ -302,14 +304,14 @@ Content-Type: multipart/form-data
 
 ```
 POST /api/v1/vision/ocr
-Content-Type: multipart/form-data
+Content-Type: application/json (Protobuf serialized)
 ```
 
 ### Batch Analysis
 
 ```
 POST /api/v1/vision/batch
-Content-Type: multipart/form-data
+Content-Type: application/json (Protobuf serialized)
 ```
 
 ---

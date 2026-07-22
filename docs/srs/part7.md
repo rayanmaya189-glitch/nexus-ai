@@ -4,13 +4,13 @@
 
 # Part 7 — API Specification + Frontend Integration + Agent Workflow Design
 
-## REST + WebSocket + Trait-Based Module Dispatch + AI Agent Communication
+## Protobuf over HTTP + WebSocket + gRPC + AI Agent Communication
 
 ---
 
 # 1. API Architecture Overview
 
-AeroXe Nexus AI exposes APIs through a gateway module. Internal module communication uses Rust trait interfaces (not gRPC).
+AeroXe Nexus AI exposes APIs through a gateway module. Internal service communication uses gRPC (sync) or NATS (async).
 
 Architecture:
 
@@ -47,7 +47,7 @@ Architecture:
          |                    |
 
 
-      Trait Method Calls    Streaming Relay
+      gRPC Calls            Streaming Relay
 
       (in-process)          (tokio channels)
 
@@ -65,7 +65,7 @@ Architecture:
         =================================
 
 
-        Trait Interfaces + NATS JetStream
+        gRPC + NATS JetStream
 
 
         =================================
@@ -81,8 +81,8 @@ Architecture:
 
 All APIs must support:
 
-* **Structured REST** — Standard REST methods (GET/POST/PUT/PATCH/DELETE) with JSON request/response
-* **Standard REST** — GET for reads, POST for creates, PUT/PATCH for updates, DELETE for removals
+* **Protobuf over HTTP** — PATCH, POST, DELETE only (no GET, no PUT — read ops use POST with read body)
+* **Protobuf Format** — Request/response bodies are Protobuf (proto3) serialized as JSON
 * **Path variables** — Resource IDs in URL path (e.g., `/api/v1/agents/{id}`)
 * **Query strings** — Supported for filtering and pagination
 * Versioning (`/api/v1/*`)
@@ -372,7 +372,7 @@ Response:
 Endpoint:
 
 ```
-GET /api/v1/agents/execution/{id}
+POST /api/v1/agents/execution
 ```
 
 Response:
@@ -635,7 +635,15 @@ Request:
 ## Search Memory
 
 ```
-GET /api/v1/memory/search?q=customer
+POST /api/v1/memory/search
+```
+
+Request:
+
+```json
+{
+"query": "customer"
+}
 ```
 
 ---
@@ -691,7 +699,7 @@ model-registry (src/modules/model-registry/)
 ## Available Models
 
 ```
-GET /api/v1/models
+POST /api/v1/models
 ```
 
 Response:
@@ -915,7 +923,7 @@ Broadband Service
 
  |
 
-Trait call
+gRPC call
 
 
  |
@@ -1089,7 +1097,7 @@ Versioned Router Dispatch
 
  |
 
-Module Trait Method Call
+Module gRPC Method Call
 
 
 ```

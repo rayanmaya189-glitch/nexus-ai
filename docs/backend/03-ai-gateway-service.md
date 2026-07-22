@@ -2,7 +2,7 @@
 
 ## Central AI Request Processing, Routing & Management
 
-> **Modular Monolith Module:** This document describes the `nexus-ai-gateway` crate — a module within the single `aeroxe-nexus` binary. It communicates with other modules via Rust trait interfaces (see [Communication Architecture](12-communication-architecture.md)), not gRPC.
+> **Modular Monolith Module:** This document describes the `nexus-ai-gateway` crate — a module within the single `aeroxe-nexus` binary. It communicates with other modules via **gRPC** (synchronous) or **NATS** (async) with Protobuf payloads.
 
 ---
 
@@ -16,7 +16,7 @@
 | Domain Type | Core Domain |
 | Language | Rust |
 | Schema | `ai_` (in shared PostgreSQL) |
-| Ports | Internal trait dispatch (no gRPC port — optional: 50051 for external gRPC) |
+| Ports | gRPC (internal sync), optional: 50051 for external gRPC |
 
 ---
 
@@ -24,13 +24,13 @@
 
 The AI Gateway module is the entry point for all AI requests within the AeroXe Nexus AI monolith. It handles:
 
-- Request reception and validation (from `nexus-gateway` via trait call)
-- Authentication and authorization enforcement (delegates to `nexus-identity` trait)
+- Request reception and validation (from `nexus-gateway` via gRPC)
+- Authentication and authorization enforcement (delegates to `nexus-identity` via gRPC)
 - Rate limiting enforcement
-- Request routing to appropriate AI agents (`nexus-agent` trait)
+- Request routing to appropriate AI agents (`nexus-agent` via gRPC)
 - Response aggregation and streaming (via tokio channels)
 - Session management (Redis + PostgreSQL)
-- Audit event publishing (NATS)
+- Audit event publishing (NATS with Protobuf payloads)
 
 ---
 
@@ -75,7 +75,7 @@ AIRequest (Aggregate Root)
 
 ---
 
-## 4. Public API Trait (Replaces gRPC)
+## 4. Public API Trait (gRPC Service Interface)
 
 ```rust
 // nexus-ai-gateway/src/interfaces/api.rs
@@ -110,11 +110,11 @@ pub struct AIChunk {
 }
 ```
 
-> **Note:** The optional external gRPC contract is defined in `proto/ai_gateway.proto` for partner/SDK integrations. It wraps the same trait methods via tonic-grpc.
+> **Note:** The gRPC contract is defined in `proto/ai_gateway.proto`. The trait methods are exposed as gRPC service methods via tonic.
 
 ---
 
-## 5. REST API Endpoints
+## 5. API Endpoints (Protobuf JSON)
 
 ### Submit AI Chat Request
 
@@ -169,22 +169,22 @@ wss://api.aeroxenexus.com/ws/chat
 ## 6. Request Processing Pipeline
 
 ```
-External Request
+External Request (Protobuf JSON)
     |
     v
 [1] Request ID Generation
     |
     v
-[2] Authentication (JWT Validation)
+[2] Authentication (JWT Validation via gRPC to identity service)
     |
     v
-[3] Tenant Validation
+[3] Tenant Validation (via gRPC to identity service)
     |
     v
 [4] Rate Limiting (Token Bucket / Redis)
     |
     v
-[5] Authorization (RBAC + ABAC)
+[5] Authorization (RBAC + ABAC via gRPC to identity service)
     |
     v
 [6] Sensitive Words Filter (prompt scan)
@@ -193,13 +193,13 @@ External Request
 [7] Prompt Injection Detection
     |
     v
-[8] Request Validation
+[8] Request Validation (Protobuf schema)
     |
     v
 [9] Agent Routing Decision
     |
     v
-[10] Trait-based dispatch to Agent Orchestrator
+[10] gRPC dispatch to Agent Orchestrator
     |
     v
 [11] Response Aggregation / Streaming
@@ -208,10 +208,10 @@ External Request
 [12] Sensitive Words Filter (response scan)
     |
     v
-[13] Audit Event Publishing
+[13] Audit Event Publishing (NATS with Protobuf payload)
     |
     v
-[14] Response to Client
+[14] Response to Client (Protobuf JSON)
 ```
 
 ---
@@ -469,7 +469,7 @@ Every request must include `tenant_id`. The gateway:
 
 1. Extracts `tenant_id` from JWT claims
 2. Validates tenant exists and is active
-3. Attaches `tenant_id` to all downstream trait calls
+3. Attaches `tenant_id` to all downstream gRPC calls
 4. Enforces tenant-specific rate limits
 5. Filters responses by tenant scope
 
@@ -510,9 +510,9 @@ CREATE TABLE ai_requests (
 
 ---
 
-## 13. NATS Events (Async Communication)
+## 13. NATS Events (Async Communication — Protobuf Payloads)
 
-> **Note:** Unlike the old microservice architecture, module-to-module calls use trait interfaces, not NATS. NATS is used only for async event publishing that other modules may consume for background processing.
+> **Note:** Module-to-module synchronous calls use **gRPC**. NATS is used only for async event publishing that other modules may consume for background processing. All NATS event payloads are **Protobuf messages**.
 
 ### Published
 
@@ -573,7 +573,7 @@ CREATE TABLE ai_requests (
 ### Tracing
 
 Every request gets a `trace_id` propagated through:
-- REST header: `X-Trace-ID`
+- HTTP header: `X-Trace-ID`
 - Internal: `trace_id` field in request context
 - NATS: `trace_id` in event data
 

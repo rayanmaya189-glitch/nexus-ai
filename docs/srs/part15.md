@@ -151,11 +151,11 @@ Customer Requests Deletion → Verify Identity → Mark for Deletion
 | Method | Endpoint | Business Status | HTTP |
 |---|---|---|---|
 | `POST` | `/api/v1/conversations` | `CREATED` | `201` |
-| `GET` | `/api/v1/conversations/{id}` | `SUCCESS` | `200` |
-| `GET` | `/api/v1/conversations?limit=10&offset=0` | `SUCCESS` | `200` |
-| `GET` | `/api/v1/conversations/{id}/messages?limit=10&offset=0` | `SUCCESS` | `200` |
+| `POST` | `/api/v1/conversations/{id}` | `SUCCESS` | `200` |
+| `POST` | `/api/v1/conversations?limit=10&offset=0` | `SUCCESS` | `200` |
+| `POST` | `/api/v1/conversations/{id}/messages?limit=10&offset=0` | `SUCCESS` | `200` |
 | `POST` | `/api/v1/conversations/{id}/messages` | `CREATED` | `201` |
-| `GET` | `/api/v1/conversations/{id}/state` | `SUCCESS` | `200` |
+| `POST` | `/api/v1/conversations/{id}/state` | `SUCCESS` | `200` |
 | `POST` | `/api/v1/conversations/{id}/end` | `UPDATED` | `200` |
 | `POST` | `/api/v1/conversations/{id}/branch` | `CREATED` | `201` |
 | `DELETE` | `/api/v1/conversations/{id}` | `DELETED` | `204` |

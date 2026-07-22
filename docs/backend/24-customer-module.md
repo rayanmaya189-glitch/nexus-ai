@@ -2,7 +2,7 @@
 
 ## Customer Aggregate, Profiles, Status Management & Addresses
 
-> **Modular Monolith Module:** This document describes the `customer` module at `src/modules/customer/`. It communicates with other modules via Rust trait interfaces (see [Communication Architecture](12-communication-architecture.md)). All database access uses SeaORM — no raw SQL.
+> **Modular Monolith Module:** This document describes the `customer` module at `src/modules/customer/`. It communicates with other modules via gRPC (sync) or NATS (async) between services. All database access uses SeaORM — no raw SQL.
 
 ---
 
@@ -320,13 +320,13 @@ pub trait CustomerService: Send + Sync {
 
 ---
 
-## 9. REST API Endpoints
+## 9. REST API Endpoints (Protobuf over HTTP)
 
 | Method | Endpoint | Business Status | HTTP | Description |
 |---|---|---|---|---|
 | `POST` | `/api/v1/customers` | `CREATED` | `201` | Create customer |
-| `GET` | `/api/v1/customers/{id}` | `SUCCESS` | `200` | Get customer |
-| `GET` | `/api/v1/customers?limit=10&offset=0` | `SUCCESS` | `200` | List customers |
+| `POST` | `/api/v1/customers` (read body) | `SUCCESS` | `200` | Get customer |
+| `POST` | `/api/v1/customers/list` (read body) | `SUCCESS` | `200` | List customers |
 | `PATCH` | `/api/v1/customers/{id}` | `UPDATED` | `200` | Update customer |
 | `DELETE` | `/api/v1/customers/{id}` | `DELETED` | `204` | Delete customer |
 | `POST` | `/api/v1/customers/{id}/suspend` | `UPDATED` | `200` | Suspend customer |
@@ -366,7 +366,7 @@ pub trait CustomerService: Send + Sync {
 }
 ```
 
-**Note:** No PUT method. Use PATCH for updates. All list endpoints support `limit` (default 10) and `offset`.
+**Note:** All endpoints use Protobuf (proto3) serialized as JSON over HTTP. Content-Type: `application/json` (Protobuf messages serialized as JSON). No PUT method — use PATCH for updates. Read operations use POST with a read body. All list endpoints support `limit` (default 10) and `offset`.
 
 ---
 
@@ -534,7 +534,7 @@ async fn test_create_customer_endpoint_v1() {
 
 | Module | Dependency Type | Usage |
 |---|---|---|
-| `identity` | Trait reference | Tenant validation, permission checks |
+| `identity` | gRPC / NATS | Tenant validation, permission checks |
 | `audit` | NATS event | Audit logging of customer operations |
 | `notification` | NATS event | Customer lifecycle notifications |
 

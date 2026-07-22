@@ -2,7 +2,7 @@
 
 ## Business Automation, Approvals & Task Management
 
-> **Modular Monolith Module:** This document describes the `nexus-workflow` crate — a module within the single `aeroxe-nexus` binary. It communicates with other modules via Rust trait interfaces (see [Communication Architecture](12-communication-architecture.md)).
+> **Modular Monolith Module:** This document describes the `nexus-workflow` crate — a module within the single `aeroxe-nexus` binary. It communicates with other modules via gRPC (synchronous) or NATS (async) messaging (see [Communication Architecture](12-communication-architecture.md)). All request/response messages are Protobuf (proto3) serialized as JSON over HTTP.
 
 ---
 
@@ -114,7 +114,7 @@ pub struct ApproveRequest {
 }
 ```
 
-> **Note:** `WorkflowService` is consumed by `nexus-gateway` (HTTP handlers) and interacts with `nexus-agent` for AI task steps via trait dispatch.
+> **Note:** `WorkflowService` is consumed by `nexus-gateway` (HTTP handlers) and interacts with `nexus-agent` for AI task steps via gRPC calls (in-process tonic channels).
 
 ---
 
@@ -199,9 +199,9 @@ Publish
 
 | Type | Description | Execution |
 |---|---|---|
-| `ai_task` | AI agent processes data | Trait call to agent module |
+| `ai_task` | AI agent processes data | gRPC call to agent module |
 | `approval` | Human approval required | Wait for human action |
-| `notification` | Send notification | Trait call to notification module |
+| `notification` | Send notification | gRPC call to notification module |
 | `api_call` | External API call | HTTP to external service |
 | `condition` | Branch based on result | Evaluate condition |
 | `delay` | Wait for specified time | Timer-based |
@@ -278,12 +278,15 @@ CREATE TABLE workflow.approvals (
 
 ---
 
-## 8. REST API Endpoints
+## 8. API Endpoints (PATCH, POST, DELETE only)
+
+> All request/response are Protobuf messages serialized as JSON over HTTP. Read operations use POST with a request body (no GET).
 
 ### Start Workflow
 
 ```
 POST /api/v1/workflows/start
+Content-Type: application/json (Protobuf serialized)
 ```
 
 **Request:**
@@ -308,19 +311,36 @@ POST /api/v1/workflows/start
 ### Get Workflow Status
 
 ```
-GET /api/v1/workflows/{id}
+POST /api/v1/workflows/status
+Content-Type: application/json (Protobuf serialized)
+```
+
+**Request:**
+```json
+{
+  "workflow_id": "wfl_789"
+}
 ```
 
 ### Approve Step
 
 ```
-POST /api/v1/workflows/{id}/steps/{step_id}/approve
+POST /api/v1/workflows/approve
+Content-Type: application/json (Protobuf serialized)
 ```
 
 ### List Active Workflows
 
 ```
-GET /api/v1/workflows?status=running
+POST /api/v1/workflows/list
+Content-Type: application/json (Protobuf serialized)
+```
+
+**Request:**
+```json
+{
+  "status": "running"
+}
 ```
 
 ---

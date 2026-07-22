@@ -97,7 +97,7 @@ pub enum LowConfidenceAction {
 | `POST` | `/api/v1/stt/sessions/{session_id}/audio` | `SUCCESS` | `200` |
 | `POST` | `/api/v1/stt/sessions/{session_id}/end` | `UPDATED` | `200` |
 | `POST` | `/api/v1/stt/transcribe` | `SUCCESS` | `200` |
-| `GET` | `/api/v1/stt/sessions/{session_id}` | `SUCCESS` | `200` |
+| `POST` | `/api/v1/stt/sessions/{session_id}` | `SUCCESS` | `200` |
 
 ---
 
@@ -201,7 +201,7 @@ CREATE TABLE tts.voice_clones (
 |---|---|---|---|
 | `POST` | `/api/v1/tts/synthesize` | `SUCCESS` | `200` |
 | `POST` | `/api/v1/tts/ssml` | `SUCCESS` | `200` |
-| `GET` | `/api/v1/tts/voices?limit=10&offset=0` | `SUCCESS` | `200` |
+| `POST` | `/api/v1/tts/voices?limit=10&offset=0` | `SUCCESS` | `200` |
 | `POST` | `/api/v1/tts/voices/clone` | `CREATED` | `201` |
 | `DELETE` | `/api/v1/tts/voices/clone/{clone_id}` | `DELETED` | `204` |
 

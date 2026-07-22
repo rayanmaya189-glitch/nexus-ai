@@ -2,7 +2,7 @@
 
 ## Zero Trust, RBAC, ABAC, AI Security & Data Protection (Modular Monolith)
 
-> This document applies to the `aeroxe-nexus` modular monolith. Unlike microservice architectures, internal module-to-module calls do not use mTLS because they are in-process trait dispatches. Security focuses on: (1) external API security via `nexus-gateway`, (2) authentication via `nexus-identity`, (3) AI safety via `nexus-security-ai`, and (4) audit via `nexus-audit`.
+> This document applies to the `aeroxe-nexus` modular monolith. Internal module-to-module calls use gRPC (synchronous) or NATS (async) messaging via in-process tonic channels. Security focuses on: (1) external API security via `nexus-gateway`, (2) authentication via `nexus-identity`, (3) AI safety via `nexus-security-ai`, and (4) audit via `nexus-audit`.
 
 ---
 
@@ -20,7 +20,7 @@ Every request must be authenticated, authorized, validated, and audited.
 User / Application
        |
        v
-API Gateway
+API Gateway (Protobuf JSON)
        |
   ================================================
   Security Enforcement Layer (nexus-gateway)
@@ -30,10 +30,10 @@ API Gateway
   ================================================
        |
        v
-Internal Modules (in-process trait dispatch)
+Internal Modules (gRPC sync / NATS async)
        |
   ================================================
-  RequestContext Propagation | Permission Trait Calls
+  RequestContext Propagation | Permission gRPC Calls
   NATS Subject Permissions | Database Security
   ================================================
        |
@@ -141,15 +141,15 @@ SELECT * FROM documents WHERE tenant_id = $1;
 
 ## 6. Module-to-Module Security
 
-> In the modular monolith, modules communicate via Rust trait methods **within the same process**. There is no network between modules, so mTLS is not needed internally.
+> In the modular monolith, modules communicate via gRPC (synchronous) or NATS (async) messaging via in-process tonic channels. Internal gRPC calls do not require mTLS since they stay within the process boundary.
 
 ### Security Enforcement
 
 | Layer | Mechanism |
 |---|---|
-| API Boundary | `nexus-gateway` validates JWT + tenant before trait dispatch |
+| API Boundary | `nexus-gateway` validates JWT + tenant before gRPC dispatch |
 | Module Entry | Modules receive pre-validated `RequestContext` (no re-validation needed) |
-| Permission Check | Modules call `nexus-identity::check_permission()` trait method |
+| Permission Check | Modules call `nexus-identity::CheckPermission()` gRPC method |
 | Tenant Isolation | All queries include `tenant_id` — enforced at database level |
 
 ### Request Context Propagation
@@ -265,7 +265,7 @@ SQL flow: Question -> LLM -> SQL Validator -> Permission Check -> Read Replica -
 | Component | Protocol |
 |---|---|
 | All External | TLS 1.3 |
-| Internal Module Calls | In-process (no network) |
+| Internal Module Calls | gRPC (in-process tonic, no network) |
 | NATS (optional) | TLS |
 | Database | TLS |
 | Optional gRPC (external) | TLS 1.3 + optional mTLS |

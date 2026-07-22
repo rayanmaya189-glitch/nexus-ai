@@ -2,7 +2,7 @@
 
 ## Outbound Webhooks, Event Delivery, Webhook Management & Retry Logic
 
-> **Modular Monolith Module:** This document describes the `nexus-webhook` crate — a module within the single `aeroxe-nexus` binary. It communicates with other modules via NATS event consumption.
+> **Modular Monolith Module:** This document describes the `nexus-webhook` crate — a module within the single `aeroxe-nexus` binary. It communicates with other modules via gRPC (sync) or NATS (async) between services.
 
 ---
 
@@ -281,17 +281,17 @@ CREATE INDEX idx_webhook_deliveries_pending ON webhook_.deliveries(status, next_
 
 ---
 
-## 8. REST API Endpoints
+## 8. REST API Endpoints (Protobuf over HTTP)
 
 | Method | Endpoint | Business Status | HTTP | Description |
 |---|---|---|---|---|
 | `POST` | `/api/v1/webhooks` | `CREATED` | `201` | Create webhook |
-| `GET` | `/api/v1/webhooks/{id}` | `SUCCESS` | `200` | Get webhook |
-| `GET` | `/api/v1/webhooks?limit=10&offset=0` | `SUCCESS` | `200` | List webhooks |
+| `POST` | `/api/v1/webhooks` (read body) | `SUCCESS` | `200` | Get webhook |
+| `POST` | `/api/v1/webhooks/list` (read body) | `SUCCESS` | `200` | List webhooks |
 | `PATCH` | `/api/v1/webhooks/{id}` | `UPDATED` | `200` | Update webhook |
 | `DELETE` | `/api/v1/webhooks/{id}` | `DELETED` | `204` | Delete webhook |
 | `POST` | `/api/v1/webhooks/{id}/test` | `SUCCESS` | `200` | Test webhook |
-| `GET` | `/api/v1/webhooks/{id}/deliveries?limit=10&offset=0` | `SUCCESS` | `200` | List deliveries |
+| `POST` | `/api/v1/webhooks/{id}/deliveries/list` (read body) | `SUCCESS` | `200` | List deliveries |
 | `POST` | `/api/v1/webhooks/{id}/deliveries/{delivery_id}/retry` | `SUCCESS` | `200` | Retry delivery |
 
 ### List Webhooks Response
@@ -335,7 +335,7 @@ CREATE INDEX idx_webhook_deliveries_pending ON webhook_.deliveries(status, next_
 }
 ```
 
-**Note:** No PUT method. Use PATCH for updates. All list endpoints support `limit` (default 10) and `offset`.
+**Note:** All endpoints use Protobuf (proto3) serialized as JSON over HTTP. Content-Type: `application/json` (Protobuf messages serialized as JSON). No PUT method — use PATCH for updates. All list endpoints support `limit` (default 10) and `offset`.
 
 ---
 

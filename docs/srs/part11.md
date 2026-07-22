@@ -63,15 +63,15 @@ ecosystem
 ================================================================
 
 
-REST API (/api/v1/*)
+REST + Protobuf API (PATCH, POST, DELETE only — no GET, no PUT)
 
 WebSocket (/ws/v1/*)
 
-NATS Events (aeroxe.v1.*)
+NATS Events (aeroxe.v1.<service>.<event> — Protobuf payloads)
 
 Database Connectors (SeaORM)
 
-Trait Interfaces (in-process)
+gRPC (sync) / NATS (async) between services
 
 
 ================================================================
@@ -900,10 +900,12 @@ REST:
 /api/v1
 ```
 
-REST:
+REST + Protobuf:
 
 ```
-GET/POST /api/v1/products
+POST /api/v1/products (read body in payload)
+PATCH /api/v1/products
+DELETE /api/v1/products
 
 ```
 

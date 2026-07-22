@@ -238,15 +238,15 @@ pub enum IVRNodeType {
 |---|---|---|---|
 | `POST` | `/api/v1/telephony/webhook/inbound` | `SUCCESS` | `200` |
 | `POST` | `/api/v1/telephony/calls/outbound` | `CREATED` | `201` |
-| `GET` | `/api/v1/telephony/calls/{call_id}` | `SUCCESS` | `200` |
-| `GET` | `/api/v1/telephony/calls?limit=10&offset=0` | `SUCCESS` | `200` |
+| `POST` | `/api/v1/telephony/calls/{call_id}` | `SUCCESS` | `200` |
+| `POST` | `/api/v1/telephony/calls?limit=10&offset=0` | `SUCCESS` | `200` |
 | `POST` | `/api/v1/telephony/calls/{call_id}/hold` | `UPDATED` | `200` |
 | `POST` | `/api/v1/telephony/calls/{call_id}/resume` | `UPDATED` | `200` |
 | `POST` | `/api/v1/telephony/calls/{call_id}/transfer` | `UPDATED` | `200` |
 | `POST` | `/api/v1/telephony/calls/{call_id}/end` | `UPDATED` | `200` |
 | `POST` | `/api/v1/telephony/calls/{call_id}/auth/verify-pin` | `SUCCESS` | `200` |
 | `POST` | `/api/v1/telephony/calls/{call_id}/auth/verify-voice` | `SUCCESS` | `200` |
-| `GET` | `/api/v1/telephony/voicemails?limit=10&offset=0` | `SUCCESS` | `200` |
+| `POST` | `/api/v1/telephony/voicemails?limit=10&offset=0` | `SUCCESS` | `200` |
 | `POST` | `/api/v1/telephony/ivr-flows` | `CREATED` | `201` |
 | `PATCH` | `/api/v1/telephony/ivr-flows/{id}` | `UPDATED` | `200` |
 | `DELETE` | `/api/v1/telephony/ivr-flows/{id}` | `DELETED` | `204` |

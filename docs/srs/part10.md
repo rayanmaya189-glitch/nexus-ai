@@ -69,7 +69,7 @@ Architecture:
 
                          |
 
-                  Trait Interfaces (in-process)
+                  gRPC / NATS (inter-service)
 
 
                          |

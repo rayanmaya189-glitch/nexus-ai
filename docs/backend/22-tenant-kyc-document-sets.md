@@ -2,7 +2,7 @@
 
 ## Tenant Onboarding + KYC Verification + Document Set Management + Agent-Document Binding
 
-> **Modular Monolith Context:** KYC handling is in `identity` module (`src/modules/identity/`, schema `identity_`), document sets in `rag` module (`src/modules/rag/`, schema `rag_`), agent bindings in `agent` module (`src/modules/agent/`, schema `agent_`), and customer data in `customer` module (`src/modules/customer/`, schema `customer_`). All modules communicate via trait interfaces — not gRPC. All database access uses SeaORM — no raw SQL. See [DDD Domain Design](02-ddd-domain-design.md).
+> **Modular Monolith Context:** KYC handling is in `identity` module (`src/modules/identity/`, schema `identity_`), document sets in `rag` module (`src/modules/rag/`, schema `rag_`), agent bindings in `agent` module (`src/modules/agent/`, schema `agent_`), and customer data in `customer` module (`src/modules/customer/`, schema `customer_`). All modules communicate via gRPC (sync) or NATS (async). All database access uses SeaORM — no raw SQL. See [DDD Domain Design](02-ddd-domain-design.md).
 
 ---
 
@@ -72,13 +72,13 @@ Tenant Registers
 
 | Method | Endpoint | Description |
 |---|---|---|
-| GET | `/api/v1/kyc/status` | Get KYC verification status |
+| POST | `/api/v1/kyc/status` | Get KYC verification status |
 | POST | `/api/v1/kyc/documents` | Upload KYC documents |
-| GET | `/api/v1/kyc/documents` | List submitted documents |
+| POST | `/api/v1/kyc/documents` | List submitted documents |
 | DELETE | `/api/v1/kyc/documents/:id` | Remove a KYC document |
 | POST | `/api/v1/kyc/submit` | Submit for review |
 | POST | `/api/v1/kyc/review` | Admin: approve/reject |
-| GET | `/api/v1/kyc/history` | KYC audit trail |
+| POST | `/api/v1/kyc/history` | KYC audit trail |
 
 ### 2.6 KYC Enforcement
 
@@ -145,15 +145,15 @@ User Creates Document Set
 | Method | Endpoint | Description |
 |---|---|---|
 | POST | `/api/v1/document-sets` | Create document set |
-| GET | `/api/v1/document-sets` | List all sets for tenant |
-| GET | `/api/v1/document-sets/:id` | Get set details |
+| POST | `/api/v1/document-sets` | List all sets for tenant |
+| POST | `/api/v1/document-sets/:id` | Get set details |
 | PATCH | `/api/v1/document-sets/:id` | Update set metadata |
 | DELETE | `/api/v1/document-sets/:id` | Delete set (soft) |
 | POST | `/api/v1/document-sets/:id/activate` | Activate set |
 | POST | `/api/v1/document-sets/:id/archive` | Archive set |
 | POST | `/api/v1/document-sets/:id/documents` | Add documents to set |
 | DELETE | `/api/v1/document-sets/:id/documents/:doc_id` | Remove document from set |
-| GET | `/api/v1/document-sets/:id/documents` | List documents in set |
+| POST | `/api/v1/document-sets/:id/documents` | List documents in set |
 
 ### 3.6 Adding Documents to a Set
 
@@ -220,10 +220,10 @@ Admin Opens Agent Configuration
 | Method | Endpoint | Description |
 |---|---|---|
 | POST | `/api/v1/agents/:id/document-sets` | Bind agent to document sets |
-| GET | `/api/v1/agents/:id/document-sets` | List bound document sets |
+| POST | `/api/v1/agents/:id/document-sets` | List bound document sets |
 | PATCH | `/api/v1/agents/:id/document-sets/:set_id` | Update binding permissions |
 | DELETE | `/api/v1/agents/:id/document-sets/:set_id` | Unbind agent from set |
-| GET | `/api/v1/document-sets/:id/agents` | List agents bound to set |
+| POST | `/api/v1/document-sets/:id/agents` | List agents bound to set |
 
 ### 4.6 Binding Rules
 
@@ -550,12 +550,12 @@ Result: Agent can ONLY query invoices/payments/credit_notes from billing
 | Layer | Enforcement |
 |---|---|
 | `nexus-gateway` | Agent SQL request validated |
-| `nexus-sql-agent` | Table whitelist check before generation (trait call) |
+| `nexus-sql-agent` | Table whitelist check before generation (gRPC call) |
 | LLM Prompt | Schema context only includes bound tables |
 | Query Validator | AST analysis against bound schema |
 | Connection Router | Execute only on bound connection |
 | Result Filter | Strip any leaked metadata |
-| `nexus-audit` | All queries logged with scope info (trait call) |
+| `nexus-audit` | All queries logged with scope info (gRPC call) |
 
 ### 6.8 Isolation Violations
 
@@ -650,10 +650,10 @@ LIMIT $4;
 |---|---|
 | `nexus-gateway` | Agent request validated against binding |
 | `nexus-agent` | Scope injected into execution context |
-| `nexus-rag` | Query filtered by document set scope (trait call) |
+| `nexus-rag` | Query filtered by document set scope (gRPC call) |
 | Vector Search | pgvector query scoped to bound documents |
-| `nexus-memory` | Agent memory scoped to tenant + sets (trait call) |
-| `nexus-audit` | All access logged with scope info (trait call) |
+| `nexus-memory` | Agent memory scoped to tenant + sets (gRPC call) |
+| `nexus-audit` | All access logged with scope info (gRPC call) |
 
 ### 5.5 Isolation Violations
 

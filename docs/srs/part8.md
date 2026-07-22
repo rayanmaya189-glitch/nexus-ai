@@ -65,7 +65,7 @@ Development cycle:
               v
 
 
-       Module Boundary Test (trait contract)
+       Module Boundary Test (gRPC contract)
 
 
               |
@@ -129,7 +129,7 @@ AeroXe Nexus AI requires:
 | --------------------- | ------------------------- |
 | Unit Testing          | Business logic validation |
 | Integration Testing   | Module communication     |
-| Contract Testing      | Trait/NATS compatibility |
+| Contract Testing      | gRPC/NATS compatibility |
 | API Testing           | External interfaces       |
 | AI Evaluation Testing | Model quality             |
 | Security Testing      | Vulnerability protection  |
@@ -218,7 +218,7 @@ src/modules/<name>/
 ├── integration/               # SeaORM + DB integration tests
 
 │
-├── contract/                  # Module trait contract tests
+├── contract/                  # gRPC service contract tests
 
 │
 ├── performance/
@@ -282,11 +282,11 @@ No Docker Compose required for unit/integration tests. All tests run with `cargo
 
 ---
 
-# 9. Module Trait Contract Testing
+# 9. gRPC Service Contract Testing
 
-In a modular monolith, trait interfaces replace gRPC contracts.
+In a modular monolith, gRPC contracts define service interfaces.
 
-## Trait Contract Testing with Mockall
+## gRPC Contract Testing with Mockall
 
 Example:
 
@@ -743,7 +743,7 @@ Target:
 
 ---
 
-## Trait Interfaces
+## gRPC Services
 
 Target:
 
@@ -1013,8 +1013,8 @@ A release is allowed only if:
 | ---------------- | --------------------------- |
 | Rust Tests       | cargo test / cargo nextest  |
 | API Testing      | axum::test / reqwest        |
-| Module Contract  | mockall (trait mocking)     |
-| Contract Testing | mockall trait verification  |
+| Module Contract  | mockall (gRPC service mocking)     |
+| Contract Testing | mockall gRPC verification  |
 | Load Testing     | k6                          |
 | Security         | Trivy + Semgrep             |
 | Browser Testing  | Playwright                  |
@@ -1094,7 +1094,7 @@ Covered:
 ✅ Testing pyramid
 ✅ Unit testing
 ✅ Integration testing
-✅ Trait contract testing
+✅ gRPC service contract testing
 ✅ NATS event testing
 ✅ RAG evaluation
 ✅ AI model evaluation

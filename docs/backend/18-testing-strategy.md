@@ -92,7 +92,7 @@ fn agent_can_execute_tool_with_permission() {
 ### Mocking Module Dependencies
 
 ```rust
-// Tests use mockall to mock other modules' trait interfaces
+// Tests use mockall to mock other modules' gRPC/NATS service interfaces
 use mockall::predicate::*;
 use mockall::*;
 
@@ -119,7 +119,7 @@ async fn test_agent_uses_rag_for_knowledge() {
 
 ## 4. Module Boundary Tests
 
-These validate that **two modules work together correctly through their trait interfaces**.
+These validate that **two modules work together correctly through their gRPC or NATS interfaces**.
 
 ```rust
 // nexus-rag/tests/contract/rag_boundary_test.rs
@@ -376,7 +376,7 @@ Question Dataset → nexux-rag module → Generated Answer → Evaluation Model 
 | Component | Target |
 |---|---|
 | API Gateway (in process) | 50,000 req/sec |
-| Module trait dispatch | < 1μs overhead |
+| gRPC/NATS dispatch | < 5μs overhead |
 | PostgreSQL query (indexed) | < 10ms |
 | Vector Search | < 200ms |
 

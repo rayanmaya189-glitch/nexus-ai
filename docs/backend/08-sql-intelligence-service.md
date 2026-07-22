@@ -2,7 +2,7 @@
 
 ## Natural Language SQL Generation, Safe Query Execution & Business Analytics
 
-> **Modular Monolith Module:** This document describes the `nexus-sql-agent` crate — a module within the single `aeroxe-nexus` binary. It communicates with other modules via Rust trait interfaces (see [Communication Architecture](12-communication-architecture.md)).
+> **Modular Monolith Module:** This document describes the `nexus-sql-agent` crate — a module within the single `aeroxe-nexus` binary. It communicates with other modules via gRPC (synchronous) or NATS (async) messaging (see [Communication Architecture](12-communication-architecture.md)). All request/response messages are Protobuf (proto3) serialized as JSON over HTTP.
 
 ---
 
@@ -96,7 +96,7 @@ pub struct ResultResponse {
 }
 ```
 
-> **Note:** `SQLAgentService` is consumed by `nexus-agent` during multi-agent execution flows — all via in-process trait dispatch.
+> **Note:** `SQLAgentService` is consumed by `nexus-agent` during multi-agent execution flows — via gRPC calls (in-process tonic channels).
 
 ---
 
@@ -370,7 +370,9 @@ The SQL Agent can query any PostgreSQL database connected to the platform:
 
 ---
 
-## 10. REST API Endpoints
+## 10. API Endpoints (PATCH, POST, DELETE only)
+
+> All request/response are Protobuf messages serialized as JSON over HTTP. Read operations use POST with a request body (no GET).
 
 ### Generate SQL
 

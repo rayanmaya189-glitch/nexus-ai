@@ -13,8 +13,8 @@
 | Domain Type | Supporting Domain |
 | Language | Rust (edition 2024) |
 | Framework | **axum** (HTTP + WebSocket) |
-| Internal Protocol | Rust trait interfaces (no gRPC internally) |
-| External Protocol | REST / WebSocket / optionally gRPC for partners |
+| Internal Protocol | gRPC (synchronous) or NATS (async) between services |
+| External Protocol | Protobuf JSON over HTTP (PATCH/POST/DELETE only) / WebSocket |
 | Database | Redis (rate limiting, session caching) — **no PostgreSQL** |
 | HTTP Port | 8080 |
 | WebSocket Endpoint | `/ws/*` (integrated in same server) |
@@ -50,7 +50,7 @@ src/modules/gateway/
 
 ## 3. Purpose
 
-The API Gateway is the **single external entry point** into the AeroXe Nexus AI monolith. Unlike a microservice gateway that proxies to separate services, this module **directly calls internal Rust modules** through trait interfaces — no HTTP/gRPC hop required.
+The API Gateway is the **single external entry point** into the AeroXe Nexus AI monolith. It routes requests to the appropriate service module via **gRPC** (synchronous operations) or **NATS** (async fire-and-forget operations). All request/response bodies are **Protobuf messages serialized as JSON** over HTTP.
 
 It handles:
 
@@ -59,7 +59,7 @@ It handles:
 - API key validation (for programmatic access)
 - Tenant extraction and validation
 - Rate limiting (per tenant, per user, per endpoint) — Token Bucket algorithm
-- Request routing to internal module trait methods
+- Request routing to internal services via gRPC (sync) or NATS (async)
 - API versioning enforcement (`/api/v1/`, `/api/v2/`, etc.)
 - WebSocket connection management and streaming relay
 - Request/response logging and audit trail
@@ -100,8 +100,8 @@ It handles:
               +------------------------------------+
                                |
               +------------------------------------+
-              |   Trait-based Module Dispatch       |
-              |  (direct Rust fn calls, no network) |
+              |   Service Dispatch Layer            |
+              |  gRPC (sync) / NATS (async)        |
               +------------------------------------+
                                |
    +----------+---------+---------+---------+------+
@@ -109,6 +109,8 @@ It handles:
    v          v         v         v         v      v
 nexus-  nexus-ai-  nexus-   nexus-   nexus-  nexus-
 identity gateway   agent    rag      memory  audit
+(via     (via      (via     (via     (via     (via
+gRPC)    gRPC)     gRPC)    gRPC)    gRPC)   NATS)
 ```
 
 ---
@@ -124,15 +126,16 @@ Inbound Request
       → IP Filtering / DDoS Check
         → CORS Handler
           → API Version Extraction (/api/v{version}/...)
-            → Authentication (JWT Validation → nexus-identity trait call)
+            → Authentication (JWT Validation → identity service via gRPC)
               → Tenant Extraction
                 → Rate Limit Check (Redis — Token Bucket)
-                  → Request Schema Validation
-                    → Authorization (RBAC/ABAC → nexus-identity trait call)
+                  → Request Schema Validation (Protobuf)
+                    → Authorization (RBAC/ABAC → identity service via gRPC)
                       → Request Logging
                         → Versioned Router Dispatch
-                          → Module Trait Dispatch
-                            → Response Audit (→ nexus-audit trait/NATS)
+                          → Service Dispatch (gRPC sync / NATS async)
+                            → Response Serialization (Protobuf JSON)
+                              → Audit Event (→ audit service via NATS)
 ```
 
 ---
@@ -196,7 +199,7 @@ pub fn build_versioned_router(state: AppState) -> Router {
 |---|---|
 | Header | `X-Request-ID` |
 | Format | UUID v4 |
-| Propagation | Injected into module trait call context |
+| Propagation | Injected into gRPC request context |
 
 ### 7.2 Authentication Middleware
 
@@ -277,7 +280,7 @@ pub struct V2LoginRequest {
 | Permission | User has required permission for resource |
 | ABAC | Context-aware policies (time, location, resource state) |
 
-All checks delegate to `nexus-identity::check_permission()` trait method.
+All checks delegate to `nexus-identity::check_permission()` via gRPC.
 
 ### 7.7 Logging Middleware
 
@@ -298,30 +301,32 @@ pub async fn log_middleware(req: Request, next: Next) -> Response { ... }
 
 ## 8. Routing Architecture
 
-### 8.1 REST Routes — All Handlers Are Module Trait Calls
+### 8.1 Routes — Gateway → Service Dispatch
+
+Read operations use **POST** with a query/read request body (e.g., `POST /api/v1/customers/read` with `{id: 123}`).
 
 ```
-/api/v1/auth/*             → nexus-identity trait calls
-/api/v1/customers/*        → nexus-customer trait calls
-/api/v1/ai/chat            → nexus-ai-gateway trait calls
-/api/v1/ai/stream          → nexus-ai-gateway (WebSocket upgrade)
-/api/v1/agents/*           → nexus-agent trait calls
-/api/v1/rag/*              → nexus-rag trait calls
-/api/v1/vision/*           → nexus-vision trait calls
-/api/v1/sql/*              → nexus-sql-agent trait calls
-/api/v1/workflows/*        → nexus-workflow trait calls
-/api/v1/memory/*           → nexus-memory trait calls
-/api/v1/security/*         → nexus-security-ai trait calls
-/api/v1/admin/*            → nexus-identity / nexus-audit trait calls
-/api/v1/document-sets/*    → nexus-rag trait calls
-/api/v1/kyc/*              → nexus-identity trait calls
-/api/v1/telephony/*        → nexus-telephony trait calls      ← NEW (Voice/Calls)
-/api/v1/conversations/*    → nexus-conversation trait calls    ← NEW (State Machine)
-/api/v1/stt/*              → nexus-stt trait calls             ← NEW (Speech-to-Text)
-/api/v1/tts/*              → nexus-tts trait calls             ← NEW (Text-to-Speech)
-/api/v1/outbound/*         → nexus-outbound trait calls        ← NEW (Campaigns)
-/api/v1/webhooks/*         → nexus-webhook trait calls         ← NEW (Event Delivery)
-/api/v1/analytics/*        → nexus-analytics trait calls       ← NEW (Metrics/BI)
+/api/v1/auth/*             → identity service (gRPC)
+/api/v1/customers/*        → customer service (gRPC)
+/api/v1/ai/chat            → ai-gateway service (gRPC)
+/api/v1/ai/stream          → ai-gateway service (WebSocket upgrade)
+/api/v1/agents/*           → agent service (gRPC)
+/api/v1/rag/*              → rag service (gRPC)
+/api/v1/vision/*           → vision service (gRPC)
+/api/v1/sql/*              → sql-agent service (gRPC)
+/api/v1/workflows/*        → workflow service (gRPC)
+/api/v1/memory/*           → memory service (gRPC)
+/api/v1/security/*         → security service (gRPC)
+/api/v1/admin/*            → identity / audit service (gRPC)
+/api/v1/document-sets/*    → rag service (gRPC)
+/api/v1/kyc/*              → identity service (gRPC)
+/api/v1/telephony/*        → telephony service (gRPC)
+/api/v1/conversations/*    → conversation service (gRPC)
+/api/v1/stt/*              → stt service (gRPC)
+/api/v1/tts/*              → tts service (gRPC)
+/api/v1/outbound/*         → outbound service (gRPC)
+/api/v1/webhooks/*         → webhook service (gRPC)
+/api/v1/analytics/*        → analytics service (gRPC)
 /health                    → Gateway (self) — module health
 /metrics                   → Gateway (self) — prometheus metrics
 ```
@@ -336,21 +341,27 @@ pub async fn log_middleware(req: Request, next: Next) -> Response { ... }
 | `ws://host/ws/v1/telephony/{call_id}` | Audio streaming for voice calls |
 | `ws://host/ws/v1/telephony/monitor/{call_id}` | Live call monitoring |
 
-### 8.3 REST API Method Standards (Structured REST)
+### 8.3 API Method Standards
 
 | Method | Usage | Allowed |
 |---|---|---|
-| `GET` | Read resource(s) | **ALLOWED** |
-| `POST` | Create resource | **ALLOWED** |
-| `PUT` | Full replace | **ALLOWED** |
 | `PATCH` | Partial update | **ALLOWED** |
-| `DELETE` | Remove resource | **ALLOWED** |
+| `POST` | Create resource, execute operation, read/query | **ALLOWED** |
+| `DELETE` | Remove/deactivate resource | **ALLOWED** |
+| `GET` | — | **NOT ALLOWED** |
+| `PUT` | — | **NOT ALLOWED** |
 
-Standard REST verbs are used. Resource IDs may appear in the URL path or request body.
+**Read operations** use `POST` with a query/read request body (e.g., `POST /api/v1/customers/read` with `{id: 123}`).
 
-### 8.4 Request/Response Format (Structured REST)
+**Write operations** use `PATCH` for partial updates and `POST` for creation.
 
-**Request Envelope:**
+**Resource IDs** may appear in the URL path or request body.
+
+### 8.4 Request/Response Format (Protobuf JSON)
+
+All request and response bodies are **Protobuf messages** (proto3) serialized as JSON over HTTP. The gateway serializes/deserializes Protobuf JSON.
+
+**Request Envelope (Protobuf):**
 ```json
 {
   "operation": "GetCustomer",
@@ -361,7 +372,7 @@ Standard REST verbs are used. Resource IDs may appear in the URL path or request
 }
 ```
 
-**Response Envelope:**
+**Response Envelope (Protobuf):**
 ```json
 {
   "status": "SUCCESS",
@@ -372,7 +383,7 @@ Standard REST verbs are used. Resource IDs may appear in the URL path or request
 }
 ```
 
-**List Response Envelope:**
+**List Response Envelope (Protobuf):**
 ```json
 {
   "status": "SUCCESS",
@@ -413,14 +424,16 @@ pub fn build_v1_routes(state: AppState) -> Router {
         .route("/auth/register", post(handlers::auth::v1_register))
         .route("/auth/refresh", post(handlers::auth::v1_refresh))
         .route("/auth/me", post(handlers::auth::v1_me))
-        // Customer routes (customer module)
+        // Customer routes
         .route("/customers", post(handlers::customer::v1_create))
-        .route("/customers/{id}", get(handlers::customer::v1_get))
+        .route("/customers/read", post(handlers::customer::v1_read))
+        .route("/customers/{id}", patch(handlers::customer::v1_update))
         .route("/customers/{id}/suspend", post(handlers::customer::v1_suspend))
         .route("/customers/{id}/activate", post(handlers::customer::v1_activate))
+        .route("/customers/{id}", delete(handlers::customer::v1_delete))
         // AI routes
         .route("/ai/chat", post(handlers::ai::v1_chat))
-        .route("/ai/stream", get(handlers::ai::v1_stream_ws))
+        .route("/ai/stream", post(handlers::ai::v1_stream_ws))
         // ... etc
         .layer(middleware_stack)
         .with_state(state)
@@ -429,40 +442,42 @@ pub fn build_v1_routes(state: AppState) -> Router {
 
 ---
 
-## 9. AppState — Shared Module References
+## 9. AppState — Service Clients
 
-The gateway holds trait object references to all modules:
+The gateway holds gRPC clients (for sync operations) and NATS publishers (for async operations) for each service:
 
 ```rust
 // src/modules/gateway/mod.rs
 pub struct AppState {
-    pub identity: Arc<dyn IdentityService>,
-    pub customer: Arc<dyn CustomerService>,
-    pub ai_gateway: Arc<dyn AIGatewayService>,
-    pub agent: Arc<dyn AgentService>,
-    pub rag: Arc<dyn RagService>,
-    pub vision: Arc<dyn VisionService>,
-    pub sql_agent: Arc<dyn SQLAgentService>,
-    pub memory: Arc<dyn MemoryService>,
-    pub workflow: Arc<dyn WorkflowService>,
-    pub security: Arc<dyn SecurityService>,
-    pub audit: Arc<dyn AuditService>,
-    pub notifications: Arc<dyn NotificationService>,
-    pub model_registry: Arc<dyn ModelRegistryService>,
-    pub config: Arc<dyn ConfigService>,
-    pub ecosystem: Arc<dyn EcosystemService>,
-    // NEW: Voice/Telephony modules
-    pub telephony: Arc<dyn TelephonyService>,
-    pub conversation: Arc<dyn ConversationService>,
-    pub stt: Arc<dyn STTService>,
-    pub tts: Arc<dyn TTSService>,
-    pub analytics: Arc<dyn AnalyticsService>,
-    pub webhook: Arc<dyn WebhookService>,
-    pub outbound: Arc<dyn OutboundService>,
+    pub identity_client: IdentityServiceClient,
+    pub customer_client: CustomerServiceClient,
+    pub ai_gateway_client: AIGatewayServiceClient,
+    pub agent_client: AgentServiceClient,
+    pub rag_client: RagServiceClient,
+    pub vision_client: VisionServiceClient,
+    pub sql_agent_client: SQLAgentServiceClient,
+    pub memory_client: MemoryServiceClient,
+    pub workflow_client: WorkflowServiceClient,
+    pub security_client: SecurityServiceClient,
+    pub notification_client: NotificationServiceClient,
+    pub model_registry_client: ModelRegistryServiceClient,
+    pub config_client: ConfigServiceClient,
+    pub ecosystem_client: EcosystemServiceClient,
+    // Voice/Telephony services
+    pub telephony_client: TelephonyServiceClient,
+    pub conversation_client: ConversationServiceClient,
+    pub stt_client: STTServiceClient,
+    pub tts_client: TTSServiceClient,
+    pub analytics_client: AnalyticsServiceClient,
+    pub webhook_client: WebhookServiceClient,
+    pub outbound_client: OutboundServiceClient,
+    // Async event publishers
+    pub audit_publisher: NatsPublisher,
+    pub notification_publisher: NatsPublisher,
 }
 ```
 
-Each trait is defined in the module's public API and implemented by the module's application layer. Because all modules live in the same binary, **there is zero network overhead** between gateway and domain logic.
+Each client connects to its service via gRPC (synchronous) or NATS (async). Services CAN be extracted to separate binaries later.
 
 ---
 
@@ -512,7 +527,7 @@ async fn test_full_chat_flow_v1() {
 | Wrong tenant → 403 | `TENANT_VIOLATION` error code |
 | Rate limit hit → 429 | `RATE_LIMIT_EXCEEDED` error code |
 | Invalid API version → 404 | `NOT_FOUND` error code |
-| Valid request → 200 | Correct JSON body |
+| Valid request → 200 | Correct Protobuf JSON body |
 
 ---
 
@@ -524,7 +539,7 @@ async fn test_full_chat_flow_v1() {
 Client connects: ws://host/ws/v1/chat/{conversation_id}
   → Upgrade to WebSocket (axum built-in)
     → Authenticate (query param or first message)
-    → Validate tenant (nexus-identity trait call)
+    → Validate tenant (identity service — gRPC)
     → Create streaming channel to nexus-ai-gateway
     → Relay messages bidirectionally via tokio channels
     → On disconnect: cleanup
@@ -556,19 +571,22 @@ Client connects: ws://host/ws/v1/chat/{conversation_id}
 
 | Method | Usage | Request Body | Idempotent |
 |---|---|---|---|
-| `GET` | Read resource(s) | No | Yes |
-| `POST` | Create / Execute action | Yes | No |
 | `PATCH` | Partial update | Yes | Yes |
+| `POST` | Create / Read / Execute action | Yes | No |
 | `DELETE` | Remove resource | No | Yes |
 
-**PUT is NOT allowed.** Use POST for creation, PATCH for updates.
+**GET and PUT are NOT allowed.** Read operations use POST with a query/read request body. Use PATCH for updates.
 
 ### Pagination Standards
 
-All list endpoints MUST support server-side pagination:
+All list endpoints MUST support server-side pagination via POST with a read request body:
 
 ```
-GET /api/v1/resource?limit=10&offset=0
+POST /api/v1/resource/read
+{
+  "limit": 10,
+  "offset": 0
+}
 ```
 
 | Parameter | Default | Max | Description |
@@ -690,7 +708,7 @@ Every response MUST include a `status` field with a business-specific code:
 ## 14. Health Checks
 
 ```
-GET /health
+POST /health
 ```
 
 ```json
@@ -744,7 +762,7 @@ GET /health
 
 ### Tracing (OpenTelemetry)
 
-Every request generates a trace with spans for each middleware + module trait call:
+Every request generates a trace with spans for each middleware + gRPC service call:
 
 ```
 Trace: gateway.request
@@ -753,13 +771,15 @@ Trace: gateway.request
   ├── Span: tenant_validation
   ├── Span: rate_limit_check
   ├── Span: request_validation
-  ├── Span: handler (module trait dispatch)
+  ├── Span: handler (gRPC service dispatch)
   └── Span: audit_logging
 ```
 
 ---
 
-## 17. NATS Events
+## 17. NATS Events (Protobuf Payloads)
+
+All NATS event payloads are **Protobuf messages** serialized as binary or JSON. Subject format: `aeroxe.v1.<service>.<event>`.
 
 ### Published
 

@@ -17,7 +17,7 @@ Rules:
 ✅ All modules share a single PostgreSQL cluster
 ✅ Each module owns a PostgreSQL schema (namespace)
 ✅ **No raw SQL** — all access through SeaORM entities and models
-✅ No direct cross-schema SQL access — communicate through Rust trait methods
+✅ No direct cross-schema SQL access — communicate through gRPC or NATS
 ✅ Data consistency through events (NATS JetStream)
 ✅ Schema = Future service boundary (extractable later)
 ✅ Tenant isolation mandatory (`tenant_id` column in all business tables)

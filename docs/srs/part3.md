@@ -4,7 +4,7 @@
 
 # Part 3 — Communication Architecture Design
 
-## Rust Trait Interfaces (In-Process) + Versioned NATS JetStream Events + External gRPC (Optional)
+## gRPC (Sync) + NATS (Async) + Protobuf over HTTP
 
 ---
 
@@ -20,9 +20,9 @@ The communication model:
 
                            |
 
-               Structured REST / WebSocket / HTTPS (versioned: /api/v1/)
+               Protobuf over HTTP (/api/v1/*)
 
-               Standard REST (GET/POST/PUT/PATCH/DELETE)
+               PATCH, POST, DELETE only (no GET, no PUT)
 
 
                            |
@@ -43,17 +43,17 @@ The communication model:
         Synchronous              Asynchronous
 
 
-    Rust Trait Interfaces     NATS JetStream (versioned)
+    gRPC (inter-service)       NATS JetStream (versioned)
 
 
-     (in-process,             (aeroxe.v1.module.event)
-      < 1μs dispatch)
+     (< 1ms dispatch,          (aeroxe.v1.module.event)
+      Protobuf)
 
 
              |                         |
 
 
-     Module-to-Module        Event Driven Flow
+     Service-to-Service        Event Driven Flow
 
 
 ================================================
@@ -82,7 +82,7 @@ Used by:
 Protocol:
 
 ```
-HTTPS Structured REST (/api/v1/*) — Standard REST methods (GET/POST/PUT/PATCH/DELETE)
+Protobuf over HTTPS (/api/v1/*) — PATCH, POST, DELETE only (no GET, no PUT)
 WebSocket (/ws/v1/*)
 ```
 
@@ -90,11 +90,11 @@ WebSocket (/ws/v1/*)
 
 | Rule | Description |
 |---|---|
-| HTTP Method | **Standard REST** (GET, POST, PUT, PATCH, DELETE as appropriate) |
+| HTTP Method | **PATCH, POST, DELETE only** (no GET, no PUT — read ops use POST with read body) |
 | Path Variables | Resource IDs in request body or URL path |
 | Query Strings | Supported for filtering and pagination |
-| Request Format | JSON |
-| Response Format | JSON |
+| Request Format | Protobuf (proto3) serialized as JSON |
+| Response Format | Protobuf (proto3) serialized as JSON |
 | Business Status | Every response includes `status` field |
 | Pagination | Query parameters or request body: `limit` (default 10) + `offset` |
 
@@ -102,11 +102,11 @@ WebSocket (/ws/v1/*)
 
 ## Internal Synchronous Communication
 
-**Modular Monolith:** Modules communicate through **Rust trait interfaces** — no gRPC, no network.
+**Microservices in Modular Monolith:** Services communicate through **gRPC** — single binary, logically separated services.
 
 ```rust
-// Example: agent module calls rag module
-let docs = self.rag_service.search(SearchQuery {
+// Example: agent service calls rag service via gRPC
+let docs = self.rag_client.search(SearchRequest {
     query: request.task,
     tenant_id: request.tenant_id,
     limit: 5,
@@ -115,12 +115,12 @@ let docs = self.rag_service.search(SearchQuery {
 
 Benefits:
 
-| Aspect | gRPC (Microservice) | Trait Interface (Modular Monolith) |
-|---|---|---|
-| Latency | 2-5ms | < 1μs (vtable dispatch) |
-| Serialization | Protobuf encode/decode | Zero — direct struct passing |
-| Type safety | Protobuf codegen | Rust compiler |
-| Testing | Need running services | Mockall mocks |
+| Aspect | gRPC (Microservices) |
+|---|---|
+| Latency | < 1ms (Protobuf serialization) |
+| Serialization | Protobuf (proto3) |
+| Type safety | Protobuf codegen + Rust compiler |
+| Testing | Mockall mocks + gRPC test utils |
 
 ---
 
@@ -142,52 +142,47 @@ NATS JetStream (versioned subjects: aeroxe.v1.*)
 
 ---
 
-# 3. Trait Interface Architecture
+# 3. gRPC Service Architecture
 
-**Key Difference:** In the modular monolith, all modules are in the same binary. They communicate through Rust trait interfaces, not gRPC. This eliminates:
-
-- Network latency
-- Serialization overhead
-- mTLS complexity (not needed in-process)
-- Service discovery (not needed in-process)
+**Key Pattern:** In the modular monolith, all services are in the same binary. They communicate through gRPC (synchronous) or NATS (async) — microservices logically separated within a single binary.
 
 ---
 
-## Module Communication
+## Service Communication
 
 Example:
 
 ```text
-agent module
+agent service
 
 
           |
 
-          | Rust trait method call
+          | gRPC call (Protobuf)
 
           |
 
-rag module
+rag service
 
 
           |
 
-          | Rust trait method call
+          | gRPC call (Protobuf)
 
           |
 
-memory module
+memory service
 
 ```
 
 ---
 
-# 4. Trait Design Principles
+# 4. gRPC Design Principles
 
-Every module exposes its public API as Rust traits:
+Every service exposes its public API as gRPC services:
 
-* Versioned trait methods (backward compatible)
-* Strong typing
+* Versioned service methods (backward compatible)
+* Strong typing via Protobuf (proto3)
 * Error standards (`Result<T, E>`)
 * Authentication context in `RequestContext`
 
@@ -202,23 +197,23 @@ pub trait IdentityService: Send + Sync {
 
 ---
 
-# 5. Module API Trait Repository
+# 5. Service API Repository
 
-All module traits live in each module's `api/mod.rs`:
+All service definitions live in proto files:
 
 ```
-src/modules/
+proto/
 
-├── identity/api/mod.rs      → IdentityService trait
-├── customer/api/mod.rs      → CustomerService trait  ← NEW
-├── agent/api/mod.rs         → AgentService trait
-├── rag/api/mod.rs           → RagService trait
-├── vision/api/mod.rs        → VisionService trait
-├── memory/api/mod.rs        → MemoryService trait
-├── sql-agent/api/mod.rs     → SQLAgentService trait
-├── workflow/api/mod.rs      → WorkflowService trait
-├── security/api/mod.rs      → SecurityService trait
-├── audit/api/mod.rs         → AuditService trait
+├── identity/v1/identity_service.proto
+├── customer/v1/customer_service.proto
+├── agent/v1/agent_service.proto
+├── rag/v1/rag_service.proto
+├── vision/v1/vision_service.proto
+├── memory/v1/memory_service.proto
+├── sql_agent/v1/sql_agent_service.proto
+├── workflow/v1/workflow_service.proto
+├── security/v1/security_service.proto
+├── audit/v1/audit_service.proto
 
 ```
 
@@ -448,9 +443,9 @@ pub trait WorkflowService: Send + Sync {
 
 ---
 
-# 16. External gRPC (Optional — for SDK/Partner Integrations)
+# 16. Internal gRPC Services (Microservices in Modular Monolith)
 
-For external integrations (not internal module comms):
+For inter-service communication (gRPC sync, NATS async):
 
 ```protobuf
 // proto/identity/v1/auth_service.proto
@@ -470,7 +465,7 @@ service CustomerService {
 }
 ```
 
-All gRPC packages include version (`v1`) in the namespace.
+All gRPC packages include version (`v1`) in the namespace. All payloads are Protobuf (proto3).
 
 ---
 
@@ -495,7 +490,7 @@ pub enum CommonError {
 
 # 18. NATS JetStream Architecture
 
-NATS is the event backbone.
+NATS is the event backbone. All payloads are Protobuf (proto3).
 
 Used for:
 
@@ -608,7 +603,7 @@ aeroxe.v1.security.threat.detected
 
 # 21. Event Schema Standard
 
-Every event:
+Every event (Protobuf serialized as JSON):
 
 ```json
 {
@@ -768,7 +763,7 @@ Customer Agent
 
  |
 
-Trait call
+gRPC call
 
 
  |
@@ -818,7 +813,7 @@ WebSocket
 
  |
 
-AI Gateway (trait call to agent module)
+AI Gateway (gRPC call to agent service)
 
  |
 
@@ -862,10 +857,10 @@ NATS:
 
 | Layer           | Technology         |
 | --------------- | ------------------ |
-| Mobile/Web API  | Structured REST (GET/POST/PUT/PATCH/DELETE) |
+| Mobile/Web API  | Protobuf over HTTP (PATCH/POST/DELETE) |
 | Real-time Chat  | WebSocket          |
-| Internal RPC    | Rust Trait Interfaces (in-process) |
-| Contract        | Protobuf (JSON-serialized) |
+| Internal RPC    | gRPC (Protobuf over HTTP/2) |
+| Contract        | Protobuf (proto3) |
 | Event Bus       | NATS JetStream     |
 | AI Runtime API  | Ollama API         |
 | Database Access | Repository Pattern (SeaORM) |
@@ -874,7 +869,7 @@ NATS:
 
 # 28. Structured REST API Definitions (NEW Modules)
 
-All operations use standard REST methods (GET/POST/PUT/PATCH/DELETE) with JSON request/response bodies.
+All operations use PATCH, POST, DELETE only (no GET, no PUT — read ops use POST with read body) with Protobuf (proto3) serialized as JSON request/response bodies.
 
 ## 27.1 Telephony Module API
 
@@ -1222,11 +1217,11 @@ message PayInvoiceRequest {
 
 The AeroXe Nexus AI communication foundation is now defined:
 
-✅ Structured REST API (GET/POST/PUT/PATCH/DELETE)
+✅ Protobuf over HTTP API (PATCH/POST/DELETE only)
 ✅ Envelope Request/Response Envelopes
 ✅ Business Status Codes
 ✅ Pagination via Request Body
-✅ Rust Trait Interfaces (in-process, no gRPC)
+✅ gRPC Inter-Service Communication (Protobuf)
 ✅ NATS JetStream Event Architecture (Outbox Pattern)
 ✅ Event Naming Standards
 ✅ Streaming Design

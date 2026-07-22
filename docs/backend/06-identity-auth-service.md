@@ -2,7 +2,7 @@
 
 ## IAM, JWT, RBAC, ABAC, Multi-Tenant User Management
 
-> **Modular Monolith Module:** This document describes the `identity` module at `src/modules/identity/`. It communicates with other modules via Rust trait interfaces (see [Communication Architecture](12-communication-architecture.md)).
+> **Modular Monolith Module:** This document describes the `identity` module at `src/modules/identity/`. It communicates with other modules via **gRPC** (synchronous) or **NATS** (async) with Protobuf payloads.
 
 ---
 
@@ -17,7 +17,7 @@
 | Language | Rust |
 | ORM | SeaORM (no raw SQL) |
 | Schema | `identity_` (in shared PostgreSQL) |
-| Dependencies | Redis (sessions, rate limiting) |
+| Dependencies | Redis (sessions, rate limiting), gRPC for internal auth |
 
 ---
 
@@ -345,7 +345,7 @@ pub struct PermissionRequest {
 }
 ```
 
-> **Note:** `IdentityService` is consumed by `gateway` middleware (auth, tenant validation) and all other modules (permission checks) — all via in-process trait dispatch.
+> **Note:** `IdentityService` is consumed by `gateway` middleware (auth, tenant validation) and all other modules (permission checks) — all via **gRPC** dispatch.
 
 ---
 
@@ -437,7 +437,7 @@ impl UserRepository for PostgresUserRepository {
 
 ---
 
-## 10. REST API Endpoints
+## 10. API Endpoints (Protobuf JSON)
 
 ### Login
 
@@ -482,7 +482,7 @@ POST /api/v1/auth/register
 ### Get Current User
 
 ```
-GET /api/v1/auth/me
+POST /api/v1/auth/me
 ```
 
 ### Change Password
@@ -493,7 +493,7 @@ POST /api/v1/auth/change-password
 
 ---
 
-## 11. External gRPC Adapter (Versioned, Optional)
+## 11. gRPC Service Definition (Protobuf)
 
 ```protobuf
 // proto/identity/v1/auth_service.proto
@@ -510,7 +510,7 @@ service AuthService {
 }
 ```
 
-Service version is embedded in the package name (`identity.v1`).
+All request/response messages are **Protobuf messages** (proto3). Service version is embedded in the package name (`identity.v1`).
 
 ---
 
@@ -529,7 +529,9 @@ Service version is embedded in the package name (`identity.v1`).
 
 ---
 
-## 13. NATS Events (Versioned Subjects)
+## 13. NATS Events (Protobuf Payloads)
+
+All NATS event payloads are **Protobuf messages** serialized as binary or JSON.
 
 ### Published
 

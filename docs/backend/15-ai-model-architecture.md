@@ -204,7 +204,7 @@ Model Router
 | `POST /api/generate` | Text generation |
 | `POST /api/chat` | Chat completion |
 | `POST /api/embeddings` | Generate embeddings |
-| `GET /api/tags` | List available models |
+| `POST /api/tags` | List available models |
 | `POST /api/pull` | Download model |
 
 ---
@@ -283,14 +283,16 @@ resources:
 
 The `model-registry-service` manages Ollama models:
 
-### REST API
+### API Endpoints (PATCH, POST, DELETE only)
+
+> All request/response are Protobuf messages serialized as JSON over HTTP. Read operations use POST with a request body (no GET).
 
 ```
-GET /api/v1/models          - List available models
-GET /api/v1/models/{name}   - Get model details
-POST /api/v1/models/pull    - Download a model
+POST /api/v1/models          - List available models
+POST /api/v1/models/details  - Get model details
+POST /api/v1/models/pull     - Download a model
 DELETE /api/v1/models/{name} - Remove a model
-GET /api/v1/models/usage    - Usage statistics
+POST /api/v1/models/usage    - Usage statistics
 ```
 
 ### Model Status Response

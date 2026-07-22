@@ -12,15 +12,17 @@
 | Domain | aeroxenexus.com |
 | Category | Enterprise Agentic AI Platform |
 | Backend Language | **Rust** (edition 2024) |
-| Architecture | **Modular Monolith** (DDD Bounded Contexts → Rust modules under `src/modules/`) |
+| Architecture | **Modular Monolith** (single Rust binary, DDD Bounded Contexts → logically separate service modules under `src/modules/`) |
 | ORM | **SeaORM** (no raw SQL — all database access through SeaORM entities & models) |
 | AI Runtime | Ollama (local GPU inference) |
-| Internal Communication | Rust trait interfaces + NATS JetStream (async) |
-| External API | REST + WebSocket (via API Gateway module) |
+| Internal Communication | gRPC (synchronous) + NATS JetStream (async) |
+| External API | Protobuf JSON over HTTP + WebSocket (via API Gateway module) |
 | API Versioning | URL-based (`/api/v1/`, `/api/v2/`, etc.) |
+| API Methods | **PATCH, POST, DELETE only** (no GET, no PUT) |
+| Request/Response Format | Protobuf (proto3) serialized as JSON over HTTP |
 | NATS Versioning | Subject-based (`aeroxe.v1.module.event`) |
 | gRPC Versioning | Service-level versioning (`identity.v1.AuthService`) |
-| Deployment | Single binary with optional sidecar services |
+| Deployment | Single binary (services CAN be extracted to separate binaries later) |
 | Testing | **TDD-First**: No code without tests |
 
 ---
@@ -29,7 +31,7 @@
 
 ### 2.1 Modular Monolithic Architecture
 
-The entire backend is a **single Rust binary** organized into DDD modules under `src/modules/`:
+The entire backend is a **single Rust binary** organized into logically separate service modules under `src/modules/`. Each module is a bounded context with its own schema and public API. Services communicate via **gRPC** (synchronous request-response) or **NATS JetStream** (async fire-and-forget). Services CAN be extracted to separate binaries later.
 
 ```
 +-------------------------------------------------------------------+
@@ -145,12 +147,13 @@ src/
 
 ### 2.3 Domain-Driven Design (DDD)
 
-- **Bounded Contexts** → Rust modules (`src/modules/<name>/`)
+- **Bounded Contexts** → Service modules (`src/modules/<name>/`)
 - **Aggregates** → Rust structs with invariant enforcement
 - **Entities + Value Objects** → Typed structs with validation (`validator` crate)
-- **Domain Events** → NATS JetStream (async) + in-process (sync)
+- **Domain Events** → NATS JetStream with Protobuf payloads (async) + gRPC (sync)
 - **Repository Traits** → `#[async_trait]` with **SeaORM** implementations
 - **No Raw SQL** → All database access through SeaORM entity models
+- **Inter-service Communication** → gRPC (synchronous) or NATS (async)
 
 ### 2.4 Test-Driven Development (TDD)
 
@@ -170,12 +173,14 @@ Every module enforces:
 
 | Decision | Rationale |
 |---|---|
-| **Single binary** vs multiple services | Eliminates network overhead, simplifies deployment, enables stronger compile-time guarantees |
+| **Single binary** vs multiple services | Simplifies deployment; services CAN be extracted later |
+| **gRPC for sync communication** | Type-safe, efficient request-response between services |
+| **NATS for async communication** | Fire-and-forget events, background processing, audit logging |
 | **SeaORM** over raw SQL | Type-safe queries, migration tooling, compile-time checked schemas |
 | **No raw SQL anywhere** | All DB access through SeaORM entity models — prevents SQL injection, enables schema migrations |
 | **Schema-per-BoundedContext** | Logical database isolation without physical separation — enables clear module boundaries |
-| **Trait-based module interfaces** | Modules communicate through Rust traits — type-safe, testable, mockable |
-| **NATS for async events only** | Background jobs, cross-module notifications, audit logging |
+| **Protobuf for all payloads** | Request/response bodies and NATS event payloads are Protobuf messages serialized as JSON |
+| **PATCH/POST/DELETE only** | No GET or PUT; reads use POST with query body; partial updates use PATCH |
 | **Transactional Outbox Pattern** | Events stored in PostgreSQL within same transaction as business data — guarantees no event loss |
 | **Distributed Locking (Redlock)** | Redis-based locks prevent concurrent processing of same resource across instances |
 | **Distributed Caching** | Multi-tier caching (L1 in-process + L2 Redis) with invalidation via NATS |
@@ -197,8 +202,8 @@ Every module enforces:
 | Async Runtime | Tokio (multi-threaded) |
 | ORM | **SeaORM** (with `sea-orm` crate, migration tooling) |
 | HTTP / WS Server | **axum** |
-| gRPC (external only) | tonic (optional, for SDK/partner integrations) |
-| Serialization | serde + serde_json |
+| gRPC (internal sync) | tonic (service-to-service communication) |
+| Serialization | serde + serde_json + protobuf (proto3) |
 | Configuration | environment-based + config files |
 | Logging | tracing + OpenTelemetry |
 
@@ -227,16 +232,16 @@ Every module enforces:
 
 ### 3.4 Module Communication Matrix
 
-| Caller → Callee | Synchronous | Asynchronous |
+| Caller → Callee | Synchronous (gRPC) | Asynchronous (NATS) |
 |---|---|---|
-| API Gateway → any module | `trait` method call | NATS for long ops |
-| AI Gateway → Agent | `trait` method call | — |
-| Agent Orchestrator → RAG | `trait` method call | NATS for ingestion |
-| Agent Orchestrator → Memory | `trait` method call | — |
-| Agent Orchestrator → SQL | `trait` method call | — |
-| Agent Orchestrator → Vision | `trait` method call | — |
-| Workflow → any module | `trait` method call | NATS for step events |
-| Audit ← any module | `trait` method call | NATS for fire-and-forget |
+| API Gateway → any service | gRPC | NATS for async ops |
+| AI Gateway → Agent | gRPC | — |
+| Agent Orchestrator → RAG | gRPC | NATS for ingestion |
+| Agent Orchestrator → Memory | gRPC | — |
+| Agent Orchestrator → SQL | gRPC | — |
+| Agent Orchestrator → Vision | gRPC | — |
+| Workflow → any service | gRPC | NATS for step events |
+| Audit ← any service | gRPC | NATS for fire-and-forget |
 
 ---
 
@@ -344,17 +349,18 @@ Every module enforces:
 
 ## 6. Versioning Standards
 
-### 6.1 API Versioning (REST)
+### 6.1 API Versioning (Protobuf over HTTP)
 
-All routes follow `/api/v{version}/<resource>` pattern.
+All routes follow `/api/v{version}/<resource>` pattern. Request/response bodies are Protobuf messages serialized as JSON. API methods are PATCH, POST, DELETE only (no GET, no PUT).
 
 ```
-/api/v1/auth/login
-/api/v1/customers/{id}
-/api/v2/customers/{id}         # Future: different response schema
+/api/v1/auth/login          (POST)
+/api/v1/customers/read      (POST with query body)
+/api/v1/customers/{id}      (PATCH)
+/api/v2/customers/read      (POST with query body — future: different response schema)
 ```
 
-Version is extracted by `api_versioning::router` in the gateway module and propagated to all trait calls via `RequestContext`.
+Version is extracted by `api_versioning::router` in the gateway module and propagated to all services via `RequestContext`.
 
 ### 6.2 NATS Event Versioning
 
@@ -397,7 +403,7 @@ Every migration is versioned and reversible via SeaORM's migration system.
 | Component | Target |
 |---|---|
 | API Gateway (HTTP serving) | 50,000 req/sec |
-| Module trait dispatch | < 1μs overhead |
+| gRPC service dispatch | < 2ms overhead |
 | PostgreSQL query (SeaORM, indexed) | < 10ms |
 | Vector Search (pgvector) | < 200ms |
 | Redis Lookup | < 10ms |

@@ -18,7 +18,7 @@ Each bounded context:
 
 * Owns its business logic
 * Owns its database **schema** (shared PostgreSQL via SeaORM)
-* Exposes public API through **Rust trait interfaces** (in-process)
+* Exposes public API through **gRPC** (sync) or **NATS** (async)
 * Publishes events through **NATS JetStream** (versioned subjects)
 * Deploys as part of a single binary (extractable later)
 

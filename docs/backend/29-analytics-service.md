@@ -2,7 +2,7 @@
 
 ## Conversation Analytics, AI Performance Metrics, Business Intelligence & Dashboards
 
-> **Modular Monolith Module:** This document describes the `nexus-analytics` crate — a module within the single `aeroxe-nexus` binary. It communicates with other modules via Rust trait interfaces and consumes NATS events.
+> **Modular Monolith Module:** This document describes the `nexus-analytics` crate — a module within the single `aeroxe-nexus` binary. It communicates with other modules via gRPC (sync) or NATS (async) between services and consumes NATS events.
 
 ---
 
@@ -364,21 +364,21 @@ CREATE INDEX idx_snapshots_tenant_metric ON analytics_.snapshots(tenant_id, metr
 
 ---
 
-## 7. REST API Endpoints
+## 7. REST API Endpoints (Protobuf over HTTP)
 
 | Method | Endpoint | Business Status | HTTP | Description |
 |---|---|---|---|---|
-| `GET` | `/api/v1/analytics/dashboard?start=...&end=...` | `SUCCESS` | `200` | Get dashboard |
-| `GET` | `/api/v1/analytics/realtime` | `SUCCESS` | `200` | Real-time metrics |
-| `GET` | `/api/v1/analytics/conversations?start=...&end=...` | `SUCCESS` | `200` | Conversation metrics |
-| `GET` | `/api/v1/analytics/calls?start=...&end=...` | `SUCCESS` | `200` | Call metrics |
-| `GET` | `/api/v1/analytics/agents?limit=10&offset=0` | `SUCCESS` | `200` | List agent metrics |
-| `GET` | `/api/v1/analytics/agents/{agent_id}/performance` | `SUCCESS` | `200` | Agent performance |
-| `GET` | `/api/v1/analytics/costs?start=...&end=...` | `SUCCESS` | `200` | Cost breakdown |
-| `GET` | `/api/v1/analytics/costs/customers/{customer_id}` | `SUCCESS` | `200` | Customer cost |
+| `POST` | `/api/v1/analytics/dashboard` (read body) | `SUCCESS` | `200` | Get dashboard |
+| `POST` | `/api/v1/analytics/realtime` (read body) | `SUCCESS` | `200` | Real-time metrics |
+| `POST` | `/api/v1/analytics/conversations` (read body) | `SUCCESS` | `200` | Conversation metrics |
+| `POST` | `/api/v1/analytics/calls` (read body) | `SUCCESS` | `200` | Call metrics |
+| `POST` | `/api/v1/analytics/agents/list` (read body) | `SUCCESS` | `200` | List agent metrics |
+| `POST` | `/api/v1/analytics/agents/performance` (read body) | `SUCCESS` | `200` | Agent performance |
+| `POST` | `/api/v1/analytics/costs` (read body) | `SUCCESS` | `200` | Cost breakdown |
+| `POST` | `/api/v1/analytics/costs/customers` (read body) | `SUCCESS` | `200` | Customer cost |
 | `POST` | `/api/v1/analytics/reports` | `CREATED` | `201` | Generate report |
-| `GET` | `/api/v1/analytics/reports?limit=10&offset=0` | `SUCCESS` | `200` | List reports |
-| `GET` | `/api/v1/analytics/reports/{id}` | `SUCCESS` | `200` | Get report |
+| `POST` | `/api/v1/analytics/reports/list` (read body) | `SUCCESS` | `200` | List reports |
+| `POST` | `/api/v1/analytics/reports` (read body) | `SUCCESS` | `200` | Get report |
 
 ### List Agent Metrics Response
 
@@ -401,7 +401,7 @@ CREATE INDEX idx_snapshots_tenant_metric ON analytics_.snapshots(tenant_id, metr
 }
 ```
 
-**Note:** No PUT method. Use PATCH for updates. All list endpoints support `limit` (default 10) and `offset`.
+**Note:** All endpoints use Protobuf (proto3) serialized as JSON over HTTP. Content-Type: `application/json` (Protobuf messages serialized as JSON). No PUT method — use PATCH for updates. All list endpoints support `limit` (default 10) and `offset`.
 
 ---
 

@@ -58,14 +58,14 @@ Campaign Created (Draft) → Target Selection → Schedule
 | Method | Endpoint | Business Status | HTTP |
 |---|---|---|---|
 | `POST` | `/api/v1/outbound/campaigns` | `CREATED` | `201` |
-| `GET` | `/api/v1/outbound/campaigns/{id}` | `SUCCESS` | `200` |
-| `GET` | `/api/v1/outbound/campaigns?limit=10&offset=0` | `SUCCESS` | `200` |
+| `POST` | `/api/v1/outbound/campaigns/{id}` | `SUCCESS` | `200` |
+| `POST` | `/api/v1/outbound/campaigns?limit=10&offset=0` | `SUCCESS` | `200` |
 | `POST` | `/api/v1/outbound/campaigns/{id}/start` | `UPDATED` | `200` |
 | `POST` | `/api/v1/outbound/callbacks` | `CREATED` | `201` |
-| `GET` | `/api/v1/outbound/callbacks?limit=10&offset=0` | `SUCCESS` | `200` |
+| `POST` | `/api/v1/outbound/callbacks?limit=10&offset=0` | `SUCCESS` | `200` |
 | `DELETE` | `/api/v1/outbound/callbacks/{id}` | `DELETED` | `204` |
 | `POST` | `/api/v1/outbound/dnc` | `CREATED` | `201` |
-| `GET` | `/api/v1/outbound/dnc?limit=10&offset=0` | `SUCCESS` | `200` |
+| `POST` | `/api/v1/outbound/dnc?limit=10&offset=0` | `SUCCESS` | `200` |
 | `DELETE` | `/api/v1/outbound/dnc/{id}` | `DELETED` | `204` |
 
 ---

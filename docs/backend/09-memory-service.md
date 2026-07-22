@@ -2,7 +2,7 @@
 
 ## Short-Term, Long-Term & Organizational AI Memory
 
-> **Modular Monolith Module:** This document describes the `nexus-memory` crate — a module within the single `aeroxe-nexus` binary. It communicates with other modules via Rust trait interfaces (see [Communication Architecture](12-communication-architecture.md)).
+> **Modular Monolith Module:** This document describes the `nexus-memory` crate — a module within the single `aeroxe-nexus` binary. It communicates with other modules via gRPC (synchronous) or NATS (async) messaging (see [Communication Architecture](12-communication-architecture.md)). All request/response messages are Protobuf (proto3) serialized as JSON over HTTP.
 
 ---
 
@@ -144,7 +144,7 @@ pub struct MemoryItem {
 }
 ```
 
-> **Note:** `MemoryService` is consumed by `nexus-agent` during execution (context retrieval) and `nexus-ai-gateway` (session management) — all via in-process trait dispatch.
+> **Note:** `MemoryService` is consumed by `nexus-agent` during execution (context retrieval) and `nexus-ai-gateway` (session management) — via gRPC calls (in-process tonic channels).
 
 ---
 
@@ -243,12 +243,15 @@ CREATE INDEX idx_conversation_user ON memory.conversation_history(user_id, creat
 
 ---
 
-## 8. REST API Endpoints
+## 8. API Endpoints (PATCH, POST, DELETE only)
+
+> All request/response are Protobuf messages serialized as JSON over HTTP. Read operations use POST with a request body (no GET).
 
 ### Store Memory
 
 ```
 POST /api/v1/memory
+Content-Type: application/json (Protobuf serialized)
 ```
 
 **Request:**
@@ -264,13 +267,30 @@ POST /api/v1/memory
 ### Search Memory
 
 ```
-GET /api/v1/memory/search?q=customer+preferences&limit=5
+POST /api/v1/memory/search
+Content-Type: application/json (Protobuf serialized)
+```
+
+**Request:**
+```json
+{
+  "query": "customer preferences",
+  "limit": 5
+}
 ```
 
 ### Get Conversation Context
 
 ```
-GET /api/v1/memory/context/{session_id}
+POST /api/v1/memory/context
+Content-Type: application/json (Protobuf serialized)
+```
+
+**Request:**
+```json
+{
+  "session_id": "456"
+}
 ```
 
 ---

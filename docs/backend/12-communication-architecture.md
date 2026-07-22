@@ -1,6 +1,6 @@
 # AeroXe Nexus AI — Communication Architecture
 
-## Trait-Based Internal Calls + Versioned NATS JetStream Event-Driven Design
+## gRPC (sync) / NATS (async) Internal Calls + Protobuf + Versioned NATS JetStream Event-Driven Design
 
 ---
 
@@ -11,7 +11,7 @@ AeroXe Nexus AI follows a **hybrid communication architecture** optimized for mo
 ```
                      External World
                            |
-                  REST / WebSocket / HTTPS (versioned: /api/v1/)
+                  HTTPS / WebSocket (Protobuf serialized as JSON)
                            |
                +---------------------------+
                |    gateway Module         |
@@ -22,10 +22,10 @@ AeroXe Nexus AI follows a **hybrid communication architecture** optimized for mo
             Internal Communication (in-process)
           ======================================
               Synchronous          Asynchronous
-              Trait Methods          NATS JetStream
-                  |                   (versioned subjects)
+              gRPC (tonic)          NATS JetStream
+                  |                   (Protobuf payloads)
           Module-to-Module         Event-Driven Flow
-          (direct fn calls)        (background jobs)
+          (direct tonic calls)     (background jobs)
           ======================================
               External gRPC (optional, versioned service names)
               tonic — for SDK / partner integrations
@@ -35,14 +35,19 @@ AeroXe Nexus AI follows a **hybrid communication architecture** optimized for mo
 
 ## 2. Communication Rules
 
-| Layer | Protocol | Versioning | Usage |
-|---|---|---|---|
-| External (Web/Mobile) | HTTPS REST | `/api/v{version}/` | Client API |
-| Real-time Chat | WebSocket | `/ws/v{version}/` | Token streaming |
-| **Internal Synchronous** | **Rust trait methods** | N/A (compile-time) | Module-to-module (in-process) |
-| **Internal Asynchronous** | **NATS JetStream (via Outbox Pattern)** | `aeroxe.v{version}.module.event` | Events, background jobs |
-| AI Runtime | Ollama HTTP API | N/A | Model inference |
-| External gRPC (optional) | tonic | `package.module.v{version}.Service` | SDK / partner integrations |
+| Layer | Protocol | Format | Versioning | Usage |
+|---|---|---|---|---|
+| External (Web/Mobile) | HTTPS | **Protobuf (proto3) serialized as JSON** | `/api/v{version}/` | Client API |
+| Real-time Chat | WebSocket | Protobuf chunks | `/ws/v{version}/` | Token streaming |
+| **Internal Synchronous** | **gRPC (tonic)** | **Protobuf** | `aeroxe.v{version}.<service>` | Module-to-module (in-process) |
+| **Internal Asynchronous** | **NATS JetStream (via Outbox Pattern)** | **Protobuf payloads** | `aeroxe.v{version}.module.event` | Events, background jobs |
+| AI Runtime | Ollama HTTP API | JSON | N/A | Model inference |
+| External gRPC (optional) | tonic | Protobuf | `package.module.v{version}.Service` | SDK / partner integrations |
+
+**HTTP API Rules:**
+- **Allowed methods:** PATCH, POST, DELETE only
+- **Read operations:** Use POST with a request body (no GET)
+- **No PUT** — use PATCH for partial updates
 
 ---
 
@@ -50,122 +55,120 @@ AeroXe Nexus AI follows a **hybrid communication architecture** optimized for mo
 
 | Medium | Format | Example |
 |---|---|---|
-| REST API | `/api/v{version}/<resource>` | `/api/v1/auth/login` |
+| HTTP API | `/api/v{version}/<resource>` | `/api/v1/auth/login` |
 | WebSocket | `/ws/v{version}/<channel>` | `/ws/v1/chat/{conv_id}` |
+| Internal gRPC | `aeroxe.v{version}.<service>.<method>` | `aeroxe.v1.vision.VisionService.AnalyzeImage` |
 | NATS Subject | `aeroxe.v{version}.<module>.<event>` | `aeroxe.v1.identity.user.created` |
 | External gRPC Package | `<module>.v{version}` | `identity.v1.AuthService` |
 | Event Envelope | `"api_version": "v{version}"` | `"api_version": "v1"` |
 
 ---
 
-## 4. Trait-Based Internal Communication (Replaces gRPC)
+## 4. gRPC Internal Communication (tonic)
 
 ### Design Principles
 
-Every module communicates with other modules through **Rust trait interfaces**:
+Every module communicates with other modules through **gRPC service interfaces** via tonic:
 
-1. **Modules depend on traits, not implementations** — enables testing with mocks
-2. **Traits are defined in each module** — in `api/mod.rs`
-3. **Requests are in-process** — `Arc<dyn Trait>` references wired at startup
-4. **Strong typing** — all inputs/outputs are typed Rust structs
-5. **No serialization overhead** — direct struct passing
-6. **Compile-time safety** — missing methods are compile errors
+1. **Modules expose gRPC services** — each module defines `.proto` service definitions
+2. **Protobuf messages** — all request/response are proto3 messages serialized as JSON over HTTP (external) or binary (internal)
+3. **In-process tonic** — modules call each other via tonic channels within the same binary (no network overhead)
+4. **Strong typing** — all inputs/outputs are Protobuf messages with codegen
+5. **Compile-time safety** — proto codegen catches mismatched types at build time
 
-### Trait Definition Pattern
+### Proto Service Definition Pattern
 
-```rust
-// src/modules/rag/api/mod.rs
-#[async_trait]
-pub trait RagService: Send + Sync {
-    async fn search(&self, query: SearchQuery) -> Result<SearchResults, RagError>;
-    async fn upload_document(&self, request: UploadRequest) -> Result<DocumentStatus>;
+```protobuf
+// proto/vision/v1/vision_service.proto
+syntax = "proto3";
+package aeroxe.vision.v1;
+
+service VisionService {
+  rpc AnalyzeImage(AnalyzeImageRequest) returns (AnalyzeImageResponse);
+  rpc ExtractText(ExtractTextRequest) returns (ExtractTextResponse);
+  rpc TroubleshootDevice(TroubleshootDeviceRequest) returns (TroubleshootDeviceResponse);
 }
 
-// src/modules/agent/application/services/agent_service.rs — uses RagService as dependency
-pub struct AgentServiceImpl {
-    rag: Arc<dyn RagService>,
-    memory: Arc<dyn MemoryService>,
-    ollama: OllamaClient,
+message AnalyzeImageRequest {
+  bytes image = 1;
+  string image_type = 2;
+  string task = 3;
+  int64 tenant_id = 4;
 }
 
-#[async_trait]
-impl AgentService for AgentServiceImpl {
-    async fn start_execution(&self, request: StartAgentRequest) -> Result<ExecutionResponse> {
-        // Call RAG synchronously — no gRPC, no serialization
-        let docs = self.rag.search(SearchQuery {
-            query: request.task.clone(),
-            tenant_id: request.tenant_id,
-            limit: 5,
-        }).await?;
-
-        // Call Ollama directly
-        let plan = self.ollama.chat(/* ... */).await?;
-
-        Ok(ExecutionResponse { /* ... */ })
-    }
+message AnalyzeImageResponse {
+  string description = 1;
+  float confidence = 2;
+  repeated DetectedObject objects = 3;
+  map<string, string> metadata = 4;
+  double latency_ms = 5;
 }
 ```
 
-### Wiring at Application Startup
+### In-Process gRPC Wiring
 
 ```rust
 // src/main.rs
 async fn main() {
-    let db = init_db().await;          // SeaORM DatabaseConnection
+    let db = init_db().await;
     let redis = RedisClient::open(config.redis_url)?;
     let nats = NatsClient::connect(config.nats_url).await?;
     let ollama = OllamaClient::new(config.ollama_url);
 
-    let identity: Arc<dyn IdentityService> = Arc::new(
-        identity::IdentityServiceImpl::new(db.clone(), redis.clone())
-    );
-    let customer: Arc<dyn CustomerService> = Arc::new(
-        customer::CustomerServiceImpl::new(db.clone(), nats.clone())
-    );
-    let rag: Arc<dyn RagService> = Arc::new(
-        rag::RagServiceImpl::new(db.clone(), nats.clone(), ollama.clone())
-    );
-    let memory: Arc<dyn MemoryService> = Arc::new(
-        memory::MemoryServiceImpl::new(db.clone(), redis.clone(), ollama.clone())
-    );
-    let agent: Arc<dyn AgentService> = Arc::new(
-        agent::AgentServiceImpl::new(rag.clone(), memory.clone(), ollama.clone())
+    // Each module runs its gRPC server on an in-process tonic channel
+    let identity_server = identity::start_grpc_server(db.clone(), redis.clone());
+    let customer_server = customer::start_grpc_server(db.clone(), nats.clone());
+    let rag_server = rag::start_grpc_server(db.clone(), nats.clone(), ollama.clone());
+    let memory_server = memory::start_grpc_server(db.clone(), redis.clone(), ollama.clone());
+    let vision_server = vision::start_grpc_server(db.clone(), ollama.clone());
+    let agent_server = agent::start_grpc_server(
+        rag_server.clone(),
+        memory_server.clone(),
+        vision_server.clone(),
+        ollama.clone(),
     );
 
+    // Gateway connects to module gRPC servers via in-process channels
     let app = gateway::build_router(AppState {
-        identity, customer, agent, rag, memory, // ...
+        identity: identity_server.clone(),
+        customer: customer_server.clone(),
+        agent: agent_server.clone(),
+        rag: rag_server.clone(),
+        memory: memory_server.clone(),
+        vision: vision_server.clone(),
     });
 
     axum::serve(listener, app).await?;
 }
 ```
 
-### Performance Comparison
+### Performance: In-Process gRPC vs Network gRPC
 
-| Aspect | External gRPC | Modular Monolith (Trait) |
+| Aspect | External gRPC (network) | In-Process gRPC (modular monolith) |
 |---|---|---|
-| Latency per call | 2-5ms (network + serialization) | < 1μs (trait vtable dispatch) |
-| Overhead | Protobuf encode/decode | Zero — direct struct passing |
-| Error handling | External gRPC status codes | Rust `Result<T, E>` |
-| Testing | Need running services | `Mockall` mocks |
-| Type safety | Protobuf codegen | Rust compiler |
+| Latency per call | 2-5ms (network + serialization) | < 50μs (tonic channel, no network) |
+| Overhead | Protobuf encode/decode + network | Protobuf encode/decode only |
+| Error handling | gRPC status codes | gRPC status codes (consistent) |
+| Testing | Need running services | tonic `Channel::from_static` mocks |
+| Type safety | Protobuf codegen | Protobuf codegen |
+| Serialization format | Protobuf binary | Protobuf binary (same as external) |
 
 ---
 
-## 5. When to Use NATS vs Trait Calls
+## 5. When to Use NATS vs gRPC Calls
 
 | Scenario | Use | Reason |
 |---|---|---|
-| User requests AI chat | Trait method | Need immediate response |
-| Agent needs RAG data | Trait method | Synchronous data needed for reasoning |
-| Agent needs memory | Trait method | Synchronous context retrieval |
-| Agent execution completes | NATS (versioned) | Other modules need to react asynchronously |
-| Customer created | NATS (versioned) | Notify other systems |
-| Document uploaded | NATS (versioned) | Long-running processing, don't block client |
-| Audit event | NATS (versioned) | Fire-and-forget, must not impact latency |
-| Notification send | NATS (versioned) | Background delivery, retry on failure |
-| Workflow step completed | NATS (versioned) | Decoupled step orchestration |
-| Config change broadcast | NATS (versioned) | All modules must eventually reconfigure |
+| User requests AI chat | gRPC call | Need immediate response |
+| Agent needs RAG data | gRPC call | Synchronous data needed for reasoning |
+| Agent needs memory | gRPC call | Synchronous context retrieval |
+| Agent execution completes | NATS (Protobuf) | Other modules need to react asynchronously |
+| Customer created | NATS (Protobuf) | Notify other systems |
+| Document uploaded | NATS (Protobuf) | Long-running processing, don't block client |
+| Audit event | NATS (Protobuf) | Fire-and-forget, must not impact latency |
+| Notification send | NATS (Protobuf) | Background delivery, retry on failure |
+| Workflow step completed | NATS (Protobuf) | Decoupled step orchestration |
+| Config change broadcast | NATS (Protobuf) | All modules must eventually reconfigure |
 
 ---
 
@@ -204,248 +207,245 @@ async fn main() {
 
 ---
 
-## 7. Module API Trait Catalogue
+## 7. Module gRPC Service Catalogue
 
-### nexus-identity
+Each module exposes a gRPC service defined in `.proto` files. Below are the service interfaces (proto-generated Rust traits):
 
-```rust
-#[async_trait]
-pub trait IdentityService: Send + Sync {
-    async fn authenticate(&self, req: AuthRequest) -> Result<AuthResponse>;
-    async fn verify_token(&self, token: &str) -> Result<JWTClaims>;
-    async fn check_permission(&self, req: PermissionRequest) -> Result<bool>;
-    async fn validate_tenant(&self, tenant_id: TenantId) -> Result<Tenant>;
-    async fn create_user(&self, req: CreateUserRequest) -> Result<User>;
+### nexus-identity (gRPC Service)
+
+```protobuf
+// proto/identity/v1/identity_service.proto
+service IdentityService {
+  rpc Authenticate(AuthRequest) returns (AuthResponse);
+  rpc VerifyToken(VerifyTokenRequest) returns (JWTClaims);
+  rpc CheckPermission(PermissionRequest) returns (PermissionResponse);
+  rpc ValidateTenant(ValidateTenantRequest) returns (Tenant);
+  rpc CreateUser(CreateUserRequest) returns (User);
 }
 ```
 
-### nexus-ai-gateway
+### nexus-ai-gateway (gRPC Service)
 
-```rust
-#[async_trait]
-pub trait AIGatewayService: Send + Sync {
-    async fn submit_request(&self, req: AIRequest) -> Result<AIResponse>;
-    async fn stream_response(&self, req: AIRequest) -> Result<Receiver<AIChunk>>;
-    async fn cancel_request(&self, id: RequestId) -> Result<()>;
-    async fn get_session_status(&self, id: SessionId) -> Result<SessionStatus>;
+```protobuf
+// proto/ai-gateway/v1/ai_gateway_service.proto
+service AIGatewayService {
+  rpc SubmitRequest(AIRequest) returns (AIResponse);
+  rpc StreamResponse(AIRequest) returns (stream AIChunk);
+  rpc CancelRequest(CancelRequest) returns (Empty);
+  rpc GetSessionStatus(SessionStatusRequest) returns (SessionStatus);
 }
 ```
 
-### nexus-agent
+### nexus-agent (gRPC Service)
 
-```rust
-#[async_trait]
-pub trait AgentService: Send + Sync {
-    async fn start_execution(&self, req: StartAgentRequest) -> Result<ExecutionResponse>;
-    async fn get_execution_status(&self, id: ExecutionId) -> Result<ExecutionStatus>;
-    async fn stream_execution(&self, req: StreamRequest) -> Result<Receiver<ExecutionEvent>>;
-    async fn cancel_execution(&self, id: ExecutionId) -> Result<()>;
+```protobuf
+// proto/agent/v1/agent_service.proto
+service AgentService {
+  rpc StartExecution(StartAgentRequest) returns (ExecutionResponse);
+  rpc GetExecutionStatus(ExecutionStatusRequest) returns (ExecutionStatus);
+  rpc StreamExecution(StreamRequest) returns (stream ExecutionEvent);
+  rpc CancelExecution(CancelRequest) returns (Empty);
 }
 ```
 
-### nexus-rag
+### nexus-rag (gRPC Service)
 
-```rust
-#[async_trait]
-pub trait RagService: Send + Sync {
-    async fn search(&self, query: SearchQuery) -> Result<SearchResults>;
-    async fn upload_document(&self, req: UploadRequest) -> Result<DocumentStatus>;
-    async fn get_document_status(&self, id: DocumentId) -> Result<Option<DocumentStatus>>;
-    async fn delete_document(&self, id: DocumentId) -> Result<()>;
+```protobuf
+// proto/rag/v1/rag_service.proto
+service RagService {
+  rpc Search(SearchRequest) returns (SearchResults);
+  rpc UploadDocument(UploadRequest) returns (DocumentStatus);
+  rpc GetDocumentStatus(DocumentStatusRequest) returns (DocumentStatus);
+  rpc DeleteDocument(DeleteRequest) returns (Empty);
 }
 ```
 
-### nexus-vision
+### nexus-vision (gRPC Service)
 
-```rust
-#[async_trait]
-pub trait VisionService: Send + Sync {
-    async fn analyze_image(&self, req: ImageRequest) -> Result<ImageAnalysisResponse>;
-    async fn extract_text(&self, req: ImageRequest) -> Result<OCRResponse>;
-    async fn troubleshoot_device(&self, req: DeviceImageRequest) -> Result<TroubleshootResponse>;
+```protobuf
+// proto/vision/v1/vision_service.proto
+service VisionService {
+  rpc AnalyzeImage(AnalyzeImageRequest) returns (AnalyzeImageResponse);
+  rpc ExtractText(ExtractTextRequest) returns (ExtractTextResponse);
+  rpc TroubleshootDevice(TroubleshootDeviceRequest) returns (TroubleshootDeviceResponse);
 }
 ```
 
-### nexus-sql-agent
+### nexus-sql-agent (gRPC Service)
 
-```rust
-#[async_trait]
-pub trait SQLAgentService: Send + Sync {
-    async fn generate_query(&self, req: QueryRequest) -> Result<SQLResponse>;
-    async fn execute_query(&self, req: SQLRequest) -> Result<ResultResponse>;
-    async fn test_connection(&self, req: TestConnectionRequest) -> Result<ConnectionStatus>;
+```protobuf
+// proto/sql-agent/v1/sql_agent_service.proto
+service SQLAgentService {
+  rpc GenerateQuery(GenerateQueryRequest) returns (SQLResponse);
+  rpc ExecuteQuery(ExecuteQueryRequest) returns (ResultResponse);
+  rpc TestConnection(TestConnectionRequest) returns (ConnectionStatus);
 }
 ```
 
-### nexus-memory
+### nexus-memory (gRPC Service)
 
-```rust
-#[async_trait]
-pub trait MemoryService: Send + Sync {
-    async fn store(&self, req: StoreMemoryRequest) -> Result<()>;
-    async fn search(&self, req: SearchMemoryRequest) -> Result<Vec<MemoryItem>>;
-    async fn get_conversation_context(&self, session_id: SessionId) -> Result<Vec<Message>>;
-    async fn clear_session(&self, session_id: SessionId) -> Result<()>;
+```protobuf
+// proto/memory/v1/memory_service.proto
+service MemoryService {
+  rpc Store(StoreMemoryRequest) returns (Empty);
+  rpc Search(SearchMemoryRequest) returns (SearchMemoryResponse);
+  rpc GetConversationContext(GetContextRequest) returns (ConversationContext);
+  rpc ClearSession(ClearSessionRequest) returns (Empty);
 }
 ```
 
-### nexus-workflow
+### nexus-workflow (gRPC Service)
 
-```rust
-#[async_trait]
-pub trait WorkflowService: Send + Sync {
-    async fn start_workflow(&self, req: StartWorkflowRequest) -> Result<WorkflowResponse>;
-    async fn get_status(&self, id: WorkflowId) -> Result<WorkflowStatus>;
-    async fn approve_step(&self, req: ApproveRequest) -> Result<()>;
-    async fn cancel_workflow(&self, id: WorkflowId) -> Result<()>;
+```protobuf
+// proto/workflow/v1/workflow_service.proto
+service WorkflowService {
+  rpc StartWorkflow(StartWorkflowRequest) returns (WorkflowResponse);
+  rpc GetStatus(GetStatusRequest) returns (WorkflowStatus);
+  rpc ApproveStep(ApproveRequest) returns (Empty);
+  rpc CancelWorkflow(CancelWorkflowRequest) returns (Empty);
 }
 ```
 
-### nexus-security-ai
+### nexus-security-ai (gRPC Service)
 
-```rust
-#[async_trait]
-pub trait SecurityService: Send + Sync {
-    async fn analyze_code(&self, req: CodeReviewRequest) -> Result<CodeReviewResponse>;
-    async fn scan_security(&self, req: SecurityScanRequest) -> Result<SecurityReport>;
-    async fn scan_prompt(&self, prompt: &str) -> Result<PromptScanResult>;
+```protobuf
+// proto/security-ai/v1/security_service.proto
+service SecurityService {
+  rpc AnalyzeCode(CodeReviewRequest) returns (CodeReviewResponse);
+  rpc ScanSecurity(SecurityScanRequest) returns (SecurityReport);
+  rpc ScanPrompt(ScanPromptRequest) returns (PromptScanResult);
 }
 ```
 
-### nexus-audit
+### nexus-audit (gRPC Service)
 
-```rust
-#[async_trait]
-pub trait AuditService: Send + Sync {
-    async fn log_event(&self, event: AuditEvent) -> Result<()>;
-    async fn query_events(&self, query: AuditQuery) -> Result<Vec<AuditEvent>>;
-    async fn generate_report(&self, req: ReportRequest) -> Result<Report>;
+```protobuf
+// proto/audit/v1/audit_service.proto
+service AuditService {
+  rpc LogEvent(AuditEvent) returns (Empty);
+  rpc QueryEvents(AuditQuery) returns (AuditEvents);
+  rpc GenerateReport(ReportRequest) returns (Report);
 }
 ```
 
-### nexus-telephony (NEW)
+### nexus-telephony (gRPC Service)
 
-```rust
-#[async_trait]
-pub trait TelephonyService: Send + Sync {
-    // Inbound/Outbound
-    async fn handle_inbound_call(&self, req: InboundCallRequest) -> Result<CallResponse>;
-    async fn initiate_outbound_call(&self, req: OutboundCallRequest) -> Result<CallResponse>;
-    async fn answer_call(&self, call_id: CallId) -> Result<()>;
-    async fn end_call(&self, call_id: CallId, reason: String) -> Result<()>;
-    // Call control
-    async fn hold_call(&self, call_id: CallId) -> Result<()>;
-    async fn resume_call(&self, call_id: CallId) -> Result<()>;
-    async fn transfer_call(&self, req: TransferRequest) -> Result<()>;
-    // Audio
-    async fn send_audio(&self, call_id: CallId, audio: AudioFrame) -> Result<()>;
-    async fn receive_audio(&self, call_id: CallId) -> Result<Receiver<AudioFrame>>;
-    // Caller authentication (NEW)
-    async fn authenticate_caller(&self, call_id: CallId, method: AuthMethod) -> Result<CallerAuthResult>;
-    async fn verify_pin(&self, call_id: CallId, pin: String) -> Result<bool>;
-    async fn verify_voice_biometric(&self, call_id: CallId, voice_sample: Vec<u8>) -> Result<f32>;
-    // Anti-fraud (NEW)
-    async fn check_fraud(&self, call_id: CallId) -> Result<FraudCheckResult>;
-    // Voicemail (NEW)
-    async fn start_voicemail(&self, call_id: CallId) -> Result<VoicemailId>;
-    async fn end_voicemail(&self, call_id: CallId) -> Result<VoicemailId>;
-    // IVR (NEW)
-    async fn start_ivr_flow(&self, call_id: CallId, flow_id: FlowId) -> Result<()>;
-    async fn handle_dtmf_input(&self, call_id: CallId, digit: char) -> Result<IVRResponse>;
-    // Live monitoring (NEW)
-    async fn start_monitoring(&self, call_id: CallId, supervisor_id: UserId, action: MonitorAction) -> Result<()>;
-    async fn end_monitoring(&self, call_id: CallId) -> Result<()>;
-    // Query
-    async fn get_call_status(&self, call_id: CallId) -> Result<CallStatus>;
-    async fn get_voicemails(&self, tenant_id: TenantId) -> Result<Vec<Voicemail>>;
+```protobuf
+// proto/telephony/v1/telephony_service.proto
+service TelephonyService {
+  // Inbound/Outbound
+  rpc HandleInboundCall(InboundCallRequest) returns (CallResponse);
+  rpc InitiateOutboundCall(OutboundCallRequest) returns (CallResponse);
+  rpc AnswerCall(AnswerCallRequest) returns (Empty);
+  rpc EndCall(EndCallRequest) returns (Empty);
+  // Call control
+  rpc HoldCall(HoldCallRequest) returns (Empty);
+  rpc ResumeCall(ResumeCallRequest) returns (Empty);
+  rpc TransferCall(TransferRequest) returns (Empty);
+  // Audio
+  rpc SendAudio(SendAudioRequest) returns (Empty);
+  rpc ReceiveAudio(ReceiveAudioRequest) returns (stream AudioFrame);
+  // Caller authentication
+  rpc AuthenticateCaller(AuthenticateCallerRequest) returns (CallerAuthResult);
+  rpc VerifyPin(VerifyPinRequest) returns (VerifyPinResponse);
+  rpc VerifyVoiceBiometric(VerifyVoiceBiometricRequest) returns (BiometricResult);
+  // Anti-fraud
+  rpc CheckFraud(CheckFraudRequest) returns (FraudCheckResult);
+  // Voicemail
+  rpc StartVoicemail(StartVoicemailRequest) returns (VoicemailResponse);
+  rpc EndVoicemail(EndVoicemailRequest) returns (VoicemailResponse);
+  // IVR
+  rpc StartIVRFlow(StartIVRRequest) returns (Empty);
+  rpc HandleDTMFInput(DTMFRequest) returns (IVRResponse);
+  // Live monitoring
+  rpc StartMonitoring(StartMonitoringRequest) returns (Empty);
+  rpc EndMonitoring(EndMonitoringRequest) returns (Empty);
+  // Query
+  rpc GetCallStatus(GetCallStatusRequest) returns (CallStatus);
+  rpc GetVoicemails(GetVoicemailsRequest) returns (Voicemails);
 }
 ```
 
-### nexus-conversation (NEW)
+### nexus-conversation (gRPC Service)
 
-```rust
-#[async_trait]
-pub trait ConversationService: Send + Sync {
-    async fn create_conversation(&self, req: CreateConversationRequest) -> Result<Conversation>;
-    async fn get_conversation(&self, id: ConversationId) -> Result<Option<Conversation>>;
-    async fn transition_state(&self, id: ConversationId, trigger: TransitionTrigger) -> Result<ConversationState>;
-    async fn add_message(&self, id: ConversationId, msg: NewMessage) -> Result<Message>;
-    async fn get_context(&self, id: ConversationId) -> Result<ConversationContext>;
-    async fn end_conversation(&self, id: ConversationId, outcome: ConversationOutcome) -> Result<()>;
+```protobuf
+// proto/conversation/v1/conversation_service.proto
+service ConversationService {
+  rpc CreateConversation(CreateConversationRequest) returns (Conversation);
+  rpc GetConversation(GetConversationRequest) returns (Conversation);
+  rpc TransitionState(TransitionStateRequest) returns (ConversationState);
+  rpc AddMessage(AddMessageRequest) returns (Message);
+  rpc GetContext(GetContextRequest) returns (ConversationContext);
+  rpc EndConversation(EndConversationRequest) returns (Empty);
 }
 ```
 
-### nexus-stt (NEW)
+### nexus-stt (gRPC Service)
 
-```rust
-#[async_trait]
-pub trait STTService: Send + Sync {
-    async fn start_streaming_session(&self, req: StreamingSessionRequest) -> Result<StreamingSessionHandle>;
-    async fn send_audio_chunk(&self, session_id: SessionId, chunk: AudioChunk) -> Result<PartialTranscript>;
-    async fn end_streaming_session(&self, session_id: SessionId) -> Result<FinalTranscript>;
-    async fn transcribe_audio(&self, req: TranscribeRequest) -> Result<Transcript>;
-    // Confidence threshold (NEW)
-    async fn get_config(&self, tenant_id: TenantId) -> Result<STTConfig>;
-    async fn update_config(&self, tenant_id: TenantId, config: STTConfig) -> Result<()>;
-    // Anti-injection (NEW)
-    async fn check_liveness(&self, audio: Vec<u8>) -> Result<LivenessResult>;
+```protobuf
+// proto/stt/v1/stt_service.proto
+service STTService {
+  rpc StartStreamingSession(StreamingSessionRequest) returns (StreamingSessionHandle);
+  rpc SendAudioChunk(SendAudioChunkRequest) returns (PartialTranscript);
+  rpc EndStreamingSession(EndStreamingSessionRequest) returns (FinalTranscript);
+  rpc TranscribeAudio(TranscribeRequest) returns (Transcript);
+  rpc GetConfig(GetConfigRequest) returns (STTConfig);
+  rpc UpdateConfig(UpdateConfigRequest) returns (Empty);
+  rpc CheckLiveness(CheckLivenessRequest) returns (LivenessResult);
 }
 ```
 
-### nexus-tts (NEW)
+### nexus-tts (gRPC Service)
 
-```rust
-#[async_trait]
-pub trait TTSService: Send + Sync {
-    async fn start_streaming_synthesis(&self, req: StreamingSynthesisRequest) -> Result<StreamingSynthesisHandle>;
-    async fn synthesize_chunk(&self, session_id: SessionId, text: String) -> Result<Receiver<AudioChunk>>;
-    async fn synthesize(&self, req: SynthesisRequest) -> Result<SynthesisResult>;
-    async fn list_voices(&self, tenant_id: TenantId) -> Result<Vec<VoiceProfile>>;
-    // Voice cloning (NEW)
-    async fn clone_voice(&self, req: VoiceCloneRequest) -> Result<VoiceClone>;
-    async fn revoke_clone(&self, clone_id: CloneId) -> Result<()>;
-    // Sentiment adaptation (NEW)
-    async fn synthesize_with_sentiment(&self, req: SentimentSynthesisRequest) -> Result<SynthesisResult>;
-    // Post-call survey (NEW)
-    async fn play_survey_prompt(&self, call_id: CallId) -> Result<()>;
+```protobuf
+// proto/tts/v1/tts_service.proto
+service TTSService {
+  rpc StartStreamingSynthesis(StreamingSynthesisRequest) returns (StreamingSynthesisHandle);
+  rpc SynthesizeChunk(SynthesizeChunkRequest) returns (stream AudioChunk);
+  rpc Synthesize(SynthesizeRequest) returns (SynthesisResult);
+  rpc ListVoices(ListVoicesRequest) returns (Voices);
+  rpc CloneVoice(VoiceCloneRequest) returns (VoiceClone);
+  rpc RevokeClone(RevokeCloneRequest) returns (Empty);
+  rpc SynthesizeWithSentiment(SentimentSynthesisRequest) returns (SynthesisResult);
+  rpc PlaySurveyPrompt(PlaySurveyRequest) returns (Empty);
 }
 ```
 
-### nexus-analytics (NEW)
+### nexus-analytics (gRPC Service)
 
-```rust
-#[async_trait]
-pub trait AnalyticsService: Send + Sync {
-    async fn get_dashboard(&self, tenant_id: TenantId, time_range: TimeRange) -> Result<Dashboard>;
-    async fn get_conversation_metrics(&self, req: ConversationMetricsRequest) -> Result<ConversationMetrics>;
-    async fn get_call_metrics(&self, req: CallMetricsRequest) -> Result<CallMetrics>;
-    async fn get_agent_performance(&self, agent_id: AgentId, time_range: TimeRange) -> Result<AgentPerformance>;
-    async fn get_cost_breakdown(&self, tenant_id: TenantId, time_range: TimeRange) -> Result<CostBreakdown>;
+```protobuf
+// proto/analytics/v1/analytics_service.proto
+service AnalyticsService {
+  rpc GetDashboard(DashboardRequest) returns (Dashboard);
+  rpc GetConversationMetrics(ConversationMetricsRequest) returns (ConversationMetrics);
+  rpc GetCallMetrics(CallMetricsRequest) returns (CallMetrics);
+  rpc GetAgentPerformance(AgentPerformanceRequest) returns (AgentPerformance);
+  rpc GetCostBreakdown(CostBreakdownRequest) returns (CostBreakdown);
 }
 ```
 
-### nexus-webhook (NEW)
+### nexus-webhook (gRPC Service)
 
-```rust
-#[async_trait]
-pub trait WebhookService: Send + Sync {
-    async fn create_subscription(&self, req: CreateWebhookRequest) -> Result<WebhookSubscription>;
-    async fn delete_subscription(&self, id: SubscriptionId) -> Result<()>;
-    async fn list_subscriptions(&self, tenant_id: TenantId) -> Result<Vec<WebhookSubscription>>;
-    async fn test_webhook(&self, id: SubscriptionId) -> Result<WebhookTestResult>;
+```protobuf
+// proto/webhook/v1/webhook_service.proto
+service WebhookService {
+  rpc CreateSubscription(CreateWebhookRequest) returns (WebhookSubscription);
+  rpc DeleteSubscription(DeleteSubscriptionRequest) returns (Empty);
+  rpc ListSubscriptions(ListSubscriptionsRequest) returns (WebhookSubscriptions);
+  rpc TestWebhook(TestWebhookRequest) returns (WebhookTestResult);
 }
 ```
 
-### nexus-outbound (NEW)
+### nexus-outbound (gRPC Service)
 
-```rust
-#[async_trait]
-pub trait OutboundService: Send + Sync {
-    async fn create_campaign(&self, req: CreateCampaignRequest) -> Result<Campaign>;
-    async fn start_campaign(&self, id: CampaignId) -> Result<()>;
-    async fn make_outbound_call(&self, req: OutboundCallRequest) -> Result<OutboundCallResult>;
-    async fn schedule_callback(&self, req: ScheduleCallbackRequest) -> Result<ScheduledCallback>;
-    async fn check_dnc(&self, phone: PhoneNumber, tenant_id: TenantId) -> Result<bool>;
+```protobuf
+// proto/outbound/v1/outbound_service.proto
+service OutboundService {
+  rpc CreateCampaign(CreateCampaignRequest) returns (Campaign);
+  rpc StartCampaign(StartCampaignRequest) returns (Empty);
+  rpc MakeOutboundCall(OutboundCallRequest) returns (OutboundCallResult);
+  rpc ScheduleCallback(ScheduleCallbackRequest) returns (ScheduledCallback);
+  rpc CheckDNC(CheckDNCRequest) returns (DNCResponse);
 }
 ```
 
@@ -498,9 +498,9 @@ Currently active version: **`v1`**
 
 ---
 
-## 9. Event Schema Standard (Versioned)
+## 9. Event Schema Standard (Versioned — Protobuf)
 
-Every NATS event includes the API version in the envelope:
+Every NATS event is a **Protobuf message** serialized as JSON. The envelope includes the API version:
 
 ```json
 {
@@ -520,6 +520,8 @@ Every NATS event includes the API version in the envelope:
   }
 }
 ```
+
+**All event payloads are Protobuf messages** — the JSON representation is for human readability; wire format is Protobuf binary.
 
 ---
 
@@ -584,20 +586,20 @@ service CustomerService {
 **User asks:** "Why is customer internet slow?"
 
 ```
-User → HTTP POST /api/v1/ai/chat
+User → HTTPS POST /api/v1/ai/chat (Protobuf JSON body)
   → gateway (auth, rate-limit, version check)
-    → ai-gateway::submit_request() [trait call]
-      → agent::start_execution() [trait call]
+    → ai-gateway::SubmitRequest() [gRPC call]
+      → agent::StartExecution() [gRPC call]
         → Ollama: LFM2.5 Thinking (intent detection)
           → Plan: check customer, check network, search knowledge
-        → rag::search() [trait call] — document knowledge
-        → memory::search() [trait call] — past conversations
+        → rag::Search() [gRPC call] — document knowledge
+        → memory::Search() [gRPC call] — past conversations
         → Ollama: Command-R 7B (generate final answer)
       ← Response + audit event (NATS: aeroxe.v1.audit.ai.request)
-    ← HTTP 200 + JSON response
+    ← HTTP 200 + Protobuf JSON response
 ```
 
-Note: **Every arrow is an in-process Rust trait method call**, not a network hop. The entire flow completes in < 3 seconds.
+Note: **Every internal arrow is a gRPC call via tonic** — binary Protobuf serialization, in-process channels, no network overhead. The entire flow completes in < 3 seconds.
 
 ---
 
@@ -628,13 +630,13 @@ All streams use **tokio channels** for zero-copy token relay between modules.
 
 ## 14. Security Requirements
 
-### Internal Trait Calls
+### Internal gRPC Calls
 
 | Requirement | Implementation |
 |---|---|
-| Authentication | JWT validated by gateway, claims attached to request |
-| Authorization | identity::check_permission() called by gateway |
-| Tenant Isolation | tenant_id propagated via RequestContext struct |
+| Authentication | JWT validated by gateway, claims attached to RequestContext |
+| Authorization | identity::CheckPermission() gRPC call |
+| Tenant Isolation | tenant_id propagated via RequestContext in all gRPC calls |
 | Rate Limiting | Token bucket in gateway middleware |
 
 ### NATS Security
@@ -642,6 +644,7 @@ All streams use **tokio channels** for zero-copy token relay between modules.
 | Requirement | Implementation |
 |---|---|
 | TLS | All NATS connections encrypted |
+| Payload Format | All payloads are Protobuf messages |
 | Account Isolation | Separate accounts per module |
 | Subject Permissions | Publish/subscribe ACLs per version |
 | Authentication | NKey or JWT-based auth |
@@ -653,18 +656,18 @@ All streams use **tokio channels** for zero-copy token relay between modules.
 ### Module Boundary Tests (TDD)
 
 ```rust
-/// Contract: agent must be able to call rag::search()
+/// Contract: agent must be able to call rag::Search() via gRPC
 #[tokio::test]
 async fn test_agent_rag_integration() {
-    let rag = MockRagService::new();
-    let agent = AgentServiceImpl::new(Arc::new(rag), /* ... */);
+    let rag_server = MockRagServiceServer::new();
+    let agent = AgentServiceImpl::new(rag_server.clone(), /* ... */);
 
     let result = agent.start_execution(/* ... */).await;
     assert!(result.is_ok());
 }
 ```
 
-### NATS Contract Tests (Versioned Subjects)
+### NATS Contract Tests (Versioned Subjects — Protobuf Payloads)
 
 ```rust
 #[tokio::test]
@@ -674,9 +677,11 @@ async fn test_agent_completed_event_is_published() {
 
     agent.start_execution(/* ... */).await;
 
-    // Verify event was published with correct versioned subject
+    // Verify Protobuf event was published with correct versioned subject
     let msg = nats.subscribe("aeroxe.v1.agent.completed").await?;
     assert_eq!(msg.subject, "aeroxe.v1.agent.completed");
+    // Deserialize as Protobuf
+    let event = AgentCompletedEvent::decode(msg.data.as_ref())?;
     // ...
 }
 ```

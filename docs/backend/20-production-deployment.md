@@ -110,8 +110,8 @@ Contains:
 
 Communication:
 
-- Trait-based dispatch (in-process)
-- NATS
+- gRPC (sync) or NATS (async)
+- Internal Protobuf message passing
 
 ### Zone 4 — Data Zone
 
@@ -269,13 +269,14 @@ Minimum 4 nodes:
 
 ## 9. Internal Communication
 
-Modules within the monolith communicate via **Rust trait method calls** (in-process). No gRPC or mTLS needed internally.
+Modules within the monolith communicate via **gRPC (sync)** or **NATS (async)**. All payloads are Protobuf messages.
 
 ```
-nexus-agent → RagService::search() trait method call → same process, no network
+nexus-agent → gRPC call → nexus-rag::search() → same binary, internal network
+nexus-agent → NATS subject aeroxe.v1.rag.search → async response
 ```
 
-External gRPC is available only for optional partner SDK integrations via `nexus-gateway`.
+External gRPC is available for partner SDK integrations via `nexus-gateway`.
 
 ---
 

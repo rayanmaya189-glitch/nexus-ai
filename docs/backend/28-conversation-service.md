@@ -2,7 +2,7 @@
 
 ## Conversation State Machine, Context Management, Turn-Taking & Flow Control
 
-> **Modular Monolith Module:** This document describes the `nexus-conversation` crate — a module within the single `aeroxe-nexus` binary. It communicates with other modules via Rust trait interfaces.
+> **Modular Monolith Module:** This document describes the `nexus-conversation` crate — a module within the single `aeroxe-nexus` binary. It communicates with other modules via gRPC (sync) or NATS (async) between services.
 
 ---
 
@@ -413,16 +413,16 @@ CREATE TABLE conversation_.entities (
 
 ---
 
-## 9. REST API Endpoints
+## 9. REST API Endpoints (Protobuf over HTTP)
 
 | Method | Endpoint | Business Status | HTTP | Description |
 |---|---|---|---|---|
 | `POST` | `/api/v1/conversations` | `CREATED` | `201` | Create conversation |
-| `GET` | `/api/v1/conversations/{id}` | `SUCCESS` | `200` | Get conversation |
-| `GET` | `/api/v1/conversations?limit=10&offset=0` | `SUCCESS` | `200` | List conversations |
-| `GET` | `/api/v1/conversations/{id}/messages?limit=10&offset=0` | `SUCCESS` | `200` | Get messages |
+| `POST` | `/api/v1/conversations` (read body) | `SUCCESS` | `200` | Get conversation |
+| `POST` | `/api/v1/conversations/list` (read body) | `SUCCESS` | `200` | List conversations |
+| `POST` | `/api/v1/conversations/{id}/messages/list` (read body) | `SUCCESS` | `200` | Get messages |
 | `POST` | `/api/v1/conversations/{id}/messages` | `CREATED` | `201` | Send message |
-| `GET` | `/api/v1/conversations/{id}/state` | `SUCCESS` | `200` | Get state |
+| `POST` | `/api/v1/conversations/{id}/state` (read body) | `SUCCESS` | `200` | Get state |
 | `POST` | `/api/v1/conversations/{id}/end` | `UPDATED` | `200` | End conversation |
 | `POST` | `/api/v1/conversations/{id}/branch` | `CREATED` | `201` | Branch conversation |
 | `DELETE` | `/api/v1/conversations/{id}` | `DELETED` | `204` | Delete conversation |
@@ -452,7 +452,7 @@ CREATE TABLE conversation_.entities (
 }
 ```
 
-**Note:** No PUT method. Use PATCH for updates. All list endpoints support `limit` (default 10) and `offset`.
+**Note:** All endpoints use Protobuf (proto3) serialized as JSON over HTTP. Content-Type: `application/json` (Protobuf messages serialized as JSON). No PUT method — use PATCH for updates. All list endpoints support `limit` (default 10) and `offset`.
 
 ---
 

@@ -2,7 +2,7 @@
 
 ## Customer Data Isolation + Cross-Platform Boundaries + Sensitive Info Protection
 
-> **Modular Monolith Context:** Customer isolation is enforced at multiple layers within the `aeroxe-nexus` binary. The `identity` module (`src/modules/identity/`) handles auth, `agent` module (`src/modules/agent/`) enforces scope, `customer` module (`src/modules/customer/`) manages customer data, and `audit` module (`src/modules/audit/`) logs all access. All cross-module isolation checks use trait interfaces, not network calls. All database access uses SeaORM — no raw SQL. See [Security Architecture](14-security-architecture.md).
+> **Modular Monolith Context:** Customer isolation is enforced at multiple layers within the `aeroxe-nexus` binary. The `identity` module (`src/modules/identity/`) handles auth, `agent` module (`src/modules/agent/`) enforces scope, `customer` module (`src/modules/customer/`) manages customer data, and `audit` module (`src/modules/audit/`) logs all access. All cross-module isolation checks use gRPC (sync) or NATS (async). All database access uses SeaORM — no raw SQL. See [Security Architecture](14-security-architecture.md).
 
 ---
 
@@ -605,10 +605,10 @@ Agent generates response
 
 | Method | Endpoint | Description |
 |---|---|---|
-| GET | `/api/v1/customers/me/balance` | Get own balance |
-| GET | `/api/v1/customers/me/usage` | Get own usage |
-| GET | `/api/v1/customers/me/invoices` | Get own invoices |
-| GET | `/api/v1/customers/me/tickets` | Get own support tickets |
+| POST | `/api/v1/customers/me/balance` | Get own balance |
+| POST | `/api/v1/customers/me/usage` | Get own usage |
+| POST | `/api/v1/customers/me/invoices` | Get own invoices |
+| POST | `/api/v1/customers/me/tickets` | Get own support tickets |
 | POST | `/api/v1/customers/me/verify` | Verify identity for sensitive data |
 
 ### Identity Verification API

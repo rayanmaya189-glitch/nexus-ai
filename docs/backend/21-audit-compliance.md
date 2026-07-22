@@ -2,7 +2,7 @@
 
 ## Comprehensive Audit Logging + Regulatory Compliance + Data Governance
 
-> **Modular Monolith Context:** The `nexus-audit` module handles all audit logging within the `aeroxe-nexus` binary. Modules call `AuditService::log_event()` trait method (synchronous) or publish to `aeroxe.v1.audit.*` NATS subjects (asynchronous). See [Communication Architecture](12-communication-architecture.md).
+> **Modular Monolith Context:** The `nexus-audit` module handles all audit logging within the `aeroxe-nexus` binary. Modules call `AuditService::log_event()` via gRPC (synchronous) or publish to `aeroxe.v1.audit.*` NATS subjects (asynchronous). See [Communication Architecture](12-communication-architecture.md).
 
 ---
 
@@ -21,10 +21,10 @@ AeroXe Nexus AI maintains complete audit trails for:
 ## 2. Audit Architecture
 
 ```
-Module (trait call or NATS) → AuditEvent → nexus-audit module → audit.events (PostgreSQL) + Elasticsearch
+Module (gRPC or NATS) → AuditEvent → nexus-audit module → audit.events (PostgreSQL) + Elasticsearch
 ```
 
-> **Key Difference:** Audit events can be sent synchronously via `AuditService::log_event()` trait call (for critical events that must be persisted immediately) or asynchronously via NATS `aeroxe.v1.audit.*` subjects (for high-volume events).
+> **Key Difference:** Audit events can be sent synchronously via gRPC `AuditService::log_event()` (for critical events that must be persisted immediately) or asynchronously via NATS `aeroxe.v1.audit.*` subjects (for high-volume events).
 
 ---
 
@@ -162,11 +162,11 @@ Module (trait call or NATS) → AuditEvent → nexus-audit module → audit.even
 
 ### Responsibilities
 
-- Ingest audit events from all modules (trait calls + NATS)
+- Ingest audit events from all modules (gRPC + NATS)
 - Validate event schema
 - Index events in Elasticsearch
 - Store events in PostgreSQL (`audit.chat_trail` + `audit.events`)
-- Provide audit query API (via `nexus-gateway` trait dispatch)
+- Provide audit query API (via `nexus-gateway` gRPC dispatch)
 - Generate compliance reports
 - Detect anomalies
 
@@ -357,23 +357,15 @@ WHERE parent_table = 'public.audit_events';
 ### Query Audit Events
 
 ```
-GET /api/v1/audit/events
-Query params:
-  - tenant_id
-  - event_type
-  - actor_user_id
-  - resource_type
-  - resource_id
-  - start_date
-  - end_date
-  - result
-  - page, limit
+POST /api/v1/audit/events
+Body (Protobuf): { tenant_id, event_type, actor_user_id, start_date, end_date, result, limit, offset }
 ```
 
 ### Get Audit Event Detail
 
 ```
-GET /api/v1/audit/events/:event_id
+POST /api/v1/audit/events/:event_id
+Body (Protobuf): { event_id }
 ```
 
 ### Generate Compliance Report

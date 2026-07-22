@@ -111,16 +111,16 @@ Payment Failed → Retry (3 attempts, 1/3/7 days)
 
 | Method | Endpoint | Business Status | HTTP |
 |---|---|---|---|
-| `GET` | `/api/v1/billing/plans` | `SUCCESS` | `200` |
+| `POST` | `/api/v1/billing/plans` | `SUCCESS` | `200` |
 | `POST` | `/api/v1/billing/subscriptions` | `CREATED` | `201` |
-| `GET` | `/api/v1/billing/subscriptions/{id}` | `SUCCESS` | `200` |
+| `POST` | `/api/v1/billing/subscriptions/{id}` | `SUCCESS` | `200` |
 | `PATCH` | `/api/v1/billing/subscriptions/{id}` | `UPDATED` | `200` |
 | `DELETE` | `/api/v1/billing/subscriptions/{id}` | `UPDATED` | `200` |
-| `GET` | `/api/v1/billing/usage?start=...&end=...` | `SUCCESS` | `200` |
-| `GET` | `/api/v1/billing/invoices?limit=10&offset=0` | `SUCCESS` | `200` |
-| `GET` | `/api/v1/billing/invoices/{id}` | `SUCCESS` | `200` |
+| `POST` | `/api/v1/billing/usage?start=...&end=...` | `SUCCESS` | `200` |
+| `POST` | `/api/v1/billing/invoices?limit=10&offset=0` | `SUCCESS` | `200` |
+| `POST` | `/api/v1/billing/invoices/{id}` | `SUCCESS` | `200` |
 | `POST` | `/api/v1/billing/invoices/{id}/pay` | `SUCCESS` | `200` |
-| `GET` | `/api/v1/billing/payments?limit=10&offset=0` | `SUCCESS` | `200` |
+| `POST` | `/api/v1/billing/payments?limit=10&offset=0` | `SUCCESS` | `200` |
 
 ---
 

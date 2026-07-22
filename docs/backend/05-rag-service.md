@@ -2,7 +2,7 @@
 
 ## Enterprise Knowledge Intelligence: Ingestion, Embeddings, Hybrid Search & Knowledge Graph
 
-> **Modular Monolith Module:** This document describes the `nexus-rag` crate — a module within the single `aeroxe-nexus` binary. It communicates with other modules via Rust trait interfaces (see [Communication Architecture](12-communication-architecture.md)).
+> **Modular Monolith Module:** This document describes the `nexus-rag` crate — a module within the single `aeroxe-nexus` binary. It communicates with other modules via **gRPC** (synchronous) or **NATS** (async) with Protobuf payloads.
 
 ---
 
@@ -103,7 +103,7 @@ pub struct SearchResults {
 }
 ```
 
-> **Note:** Other modules (like `nexus-agent`) call `RagService` methods synchronously via trait dispatch. Document upload processing is async via NATS.
+> **Note:** Other modules (like `nexus-agent`) call `RagService` methods via **gRPC** (Protobuf request/response). Document upload processing is async via **NATS** with Protobuf payloads.
 
 ---
 
@@ -491,7 +491,7 @@ CREATE TABLE rag.document_metadata (
 
 ---
 
-## 14. REST API Endpoints
+## 14. API Endpoints (Protobuf JSON)
 
 ### Upload Document
 
@@ -543,7 +543,7 @@ POST /api/v1/rag/search
 ### Get Document Status
 
 ```
-GET /api/v1/rag/documents/{id}/status
+POST /api/v1/rag/documents/{id}/status
 ```
 
 ---

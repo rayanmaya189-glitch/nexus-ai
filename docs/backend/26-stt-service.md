@@ -2,7 +2,7 @@
 
 ## Real-Time Speech Recognition, Streaming Transcription & Audio Processing
 
-> **Modular Monolith Module:** This document describes the `nexus-stt` crate — a module within the single `aeroxe-nexus` binary. It communicates with other modules via Rust trait interfaces.
+> **Modular Monolith Module:** This document describes the `nexus-stt` crate — a module within the single `aeroxe-nexus` binary. It communicates with other modules via gRPC (sync) or NATS (async) between services.
 
 ---
 
@@ -273,7 +273,7 @@ CREATE TABLE stt_.models (
 
 ---
 
-## 7. REST API Endpoints
+## 7. REST API Endpoints (Protobuf over HTTP)
 
 | Method | Endpoint | Business Status | HTTP | Description |
 |---|---|---|---|---|
@@ -281,9 +281,9 @@ CREATE TABLE stt_.models (
 | `POST` | `/api/v1/stt/sessions/{session_id}/audio` | `SUCCESS` | `200` | Send audio chunk |
 | `POST` | `/api/v1/stt/sessions/{session_id}/end` | `UPDATED` | `200` | End session |
 | `POST` | `/api/v1/stt/transcribe` | `SUCCESS` | `200` | Batch transcribe |
-| `GET` | `/api/v1/stt/sessions/{session_id}` | `SUCCESS` | `200` | Get transcript |
+| `POST` | `/api/v1/stt/sessions` (read body) | `SUCCESS` | `200` | Get transcript |
 
-**Note:** No PUT method. Use PATCH for updates.
+**Note:** All endpoints use Protobuf (proto3) serialized as JSON over HTTP. Content-Type: `application/json` (Protobuf messages serialized as JSON). No PUT method — use PATCH for updates.
 
 ---
 

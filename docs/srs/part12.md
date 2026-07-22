@@ -214,9 +214,7 @@ Integration Services
 Communication:
 
 ```text
-Trait-based dispatch (in-process)
-
-NATS
+gRPC (sync) / NATS (async) — Protobuf payloads
 
 ```
 
@@ -536,7 +534,7 @@ Modules:
 Use:
 
 ```
-Trait-based dispatch (in-process)
+gRPC (sync) / NATS (async) between services
 
 ```
 
@@ -549,7 +547,7 @@ Agent Module
 
        |
 
-Trait Dispatch
+gRPC / NATS
 
        |
 

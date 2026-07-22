@@ -63,7 +63,7 @@ Threat Detection
 
                            |
 
-              Internal Modules (in-process trait dispatch)
+              Internal Modules (gRPC / NATS)
 
 
                            |
@@ -384,15 +384,15 @@ tenant_c_database
 
 # 9. Module-to-Module Security
 
-> **Modular Monolith:** In the modular monolith, modules communicate via Rust trait methods **within the same process**. There is no network between modules, so mTLS is not needed internally.
+> **Microservices in Modular Monolith:** Services communicate via gRPC (sync) or NATS (async) **within the same binary**. gRPC handles synchronous inter-service calls; NATS handles async event-driven communication.
 
 ### Security Enforcement
 
 | Layer | Mechanism |
 |---|---|
-| API Boundary | `nexus-gateway` validates JWT + tenant before trait dispatch |
-| Module Entry | Modules receive pre-validated `RequestContext` (no re-validation needed) |
-| Permission Check | Modules call `nexus-identity::check_permission()` trait method |
+| API Boundary | `nexus-gateway` validates JWT + tenant before service dispatch |
+| Module Entry | Services receive pre-validated `RequestContext` (no re-validation needed) |
+| Permission Check | Services call `nexus-identity::check_permission()` via gRPC |
 | Tenant Isolation | All queries include `tenant_id` — enforced at database level |
 
 ```
@@ -1060,7 +1060,7 @@ Audit
 ================================================
 
 
-Trait-Based Dispatch (in-process)
+gRPC / NATS (inter-service)
 
 
 NATS Secure Messaging

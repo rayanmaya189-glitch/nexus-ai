@@ -127,7 +127,7 @@ Benefits:
 | Deployment | Single systemd service |
 | Startup | Minutes | < 1 second |
 | Debugging | Cross-container tracing | Single process |
-| Latency | 2-5ms (gRPC) | < 1μs (trait call) |
+| Latency | < 1ms (gRPC in-process) |
 | Resource usage | N runtimes | 1 runtime |
 
 ├── NATS Client
@@ -870,14 +870,14 @@ Every service:
 ## Liveness
 
 ```
-GET /health/live
+POST /health/live
 
 ```
 
 ## Readiness
 
 ```
-GET /health/ready
+POST /health/ready
 
 ```
 
@@ -1116,7 +1116,7 @@ Applications
 Single Binary (Modular Monolith)
 
 
-Trait-Based Dispatch (in-process)
+gRPC / NATS (inter-service)
 
 
 NATS JetStream
